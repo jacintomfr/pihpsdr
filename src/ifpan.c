@@ -47,7 +47,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
 #include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 
@@ -71,6 +74,16 @@ int       ifpan_rigctld_cache_ms = 0;
 int       ifpan_kenwood_mode = -1;
 int       ifpan_kenwood_smeter = -999;
 #define CAT_SMETER_EVERY 3            // read the S-meter every 3 polls
+
+//
+// CAT link: either Hamlib rigctld (which owns the serial port), or the
+// radio's own Kenwood protocol over TCP straight to an RS-232/WiFi bridge
+// (ESP32/ts570_wifi_bridge, or ser2net/socat), without rigctld.
+//
+int       ifpan_cat_backend = IFPAN_CAT_RIGCTLD;
+char      ifpan_kenwood_host[64] = "ts570.local";
+int       ifpan_kenwood_port = 7373;
+static volatile int cat_reconnect = 0;   // set by the menu: close and reconnect
 
 //
 // Kenwood mode as shown next to "TS" (short names), and the Hamlib names
@@ -108,6 +121,9 @@ void ifpan_save_state(void) {
   SetPropI0("ifpan.cat_write",     ifpan_cat_write);
   SetPropI0("ifpan.follow_vfo",    ifpan_follow_vfo);
   SetPropI0("ifpan.rigctld_cache_ms", ifpan_rigctld_cache_ms);
+  SetPropI0("ifpan.cat_backend",   ifpan_cat_backend);
+  SetPropS0("ifpan.kenwood_host",  ifpan_kenwood_host);
+  SetPropI0("ifpan.kenwood_port",  ifpan_kenwood_port);
 }
 
 void ifpan_restore_state(void) {
@@ -119,6 +135,10 @@ void ifpan_restore_state(void) {
   GetPropI0("ifpan.cat_write",     ifpan_cat_write);
   GetPropI0("ifpan.follow_vfo",    ifpan_follow_vfo);
   GetPropI0("ifpan.rigctld_cache_ms", ifpan_rigctld_cache_ms);
+  GetPropI0("ifpan.cat_backend",   ifpan_cat_backend);
+  GetPropS0("ifpan.kenwood_host",  ifpan_kenwood_host);
+  GetPropI0("ifpan.kenwood_port",  ifpan_kenwood_port);
+  if (ifpan_cat_backend != IFPAN_CAT_KENWOOD) { ifpan_cat_backend = IFPAN_CAT_RIGCTLD; }
   if (ifpan_poll_ms < 20) { ifpan_poll_ms = 20; }
   // keep the IF well inside the Pluto span (+/- 384 kHz at 768 kHz)
   if (ifpan_lo_offset >  200000) { ifpan_lo_offset =  200000; }
@@ -173,15 +193,22 @@ static gboolean ui_watch(gpointer data) {
   return G_SOURCE_CONTINUE;
 }
 
+//
+// Connect to the CAT server of the selected backend. rigctld gets a long
+// receive timeout (its own retries when the radio does not answer); the
+// Kenwood bridge a short one (the radio answers within ~40 ms or not at all).
+//
 static int cat_connect(void) {
   struct addrinfo hints, *res, *ai;
   char port[16];
   int sock = -1;
+  int kenwood = (ifpan_cat_backend == IFPAN_CAT_KENWOOD);
+  const char *host = kenwood ? ifpan_kenwood_host : ifpan_rigctld_host;
   memset(&hints, 0, sizeof(hints));
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
-  snprintf(port, sizeof(port), "%d", ifpan_rigctld_port);
-  if (getaddrinfo(ifpan_rigctld_host, port, &hints, &res) != 0) { return -1; }
+  snprintf(port, sizeof(port), "%d", kenwood ? ifpan_kenwood_port : ifpan_rigctld_port);
+  if (getaddrinfo(host, port, &hints, &res) != 0) { return -1; }
   for (ai = res; ai != NULL; ai = ai->ai_next) {
     sock = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
     if (sock < 0) { continue; }
@@ -191,12 +218,113 @@ static int cat_connect(void) {
   }
   freeaddrinfo(res);
   if (sock >= 0) {
-    // long enough for rigctld's own retries when the radio does not answer
-    struct timeval tv = { 6, 0 };
+    struct timeval tv = { kenwood ? 0 : 6, kenwood ? 500000 : 0 };
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    if (kenwood) {
+      int one = 1;
+      setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
+    }
   }
   return sock;
+}
+
+void ifpan_cat_reconnect(void) {
+  cat_reconnect = 1;
+}
+
+// ---------------------------------------------------------------------
+// Kenwood CAT over TCP (TS-570D: commands and answers end with ';')
+// ---------------------------------------------------------------------
+
+//
+// Read one answer up to ';'. Returns 0, -1 if the connection failed,
+// -2 on timeout (the radio did not answer).
+//
+static int kw_read_frame(int sock, char *frame, size_t size) {
+  size_t len = 0;
+  for (;;) {
+    char c;
+    ssize_t n = recv(sock, &c, 1, 0);
+    if (n == 0) { return -1; }
+    if (n < 0) { return (errno == EAGAIN || errno == EWOULDBLOCK) ? -2 : -1; }
+    if (c == ';') {
+      frame[len] = 0;
+      return 0;
+    }
+    if (c == '\r' || c == '\n') { continue; }
+    if (len < size - 1) { frame[len++] = c; }
+  }
+}
+
+//
+// Send a read command and wait for the answer starting with prefix.
+// Other frames (auto-information, late answers) are skipped; "?" means
+// the radio rejected the command. Returns 0, -1 (connection), -2 (no answer).
+//
+static int kw_query(int sock, const char *cmd, const char *prefix, char *frame, size_t size) {
+  int len = strlen(cmd);
+  size_t plen = strlen(prefix);
+  if (send(sock, cmd, len, MSG_NOSIGNAL) != len) { return -1; }
+  for (int i = 0; i < 8; i++) {
+    int rc = kw_read_frame(sock, frame, size);
+    if (rc < 0) { return rc; }
+    if (strcmp(frame, "?") == 0) { return -2; }
+    if (strncmp(frame, prefix, plen) == 0) { return 0; }
+  }
+  return -2;
+}
+
+// "AI0;": no unsolicited frames, then drop whatever is still queued
+static int kw_setup(int sock) {
+  char frame[64];
+  if (send(sock, "AI0;", 4, MSG_NOSIGNAL) != 4) { return -1; }
+  while (kw_read_frame(sock, frame, sizeof(frame)) == 0) { }
+  return 0;
+}
+
+// "FA;" -> "FA00014074000;"
+static long long kw_get_freq(int sock) {
+  char frame[64];
+  int rc = kw_query(sock, "FA;", "FA", frame, sizeof(frame));
+  if (rc < 0) { return rc; }
+  char *end;
+  long long f = strtoll(frame + 2, &end, 10);
+  if (end == frame + 2 || f <= 0) { return -2; }
+  return f;
+}
+
+// "FA00014074000;" (no answer)
+static int kw_set_freq(int sock, long long f) {
+  char cmd[32];
+  int len = snprintf(cmd, sizeof(cmd), "FA%011lld;", f);
+  return (send(sock, cmd, len, MSG_NOSIGNAL) == len) ? 0 : -1;
+}
+
+// "MD;" -> "MDn;"  (1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 FSK, 7 CW-R, 9 FSK-R)
+static int kw_get_mode(int sock) {
+  // index into ifpan_mode_names[] for MD 0..9 (-3: not one of them)
+  static const int md_index[10] = { -3, 1, 0, 2, 5, 4, 6, 3, -3, 7 };
+  char frame[64];
+  int rc = kw_query(sock, "MD;", "MD", frame, sizeof(frame));
+  if (rc < 0) { return rc; }
+  int md = frame[2] - '0';
+  return (md >= 0 && md <= 9) ? md_index[md] : -3;
+}
+
+//
+// "SM;" -> S-meter 0000..0015 (last 4 digits of the answer). Shown like the
+// radio's own scale: 1..9 = S1..S9 (6 dB per S unit), 10..15 = S9+10..+60.
+//
+static int kw_get_strength(int sock, int *db) {
+  char frame[64];
+  int rc = kw_query(sock, "SM;", "SM", frame, sizeof(frame));
+  if (rc < 0) { return rc; }
+  size_t len = strlen(frame);
+  if (len < 6) { return -2; }
+  int raw = atoi(frame + len - 4);
+  *db = (raw <= 9) ? (raw - 9) * 6 : (raw - 9) * 10;
+  return 0;
 }
 
 //
@@ -291,6 +419,34 @@ static int cat_set_freq(int sock, long long f) {
   return 0;
 }
 
+// ---------------------------------------------------------------------
+// Backend dispatch (same return conventions for both backends)
+// ---------------------------------------------------------------------
+
+static const char *cat_name(void) {
+  return (ifpan_cat_backend == IFPAN_CAT_KENWOOD) ? "Kenwood TCP" : "rigctld";
+}
+
+static int be_setup(int sock) {
+  return (ifpan_cat_backend == IFPAN_CAT_KENWOOD) ? kw_setup(sock) : cat_set_cache(sock, ifpan_rigctld_cache_ms);
+}
+
+static long long be_get_freq(int sock) {
+  return (ifpan_cat_backend == IFPAN_CAT_KENWOOD) ? kw_get_freq(sock) : cat_get_freq(sock);
+}
+
+static int be_set_freq(int sock, long long f) {
+  return (ifpan_cat_backend == IFPAN_CAT_KENWOOD) ? kw_set_freq(sock, f) : cat_set_freq(sock, f);
+}
+
+static int be_get_mode(int sock) {
+  return (ifpan_cat_backend == IFPAN_CAT_KENWOOD) ? kw_get_mode(sock) : cat_get_mode(sock);
+}
+
+static int be_get_strength(int sock, int *db) {
+  return (ifpan_cat_backend == IFPAN_CAT_KENWOOD) ? kw_get_strength(sock, db) : cat_get_strength(sock, db);
+}
+
 static gpointer cat_thread(gpointer data) {
   int sock = -1;
   long long hold_freq = 0;            // frequency just sent to the Kenwood
@@ -298,18 +454,44 @@ static gpointer cat_thread(gpointer data) {
   int trouble = 0;                    // a CAT problem has been reported (log once)
   int mode_count = 0;                 // polls until the next mode read (0: now)
   int smeter_count = 0;               // polls until the next S-meter read
-  t_print("%s: rigctld at %s:%d, IF=%lld Hz\n", __func__, ifpan_rigctld_host, ifpan_rigctld_port, ifpan_if_freq);
+  t_print("%s: CAT via %s (%s:%d), IF=%lld Hz\n", __func__, cat_name(),
+          ifpan_cat_backend == IFPAN_CAT_KENWOOD ? ifpan_kenwood_host : ifpan_rigctld_host,
+          ifpan_cat_backend == IFPAN_CAT_KENWOOD ? ifpan_kenwood_port : ifpan_rigctld_port, ifpan_if_freq);
   for (;;) {
+    if (cat_reconnect) {
+      //
+      // CAT settings changed in the menu: drop the link, start again
+      //
+      cat_reconnect = 0;
+      if (sock >= 0) {
+        close(sock);
+        sock = -1;
+      }
+      trouble = 0;
+      ifpan_cat_connected = 0;
+      ifpan_kenwood_mode = -1;
+      ifpan_kenwood_smeter = -999;
+      g_idle_add(ext_vfo_update, NULL);
+      t_print("%s: CAT now via %s (%s:%d)\n", __func__, cat_name(),
+              ifpan_cat_backend == IFPAN_CAT_KENWOOD ? ifpan_kenwood_host : ifpan_rigctld_host,
+              ifpan_cat_backend == IFPAN_CAT_KENWOOD ? ifpan_kenwood_port : ifpan_rigctld_port);
+    }
     if (sock < 0) {
       sock = cat_connect();
       if (sock < 0) {
+        if (!trouble) {
+          t_print("%s: cannot connect to %s\n", __func__, cat_name());
+          trouble = 1;
+          ifpan_cat_connected = 0;
+          g_idle_add(ext_vfo_update, NULL);
+        }
         usleep(1000000);
         continue;
       }
-      if (cat_set_cache(sock, ifpan_rigctld_cache_ms) < 0) {
+      if (be_setup(sock) < 0) {
         // rigctld accepted the connection but is stuck opening the radio
         if (!trouble) {
-          t_print("%s: rigctld not answering (radio off, wrong baud rate or cable?)\n", __func__);
+          t_print("%s: %s not answering (radio off, wrong baud rate or cable?)\n", __func__, cat_name());
           trouble = 1;
           ifpan_cat_connected = 0;
           g_idle_add(ext_vfo_update, NULL);
@@ -319,7 +501,7 @@ static gpointer cat_thread(gpointer data) {
         usleep(1000000);
         continue;
       }
-      t_print("%s: connected to rigctld\n", __func__);
+      t_print("%s: connected (%s)\n", __func__, cat_name());
     }
     //
     // piHPSDR-IF -> Kenwood: send the latest requested frequency, if any
@@ -330,8 +512,8 @@ static gpointer cat_thread(gpointer data) {
     cat_set_target = 0;
     g_mutex_unlock(&cat_mutex);
     if (target > 0) {
-      if (cat_set_freq(sock, target) < 0) {
-        t_print("%s: rigctld connection lost\n", __func__);
+      if (be_set_freq(sock, target) < 0) {
+        t_print("%s: %s connection lost\n", __func__, cat_name());
         ifpan_cat_connected = 0;
         g_idle_add(ext_vfo_update, NULL);
         close(sock);
@@ -341,7 +523,7 @@ static gpointer cat_thread(gpointer data) {
       hold_freq = target;
       hold_until = g_get_monotonic_time() + CAT_SET_HOLD_US;
     }
-    long long f = cat_get_freq(sock);
+    long long f = be_get_freq(sock);
     if (f == -2) {
       //
       // rigctld is there but the radio does not answer (off, wrong baud
@@ -358,7 +540,7 @@ static gpointer cat_thread(gpointer data) {
     }
     if (f < 0) {
       if (!trouble) {
-        t_print("%s: rigctld connection lost\n", __func__);
+        t_print("%s: %s connection lost\n", __func__, cat_name());
         trouble = 1;
         ifpan_cat_connected = 0;
         g_idle_add(ext_vfo_update, NULL);
@@ -380,7 +562,7 @@ static gpointer cat_thread(gpointer data) {
     //
     if (mode_count-- <= 0) {
       mode_count = CAT_MODE_EVERY;
-      int m = cat_get_mode(sock);
+      int m = be_get_mode(sock);
       if (m == -1) {
         close(sock);
         sock = -1;
@@ -399,7 +581,7 @@ static gpointer cat_thread(gpointer data) {
     if (smeter_count-- <= 0) {
       smeter_count = CAT_SMETER_EVERY;
       int db;
-      int rc = cat_get_strength(sock, &db);
+      int rc = be_get_strength(sock, &db);
       if (rc == -1) {
         close(sock);
         sock = -1;
@@ -449,7 +631,7 @@ static gpointer cat_thread(gpointer data) {
       g_mutex_lock(&cat_mutex);
       pending = cat_set_target;
       g_mutex_unlock(&cat_mutex);
-      if (pending > 0) { break; }
+      if (pending > 0 || cat_reconnect) { break; }
       usleep(10000);
     }
   }

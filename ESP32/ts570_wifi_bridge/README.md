@@ -86,8 +86,11 @@ The answer is the VFO A frequency, e.g. `FA00014074000;`.
 
 ## Using it
 
-- **piHPSDR-IF:** a direct "Kenwood over TCP" CAT mode is planned; it will
-  connect to `<bridge IP>:7373` without rigctld.
+- **piHPSDR-IF (no rigctld needed):** Menu → Radio → "CAT via Kenwood TCP",
+  address `ts570.local:7373` (or the bridge's fixed IP), Enter. piHPSDR-IF then
+  talks to the radio directly (`FA;` frequency, `MD;` mode, `SM;` S-meter,
+  `FA…;` to tune). Props: `ifpan.cat_backend=1`, `ifpan.kenwood_host`,
+  `ifpan.kenwood_port`.
 - **With rigctld (works today):** create a virtual serial port that points at
   the bridge and give it to rigctld:
 

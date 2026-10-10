@@ -1282,7 +1282,16 @@ void radio_start_radio(void) {
     have_rx_gain = 1;
     break;
   case SOAPYSDR_USB_DEVICE:
+#ifdef IFPAN
+    //
+    // IF panadapter: the TS-570D 1st LO is above the signal, so the 1st IF
+    // is spectrally inverted; with the PlutoSDR this needs "Swap IQ" off
+    // (checked on air: USB stations demodulate in USB).
+    //
+    soapy_iqswap = 0;
+#else
     soapy_iqswap = 1;  // This is the default
+#endif
     have_rx_gain = 1;
     break;
   case DEVICE_STEMLAB:

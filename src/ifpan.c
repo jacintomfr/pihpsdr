@@ -301,8 +301,12 @@ static gboolean win_save(gpointer data) {
   return G_SOURCE_REMOVE;
 }
 
+static int win_tracking = 0;          // save moves only after the restore is done
+static int win_have_saved = 0;
+
 static gboolean win_moved(GtkWidget *widget, GdkEvent *event, gpointer data) {
   int x, y;
+  if (!win_tracking) { return FALSE; }
   gtk_window_get_position(GTK_WINDOW(widget), &x, &y);
   if ((x != 0 || y != 0) && (x != win_x || y != win_y)) {
     win_x = x;
@@ -313,19 +317,51 @@ static gboolean win_moved(GtkWidget *widget, GdkEvent *event, gpointer data) {
   return FALSE;
 }
 
+//
+// The window manager places a new window itself when it is mapped, so the
+// saved position is applied some time after start-up, and once more if the
+// window manager moved it again. Only then are moves tracked and saved.
+//
+static gboolean win_apply(gpointer data) {
+  int pass = GPOINTER_TO_INT(data);
+  int x, y;
+  gtk_window_get_position(GTK_WINDOW(top_window), &x, &y);
+  if (win_have_saved && pass == 0) {
+    gtk_window_move(GTK_WINDOW(top_window), win_x, win_y);
+  } else if (win_have_saved && pass == 1 && (x != win_x || y != win_y)) {
+    //
+    // Some window managers place the frame, others the client area, so the
+    // position read back may differ from the one requested by the frame
+    // size: compensate once.
+    //
+    gtk_window_move(GTK_WINDOW(top_window), 2 * win_x - x, 2 * win_y - y);
+  }
+  if (pass < 2) {
+    g_timeout_add(1000, win_apply, GINT_TO_POINTER(pass + 1));
+  } else {
+    // from now on, only moves by the user are saved
+    t_print("%s: window at %d,%d (saved %d,%d)\n", __func__, x, y, win_x, win_y);
+    win_x = x;
+    win_y = y;
+    win_tracking = 1;
+  }
+  return G_SOURCE_REMOVE;
+}
+
 static void win_restore(void) {
   int x, y;
   FILE *fp = fopen(WINDOW_POS_FILE, "r");
   if (fp) {
-    if (fscanf(fp, "%d %d", &x, &y) == 2 && x > -100 && y > -100) {
-      win_x = x;
-      win_y = y;
-      gtk_window_move(GTK_WINDOW(top_window), x, y);
-      t_print("%s: window placed at %d,%d\n", __func__, x, y);
+    if (fscanf(fp, "%d %d", &x, &y) == 2) {
+      // some window managers refuse negative positions: use the screen edge
+      win_x = (x < 0) ? 0 : x;
+      win_y = (y < 0) ? 0 : y;
+      win_have_saved = 1;
     }
     fclose(fp);
   }
   g_signal_connect(top_window, "configure-event", G_CALLBACK(win_moved), NULL);
+  g_timeout_add(1500, win_apply, GINT_TO_POINTER(0));
 }
 
 void ifpan_start(void) {

@@ -938,8 +938,14 @@ static void ifpan_layout(cairo_t *cr, const VFO_BAR_LAYOUT *src, double width,
   // and the top row is kept for the piHPSDR-IF mode and the Kenwood state.
   //
   dst->filter_x = 0;
+  //
+  // Row 2 keeps a sixth, empty slot so that its five indicators keep the
+  // spacing they had with AGC at the end (AGC is now at the end of row 3).
+  //
+  int spare_x, spare_y;
   SLOT row1[] = {
     { &dst->mode_x, &dst->mode_y, "CWU 1.0kP 800 Hz" },
+    { &dst->rit_x,  &dst->rit_y,  "RIT-9999" },              // as drawn for -9999 Hz
     { &dst->cat_x,  &dst->cat_y,  "TS 28.888.88 FSKR" },   // Kenwood VFO + mode (see below)
   };
   SLOT row2[] = {
@@ -948,17 +954,17 @@ static void ifpan_layout(cairo_t *cr, const VFO_BAR_LAYOUT *src, double width,
     { &dst->anf_x,  &dst->anf_y,  "ANF" },
     { &dst->snb_x,  &dst->snb_y,  "SNB" },
     { &dst->eq_x,   &dst->eq_y,   "RxEQ" },
-    { &dst->agc_x,  &dst->agc_y,  "AGC slow" },
+    { &spare_x,     &spare_y,     "AGC slow" },
   };
   SLOT row3[] = {
     { &dst->lock_x, &dst->lock_y, "Locked" },
     { &dst->zoom_x, &dst->zoom_y, "Zoom 8" },
     { &dst->ctun_x, &dst->ctun_y, "CTUN" },
     { &dst->step_x, &dst->step_y, "Step 100kHz" },
-    { &dst->rit_x,  &dst->rit_y,  "RIT -9999" },
+    { &dst->agc_x,  &dst->agc_y,  "AGC slow" },
   };
   struct { SLOT *s; int n; int y; } rows[3] = {
-    { row1, 2, src->mode_y },
+    { row1, 3, src->mode_y },
     { row2, 6, (src->mode_y + src->lock_y) / 2 },
     { row3, 5, src->lock_y },
   };
@@ -966,7 +972,12 @@ static void ifpan_layout(cairo_t *cr, const VFO_BAR_LAYOUT *src, double width,
   double sep = 0.6 * src->size1;
   double rowlen[3], maxlen = 0.0;
   cairo_set_font_size(cr, src->size1);
-  for (int r = 0; r < 3; r++) {
+  //
+  // The block width comes from rows 2 and 3 only, so that the dial never
+  // gets smaller: row 1 (mode, RIT, TS) is fitted into that width below.
+  //
+  rowlen[0] = 0.0;
+  for (int r = 1; r < 3; r++) {
     rowlen[r] = 0.0;
     for (int i = 0; i < rows[r].n; i++) {
       double w = 85.0;
@@ -983,7 +994,26 @@ static void ifpan_layout(cairo_t *cr, const VFO_BAR_LAYOUT *src, double width,
   // block width (extra space shared out between the slots)
   //
   double x0 = width - maxlen;
-  for (int r = 0; r < 3; r++) {
+  //
+  // Row 1: mode at the left edge, TS at the right edge, RIT centred in the
+  // space between their widest texts (fixed positions, no overlap even with
+  // the widest CW mode text, RIT-9999 and a FSKR Kenwood mode).
+  //
+  {
+    double wm, wr, wt;
+    cairo_text_extents(cr, row1[0].tmpl, &e);
+    wm = e.x_advance;
+    cairo_text_extents(cr, row1[1].tmpl, &e);
+    wr = e.x_advance;
+    cairo_text_extents(cr, row1[2].tmpl, &e);
+    wt = e.x_advance;
+    double xs[3] = { x0, x0 + wm + 0.5 * (maxlen - wm - wr - wt), x0 + maxlen - wt };
+    for (int i = 0; i < 3; i++) {
+      *row1[i].x = (int)(xs[i] + 0.5);
+      *row1[i].y = rows[0].y;
+    }
+  }
+  for (int r = 1; r < 3; r++) {
     double extra = (rows[r].n > 1) ? (maxlen - rowlen[r]) / (rows[r].n - 1) : 0.0;
     double x = x0;
     for (int i = 0; i < rows[r].n; i++) {

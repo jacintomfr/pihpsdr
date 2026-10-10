@@ -43,6 +43,7 @@
 //
 
 #include <gtk/gtk.h>
+#include <wdsp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -60,6 +61,7 @@
 #include "message.h"
 #include "property.h"
 #include "radio.h"
+#include "receiver.h"
 #include "vfo.h"
 
 long long ifpan_if_freq = IFPAN_DEFAULT_IF_FREQ;
@@ -168,12 +170,41 @@ void ifpan_restore_state(void) {
   if (ifpan_lo_offset < -200000) { ifpan_lo_offset = -200000; }
 }
 
+//
+// While the Kenwood dial turns, the signals slide through the IF, and the
+// display averaging (Display menu) smears them: peaks get lower and
+// distorted, and with fast tuning they almost vanish. So the averaging is
+// switched off in WDSP while the display centre keeps moving, and the
+// receiver's own setting is put back 300 ms after the last move (the
+// setting itself is never changed, so nothing wrong can be saved).
+//
+#define TUNING_SETTLE_US 300000
+static gint64 tuning_until = 0;
+static guint  tuning_timer = 0;
+
+static gboolean tuning_check(gpointer data) {
+  if (g_get_monotonic_time() < tuning_until) { return G_SOURCE_CONTINUE; }
+  tuning_timer = 0;
+  if (receivers > 0 && receiver[0] != NULL) { rx_set_average(receiver[0]); }
+  return G_SOURCE_REMOVE;
+}
+
+static void tuning_moved(void) {
+  if (receivers < 1 || receiver[0] == NULL) { return; }
+  tuning_until = g_get_monotonic_time() + TUNING_SETTLE_US;
+  if (tuning_timer == 0) {
+    SetDisplayAverageMode(receiver[0]->id, 0, AVERAGE_MODE_NONE);
+    tuning_timer = g_timeout_add(50, tuning_check, NULL);
+  }
+}
+
 static gboolean cat_apply(gpointer data) {
   long long f;
   g_mutex_lock(&cat_mutex);
   f = cat_pending;
   cat_scheduled = 0;
   g_mutex_unlock(&cat_mutex);
+  tuning_moved();
   vfo_id_set_center(VFO_A, f);
   // a re-centre caused by the Kenwood must not be sent back to it
   ui_last_freq = vfo[VFO_A].ctun ? vfo[VFO_A].ctun_frequency : vfo[VFO_A].frequency;

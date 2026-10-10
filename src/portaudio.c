@@ -498,12 +498,27 @@ int audio_open_output(RECEIVER *rx) {
   outputParameters.device = padev;
   outputParameters.hostApiSpecificStreamInfo = NULL;
   outputParameters.sampleFormat = paFloat32;
+#ifdef _WIN32
+  //
+  // Windows (MME, DirectSound, shared WASAPI): a zero latency and 128-frame
+  // callbacks under-run the host buffer at the smallest scheduling delay,
+  // which is heard as frequent cuts. Use the device's own "high" latency
+  // (typically 0.1-0.2 s) and let PortAudio choose the callback size. The
+  // ring buffer above still controls the overall RX audio latency.
+  //
+  const PaDeviceInfo *pinfo = Pa_GetDeviceInfo(padev);
+  outputParameters.suggestedLatency = (pinfo && pinfo->defaultHighOutputLatency > 0.05)
+                                      ? pinfo->defaultHighOutputLatency : 0.1;
+  unsigned long frames_per_buffer = paFramesPerBufferUnspecified;
+#else
   // use a zero for the latency to get the minimum value
   outputParameters.suggestedLatency = 0.0; //Pa_GetDeviceInfo(padev)->defaultLowOutputLatency ;
+  unsigned long frames_per_buffer = 128;
+#endif
   outputParameters.hostApiSpecificStreamInfo = NULL; //See you specific host's API docs for info on using this field
   outputParameters.channelCount = channels;
   ad->audio_channels = channels;
-  err = Pa_OpenStream(&(ad->pastream), NULL, &outputParameters, 48000.0, 128, paNoFlag, pa_out_cb, rx);
+  err = Pa_OpenStream(&(ad->pastream), NULL, &outputParameters, 48000.0, frames_per_buffer, paNoFlag, pa_out_cb, rx);
   if (err != paNoError) {
     t_print("%s: open stream error %s\n", __func__, Pa_GetErrorText(err));
     g_free(ad);

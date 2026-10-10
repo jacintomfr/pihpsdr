@@ -73,6 +73,17 @@ for pass in 1 2 3; do
   done
 done
 
+# ldd misses some imports (librtlsdr.dll -> libusb-1.0.dll printed nothing);
+# close the set again from the PE import tables (objdump), which is exact.
+for pass in 1 2 3; do
+  find "$STAGE" -iname '*.dll' -o -iname '*.exe' | while read -r f; do
+    objdump -p "$f" | awk '/DLL Name:/ {print $3}'
+  done | sort -fu | while read -r name; do
+    [ -f "$STAGE/bin/$name" ] && continue
+    [ -f "$MINGW/bin/$name" ] && cp "$MINGW/bin/$name" "$STAGE/bin/"
+  done
+done
+
 # --- data files -------------------------------------------------------------
 cp "$MINGW"/share/glib-2.0/schemas/org.gtk.*.xml "$STAGE/share/glib-2.0/schemas/"
 glib-compile-schemas "$STAGE/share/glib-2.0/schemas"

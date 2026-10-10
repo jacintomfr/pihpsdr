@@ -653,6 +653,39 @@ static void process_rx_buffer(RECEIVER *rx, const float *rxbuff, const int eleme
   }
 }
 
+//
+// Read errors (e.g. the network/USB link to the radio was lost): without a
+// pause the receive loop spins, and the driver prints its error messages
+// at hundreds of MB per minute into the log. After 10 consecutive errors,
+// wait between attempts (100 ms more each time, up to 2 s), log the loss
+// once, and every 20 attempts try to re-activate the stream. An occasional
+// overflow is harmless and does not count. Returns the updated error count.
+//
+static int rx_read_failed(int rc, int errcount) {
+  if (rc == SOAPY_SDR_OVERFLOW || rc == 0) { return errcount; }
+  errcount++;
+  if (errcount == 10) {
+    t_print("%s: RX stream errors (%s), retrying with back-off\n", __func__, SoapySDR_errToStr(rc));
+  }
+  if (errcount >= 10) {
+    int ms = (errcount - 9) * 100;
+    if (ms > 2000) { ms = 2000; }
+    usleep(ms * 1000);
+    if (errcount % 20 == 0) {
+      SoapySDRDevice_deactivateStream(soapy_device, rx_stream, 0, 0LL);
+      SoapySDRDevice_activateStream(soapy_device, rx_stream, 0, 0LL, 0);
+    }
+  }
+  return errcount;
+}
+
+static int rx_read_ok(int errcount) {
+  if (errcount >= 10) {
+    t_print("%s: RX stream recovered after %d errors\n", __func__, errcount);
+  }
+  return 0;
+}
+
 static void *soapy_receive_single_thread(void *arg) {
   ASSERT_SERVER(NULL);
   if (!soapy_device) { return NULL; }
@@ -668,14 +701,17 @@ static void *soapy_receive_single_thread(void *arg) {
   float *rxbuff = g_new(float, max_rx_samples * 2);
   void *buffs[1] = {rxbuff};
   int id = rx->id;
+  int errcount = 0;
   rxthread_running = TRUE;
   t_print("%s started, id=%d\n", __func__, id);
   while (rxthread_running) {
     int elements = SoapySDRDevice_readStream(soapy_device, rx_stream, buffs, max_rx_samples, &flags, &timeNs,
       timeoutUs);
     if (elements <= 0) {
+      errcount = rx_read_failed(elements, errcount);
       continue;
     }
+    errcount = rx_read_ok(errcount);
     process_rx_buffer(rx, rxbuff, elements, 1);
   }
   t_print("%s: deactivateStream\n", __func__);
@@ -700,6 +736,7 @@ static gpointer soapy_receive_dual_thread(gpointer data) {
   float *rx1buff = g_new(float, max_rx_samples * 2);
   float *rx2buff = g_new(float, max_rx_samples * 2);
   void *buffs[2] = {rx1buff, rx2buff};
+  int errcount = 0;
   rxthread_running = TRUE;
   t_print("%s started\n", __func__);
   while (rxthread_running) {
@@ -707,8 +744,10 @@ static gpointer soapy_receive_dual_thread(gpointer data) {
                      soapy_device, rx_stream, buffs, max_rx_samples, &flags, &timeNs, timeoutUs
                    );
     if (elements <= 0) {
+      errcount = rx_read_failed(elements, errcount);
       continue;
     }
+    errcount = rx_read_ok(errcount);
     process_rx_buffer(rxpair[0], rx1buff, elements, 1);
     if (receivers > 1) {
       //

@@ -926,18 +926,21 @@ static void ifpan_layout(cairo_t *cr, const VFO_BAR_LAYOUT *src, double width,
                          VFO_BAR_LAYOUT *dst, IFPAN_DIAL *dial) {
   //
   // Row contents: { pointer to x, pointer to y, template }.
-  // A NULL template means the filter graphic (fixed 85 pixels).
+  // (A NULL template would be a fixed 85-pixel slot; none is used now.)
   //
   typedef struct { int *x; int *y; const char *tmpl; } SLOT;
   *dst = *src;
   dst->vfo_b_l = -1;
   dst->ps_x = dst->xit_x = dst->cmpr_x = dst->dexp_x = dst->vox_x = 0;
   dst->split_x = dst->sat_x = dst->dup_x = dst->div_x = dst->multifn_x = 0;
-  int have_filter = (src->filter_x != 0);
+  //
+  // No filter-edge graphic: the filter width is already in the mode text,
+  // and the top row is kept for the piHPSDR-IF mode and the Kenwood state.
+  //
+  dst->filter_x = 0;
   SLOT row1[] = {
     { &dst->mode_x, &dst->mode_y, "CWU 1.0kP 800 Hz" },
-    { &dst->agc_x,  &dst->agc_y,  "AGC slow" },
-    { &dst->cat_x,  &dst->cat_y,  "TS 28.888.88" },   // Kenwood VFO (see below)
+    { &dst->cat_x,  &dst->cat_y,  "TS 28.888.88 FSKR" },   // Kenwood VFO + mode (see below)
   };
   SLOT row2[] = {
     { &dst->nr_x,   &dst->nr_y,   "NR2" },
@@ -945,7 +948,7 @@ static void ifpan_layout(cairo_t *cr, const VFO_BAR_LAYOUT *src, double width,
     { &dst->anf_x,  &dst->anf_y,  "ANF" },
     { &dst->snb_x,  &dst->snb_y,  "SNB" },
     { &dst->eq_x,   &dst->eq_y,   "RxEQ" },
-    { &dst->filter_x, &dst->filter_y, NULL },
+    { &dst->agc_x,  &dst->agc_y,  "AGC slow" },
   };
   SLOT row3[] = {
     { &dst->lock_x, &dst->lock_y, "Locked" },
@@ -955,11 +958,10 @@ static void ifpan_layout(cairo_t *cr, const VFO_BAR_LAYOUT *src, double width,
     { &dst->rit_x,  &dst->rit_y,  "RIT -9999" },
   };
   struct { SLOT *s; int n; int y; } rows[3] = {
-    { row1, 3, src->mode_y },
-    { row2, have_filter ? 6 : 5, (src->mode_y + src->lock_y) / 2 },
+    { row1, 2, src->mode_y },
+    { row2, 6, (src->mode_y + src->lock_y) / 2 },
     { row3, 5, src->lock_y },
   };
-  if (!have_filter) { dst->filter_x = 0; }
   cairo_text_extents_t e;
   double sep = 0.6 * src->size1;
   double rowlen[3], maxlen = 0.0;
@@ -1652,8 +1654,9 @@ void vfo_update(void) {
     } else {
       cairo_set_source_rgba(cr, COLOUR_SHADE);
     }
-    snprintf(temp_text, sizeof(temp_text), "TS %lld.%03lld.%02lld", kf / 1000000LL,
-             (kf / 1000LL) % 1000LL, (kf / 10LL) % 100LL);
+    int km = ifpan_kenwood_mode;
+    snprintf(temp_text, sizeof(temp_text), "TS %lld.%03lld.%02lld %s", kf / 1000000LL,
+             (kf / 1000LL) % 1000LL, (kf / 10LL) % 100LL, km >= 0 ? ifpan_mode_names[km] : "");
     cairo_show_text(cr, temp_text);
   }
 #else

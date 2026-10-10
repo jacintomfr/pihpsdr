@@ -68,6 +68,15 @@ int       ifpan_cat_connected = 0;
 int       ifpan_cat_write = 1;
 int       ifpan_follow_vfo = 0;
 int       ifpan_rigctld_cache_ms = 0;
+int       ifpan_kenwood_mode = -1;
+
+//
+// Kenwood mode as shown next to "TS" (short names), and the Hamlib names
+// rigctld reports for them (same order).
+//
+const char *ifpan_mode_names[] = { "USB", "LSB", "CW", "CW-R", "AM", "FM", "FSK", "FSKR", NULL };
+static const char *hamlib_mode_names[] = { "USB", "LSB", "CW", "CWR", "AM", "FM", "RTTY", "RTTYR", NULL };
+#define CAT_MODE_EVERY 20             // read the mode every 20 polls (~1 s)
 
 #define CAT_SET_HOLD_US 400000        // ignore stale readings this long after a set
 
@@ -219,6 +228,23 @@ static long long cat_get_freq(int sock) {
 }
 
 //
+// Send "m\n" (reply: mode line + passband line). Returns the index into
+// ifpan_mode_names[] (-3 if the mode is not one of them), -1 if the
+// connection failed, -2 if the radio did not answer.
+//
+static int cat_get_mode(int sock) {
+  char line[64], pb[64];
+  if (send(sock, "m\n", 2, MSG_NOSIGNAL) != 2) { return -1; }
+  if (cat_read_line(sock, line, sizeof(line)) < 0) { return -1; }
+  if (strncmp(line, "RPRT", 4) == 0) { return -2; }
+  if (cat_read_line(sock, pb, sizeof(pb)) < 0) { return -1; }   // passband, not used
+  for (int i = 0; hamlib_mode_names[i] != NULL; i++) {
+    if (strcmp(line, hamlib_mode_names[i]) == 0) { return i; }
+  }
+  return -3;
+}
+
+//
 // Set the rigctld frequency cache timeout. Returns -1 if the connection failed.
 //
 static int cat_set_cache(int sock, int ms) {
@@ -250,6 +276,7 @@ static gpointer cat_thread(gpointer data) {
   long long hold_freq = 0;            // frequency just sent to the Kenwood
   gint64 hold_until = 0;              // until then, ignore other readings
   int trouble = 0;                    // a CAT problem has been reported (log once)
+  int mode_count = 0;                 // polls until the next mode read (0: now)
   t_print("%s: rigctld at %s:%d, IF=%lld Hz\n", __func__, ifpan_rigctld_host, ifpan_rigctld_port, ifpan_if_freq);
   for (;;) {
     if (sock < 0) {
@@ -323,7 +350,26 @@ static gpointer cat_thread(gpointer data) {
       t_print("%s: Kenwood answering (%lld Hz)\n", __func__, f);
       trouble = 0;
       ifpan_cat_connected = 1;
+      mode_count = 0;
       g_idle_add(ext_vfo_update, NULL);
+    }
+    //
+    // Kenwood mode, shown next to "TS": changes rarely, so read it only
+    // every CAT_MODE_EVERY polls (each read keeps the radio busy ~30 ms)
+    //
+    if (mode_count-- <= 0) {
+      mode_count = CAT_MODE_EVERY;
+      int m = cat_get_mode(sock);
+      if (m == -1) {
+        close(sock);
+        sock = -1;
+        continue;
+      }
+      if (m == -3) { m = -1; }
+      if (m >= -1 && m != ifpan_kenwood_mode) {
+        ifpan_kenwood_mode = m;
+        g_idle_add(ext_vfo_update, NULL);
+      }
     }
     //
     // Right after a set, the radio may still report the old frequency:
@@ -354,7 +400,22 @@ static gpointer cat_thread(gpointer data) {
       }
       g_mutex_unlock(&cat_mutex);
     }
-    usleep(ifpan_poll_ms * 1000);
+    //
+    // How fast the display follows the Kenwood dial: poll interval =
+    // ifpan.poll_ms x "VFO Encoder Divisor" (Radio menu), so 1 = 50 ms,
+    // 4 = 200 ms. A pending piHPSDR-IF -> Kenwood request ends the wait at
+    // once, so tuning with the mouse is never delayed.
+    //
+    int div = (vfo_encoder_divisor < 1) ? 1 : vfo_encoder_divisor;
+    gint64 wait_end = g_get_monotonic_time() + (gint64)ifpan_poll_ms * div * 1000;
+    while (g_get_monotonic_time() < wait_end) {
+      long long pending;
+      g_mutex_lock(&cat_mutex);
+      pending = cat_set_target;
+      g_mutex_unlock(&cat_mutex);
+      if (pending > 0) { break; }
+      usleep(10000);
+    }
   }
   return NULL;
 }

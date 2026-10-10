@@ -524,6 +524,55 @@ void soapy_protocol_init(void) {
   SoapySDRKwargs_clear(&args);
 }
 
+#ifdef IFPAN
+//
+// IF panadapter: the Pluto LO sits ifpan_lo_offset (D) above the IF so that
+// its DC spike is not on the Kenwood frequency. In the (I/Q-swapped as
+// selected) stream the IF centre is then at delta = +D (swap) or -D (no swap),
+// because swapping I and Q mirrors the spectrum. Rotating every sample by
+// -delta puts the IF (= Kenwood VFO) back to the centre of the display and
+// leaves the DC spike at -delta.
+//
+static double rot_re[2] = { 1.0, 1.0 }, rot_im[2] = { 0.0, 0.0 };  // oscillator
+static double step_re[2], step_im[2];                               // per-sample step
+static double step_hz[2] = { 0.0, 0.0 };
+static int    step_rate[2] = { 0, 0 };
+static int    renorm[2] = { 0, 0 };
+
+static inline void ifpan_add_iq_samples(RECEIVER *rx, double isample, double qsample) {
+  int id = rx->id & 1;
+  double delta = soapy_iqswap ? (double)ifpan_lo_offset : -(double)ifpan_lo_offset;
+  if (delta != step_hz[id] || rx->sample_rate != step_rate[id]) {
+    double w = -2.0 * M_PI * delta / (double)rx->sample_rate;
+    step_re[id] = cos(w);
+    step_im[id] = sin(w);
+    step_hz[id] = delta;
+    step_rate[id] = rx->sample_rate;
+  }
+  if (delta != 0.0) {
+    double ore = rot_re[id], oim = rot_im[id];
+    double i2 = isample * ore - qsample * oim;
+    double q2 = isample * oim + qsample * ore;
+    isample = i2;
+    qsample = q2;
+    double nre = ore * step_re[id] - oim * step_im[id];
+    double nim = ore * step_im[id] + oim * step_re[id];
+    if (++renorm[id] >= 4096) {   // keep |oscillator| = 1
+      double m = 1.0 / sqrt(nre * nre + nim * nim);
+      nre *= m;
+      nim *= m;
+      renorm[id] = 0;
+    }
+    rot_re[id] = nre;
+    rot_im[id] = nim;
+  }
+  rx_add_iq_samples(rx, isample, qsample);
+}
+#define RX_ADD_IQ ifpan_add_iq_samples
+#else
+#define RX_ADD_IQ rx_add_iq_samples
+#endif
+
 static void process_rx_buffer(RECEIVER *rx, const float *rxbuff, const int elements, const int micflag) {
   double isample, qsample;
   //
@@ -554,9 +603,9 @@ static void process_rx_buffer(RECEIVER *rx, const float *rxbuff, const int eleme
           isample = rx->resample_output[j * 2];
           qsample = rx->resample_output[(j * 2) + 1];
           if (soapy_iqswap) {
-            rx_add_iq_samples(rx, qsample, isample);
+            RX_ADD_IQ(rx, qsample, isample);
           } else {
-            rx_add_iq_samples(rx, isample, qsample);
+            RX_ADD_IQ(rx, isample, qsample);
           }
           if (transmitter != NULL && micflag) {
             mic_samples++;
@@ -583,9 +632,9 @@ static void process_rx_buffer(RECEIVER *rx, const float *rxbuff, const int eleme
       isample = (double)rxbuff[i * 2];
       qsample = (double)rxbuff[(i * 2) + 1];
       if (soapy_iqswap) {
-        rx_add_iq_samples(rx, qsample, isample);
+        RX_ADD_IQ(rx, qsample, isample);
       } else {
-        rx_add_iq_samples(rx, isample, qsample);
+        RX_ADD_IQ(rx, isample, qsample);
       }
       if (transmitter != NULL && micflag) {
         mic_samples++;
@@ -737,7 +786,8 @@ void soapy_protocol_set_rx_frequency(const int id) {
     t_print("%s: RX%d IF failed: %s\n", __func__, id + 1, SoapySDR_errToStr(rc));
   } else {
     ifpan_tuned[id] = fif;
-    t_print("%s: RX%d locked to IF %lld Hz\n", __func__, id + 1, fif);
+    t_print("%s: RX%d locked to IF %lld Hz (LO %lld Hz, offset %lld Hz)\n", __func__, id + 1,
+            ifpan_if_freq, fif, ifpan_lo_offset);
   }
   return;
 #endif

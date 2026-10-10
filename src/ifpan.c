@@ -45,6 +45,7 @@
 #include "vfo.h"
 
 long long ifpan_if_freq = IFPAN_DEFAULT_IF_FREQ;
+long long ifpan_lo_offset = 50000;
 char      ifpan_rigctld_host[64] = "127.0.0.1";
 int       ifpan_rigctld_port = 4532;
 int       ifpan_poll_ms = 50;
@@ -56,15 +57,18 @@ static long long cat_pending = 0;     // last frequency read, waiting for the ma
 static int       cat_scheduled = 0;   // an idle callback is already queued
 
 //
-// Frequency the PlutoSDR is tuned to: always the IF centre
-// (with the radio's frequency calibration applied).
+// Frequency the PlutoSDR LO is tuned to: the IF centre plus the LO offset
+// (with the radio's frequency calibration applied). The offset moves the
+// Pluto's DC spike away from the Kenwood VFO; soapy_protocol.c shifts the
+// samples back digitally so the IF centre stays in the middle of the display.
 //
 long long ifpan_hw_frequency(void) {
-  return calibrated_frequency(ifpan_if_freq);
+  return calibrated_frequency(ifpan_if_freq + ifpan_lo_offset);
 }
 
 void ifpan_save_state(void) {
   SetPropI0("ifpan.if_freq",       ifpan_if_freq);
+  SetPropI0("ifpan.lo_offset",     ifpan_lo_offset);
   SetPropS0("ifpan.rigctld_host",  ifpan_rigctld_host);
   SetPropI0("ifpan.rigctld_port",  ifpan_rigctld_port);
   SetPropI0("ifpan.poll_ms",       ifpan_poll_ms);
@@ -75,7 +79,11 @@ void ifpan_restore_state(void) {
   GetPropS0("ifpan.rigctld_host",  ifpan_rigctld_host);
   GetPropI0("ifpan.rigctld_port",  ifpan_rigctld_port);
   GetPropI0("ifpan.poll_ms",       ifpan_poll_ms);
+  GetPropI0("ifpan.lo_offset",     ifpan_lo_offset);
   if (ifpan_poll_ms < 20) { ifpan_poll_ms = 20; }
+  // keep the IF well inside the Pluto span (+/- 384 kHz at 768 kHz)
+  if (ifpan_lo_offset >  200000) { ifpan_lo_offset =  200000; }
+  if (ifpan_lo_offset < -200000) { ifpan_lo_offset = -200000; }
 }
 
 static gboolean cat_apply(gpointer data) {

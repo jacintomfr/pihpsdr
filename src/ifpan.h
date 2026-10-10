@@ -35,7 +35,8 @@
 
 #define IFPAN_DEFAULT_IF_FREQ  73050000LL   // TS-570D 1st IF
 
-extern long long ifpan_if_freq;       // IF centre the Pluto is locked to (Hz)
+extern long long ifpan_if_freq;       // IF centre (= Kenwood VFO) in Hz
+extern long long ifpan_lo_offset;     // Pluto LO = IF + this, keeps the DC spike off the VFO
 extern char      ifpan_rigctld_host[64];
 extern int       ifpan_rigctld_port;
 extern int       ifpan_poll_ms;

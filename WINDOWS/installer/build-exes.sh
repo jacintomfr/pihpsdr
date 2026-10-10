@@ -30,6 +30,14 @@ case "$(uname -s)" in
   *) echo "run this from the MSYS2 MINGW64 shell (see WINDOWS/BUILD.md)"; exit 1 ;;
 esac
 
+# The checkout is normally made with Git for Windows (core.autocrlf=true,
+# CRLF files on disk). MSYS2's own git does not see that setting and would
+# call every file modified, so the version shown in piHPSDR would always be
+# "...-dirty". Use the same line-ending view for the git calls in make.
+if [ -z "$(git config core.autocrlf)" ] && git ls-files --eol Makefile | grep -q 'w/crlf'; then
+  export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.autocrlf GIT_CONFIG_VALUE_0=true
+fi
+
 make clean >/dev/null
 make -j"$JOBS" IFPAN=ON SOAPYSDR=ON
 [ -f "$EXE" ] || { echo "make did not produce $EXE"; exit 1; }

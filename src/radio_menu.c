@@ -152,6 +152,51 @@ static void vfo_divisor_value_changed_cb(GtkWidget *widget, gpointer data) {
 static void follow_cb(GtkWidget *widget, gpointer data) {
   ifpan_set_follow(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)));
 }
+
+//
+// CAT link: rigctld or Kenwood over TCP (address "host:port"); a change
+// makes the CAT thread reconnect at once
+//
+static GtkWidget *cat_addr_entry = NULL;
+
+static void cat_backend_cb(GtkWidget *widget, gpointer data) {
+  int b = gtk_combo_box_get_active(GTK_COMBO_BOX(widget));
+  if (b < 0 || b == ifpan_cat_backend) { return; }
+  ifpan_cat_backend = b;
+  if (cat_addr_entry) { gtk_widget_set_sensitive(cat_addr_entry, b == IFPAN_CAT_KENWOOD); }
+  ifpan_cat_reconnect();
+}
+
+static void cat_addr_apply(GtkWidget *widget) {
+  char text[64], host[64];
+  int port = ifpan_kenwood_port;
+  snprintf(text, sizeof(text), "%s", gtk_entry_get_text(GTK_ENTRY(widget)));
+  char *colon = strrchr(text, ':');
+  if (colon) {
+    *colon = 0;
+    port = atoi(colon + 1);
+  }
+  snprintf(host, sizeof(host), "%s", text);
+  if (host[0] == 0 || port <= 0 || port > 65535) { return; }
+  if (strcmp(host, ifpan_kenwood_host) != 0 || port != ifpan_kenwood_port) {
+    snprintf(ifpan_kenwood_host, sizeof(ifpan_kenwood_host), "%s", host);
+    ifpan_kenwood_port = port;
+    if (ifpan_cat_backend == IFPAN_CAT_KENWOOD) { ifpan_cat_reconnect(); }
+  }
+}
+
+static void cat_addr_activate_cb(GtkWidget *widget, gpointer data) {
+  cat_addr_apply(widget);
+}
+
+static gboolean cat_addr_focus_cb(GtkWidget *widget, GdkEvent *event, gpointer data) {
+  cat_addr_apply(widget);
+  return FALSE;
+}
+
+static void cat_addr_destroy_cb(GtkWidget *widget, gpointer data) {
+  cat_addr_entry = NULL;
+}
 #endif
 
 static void toggle_cb(GtkWidget *widget, gpointer data) {
@@ -866,6 +911,28 @@ void radio_menu(GtkWidget *parent) {
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (Btn), ifpan_follow_vfo);
     gtk_grid_attach(GTK_GRID(grid), Btn, 5, row, 2, 1);
     g_signal_connect(Btn, "toggled", G_CALLBACK(follow_cb), NULL);
+    row++;
+    //
+    // CAT link to the Kenwood: rigctld, or Kenwood CAT over TCP straight to
+    // an RS-232/WiFi bridge at "host:port"
+    //
+    GtkWidget *cat_combo = gtk_combo_box_text_new();
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(cat_combo), NULL, "CAT via rigctld");
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(cat_combo), NULL, "CAT via Kenwood TCP");
+    gtk_combo_box_set_active(GTK_COMBO_BOX(cat_combo), ifpan_cat_backend);
+    my_combo_attach(GTK_GRID(grid), cat_combo, 5, row, 2, 1);
+    g_signal_connect(cat_combo, "changed", G_CALLBACK(cat_backend_cb), NULL);
+    row++;
+    char addr[96];
+    snprintf(addr, sizeof(addr), "%s:%d", ifpan_kenwood_host, ifpan_kenwood_port);
+    cat_addr_entry = gtk_entry_new();
+    gtk_entry_set_text(GTK_ENTRY(cat_addr_entry), addr);
+    gtk_entry_set_width_chars(GTK_ENTRY(cat_addr_entry), 18);
+    gtk_widget_set_sensitive(cat_addr_entry, ifpan_cat_backend == IFPAN_CAT_KENWOOD);
+    gtk_grid_attach(GTK_GRID(grid), cat_addr_entry, 5, row, 2, 1);
+    g_signal_connect(cat_addr_entry, "activate", G_CALLBACK(cat_addr_activate_cb), NULL);
+    g_signal_connect(cat_addr_entry, "focus-out-event", G_CALLBACK(cat_addr_focus_cb), NULL);
+    g_signal_connect(cat_addr_entry, "destroy", G_CALLBACK(cat_addr_destroy_cb), NULL);
     row++;
 #endif
     for (int id = 0; id < RECEIVERS; id++) {

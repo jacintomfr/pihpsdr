@@ -49,6 +49,13 @@ extern const char *ifpan_mode_names[];
 
 extern void      ifpan_set_follow(int on);
 
+#define IFPAN_CAT_RIGCTLD 0           // Hamlib rigctld (TCP, rigctl protocol)
+#define IFPAN_CAT_KENWOOD 1           // Kenwood CAT over TCP (RS-232/WiFi bridge)
+extern int       ifpan_cat_backend;
+extern char      ifpan_kenwood_host[64];
+extern int       ifpan_kenwood_port;
+extern void      ifpan_cat_reconnect(void);   // apply new CAT settings now
+
 extern long long ifpan_hw_frequency(void);
 extern void      ifpan_start(void);
 extern void      ifpan_save_state(void);

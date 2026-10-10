@@ -27,6 +27,13 @@
 // is never touched, so the RX stream is not interrupted while the
 // Kenwood dial is turned.
 //
+// Two-way (ifpan.cat_write, default on): when the receiver is tuned in
+// piHPSDR-IF (click, wheel, keypad, ...), the new frequency is sent to the
+// Kenwood ("F"), which then becomes the new display centre. Only the latest
+// request is sent (no queue), CAT-driven changes are not echoed back, and
+// for a short while after a set, stale readings of the old frequency are
+// ignored so that the display does not jump back.
+//
 
 #include <gtk/gtk.h>
 #include <stdio.h>
@@ -50,11 +57,16 @@ char      ifpan_rigctld_host[64] = "127.0.0.1";
 int       ifpan_rigctld_port = 4532;
 int       ifpan_poll_ms = 50;
 int       ifpan_cat_connected = 0;
+int       ifpan_cat_write = 1;
+
+#define CAT_SET_HOLD_US 400000        // ignore stale readings this long after a set
 
 static GThread *cat_thread_id = NULL;
 static GMutex   cat_mutex;
 static long long cat_pending = 0;     // last frequency read, waiting for the main loop
 static int       cat_scheduled = 0;   // an idle callback is already queued
+static long long cat_set_target = 0;  // frequency to send to the Kenwood (0: none)
+static long long ui_last_freq = -1;   // receiver frequency last seen (main thread only)
 
 //
 // Frequency the PlutoSDR LO is tuned to: the IF centre plus the LO offset
@@ -72,6 +84,7 @@ void ifpan_save_state(void) {
   SetPropS0("ifpan.rigctld_host",  ifpan_rigctld_host);
   SetPropI0("ifpan.rigctld_port",  ifpan_rigctld_port);
   SetPropI0("ifpan.poll_ms",       ifpan_poll_ms);
+  SetPropI0("ifpan.cat_write",     ifpan_cat_write);
 }
 
 void ifpan_restore_state(void) {
@@ -80,6 +93,7 @@ void ifpan_restore_state(void) {
   GetPropI0("ifpan.rigctld_port",  ifpan_rigctld_port);
   GetPropI0("ifpan.poll_ms",       ifpan_poll_ms);
   GetPropI0("ifpan.lo_offset",     ifpan_lo_offset);
+  GetPropI0("ifpan.cat_write",     ifpan_cat_write);
   if (ifpan_poll_ms < 20) { ifpan_poll_ms = 20; }
   // keep the IF well inside the Pluto span (+/- 384 kHz at 768 kHz)
   if (ifpan_lo_offset >  200000) { ifpan_lo_offset =  200000; }
@@ -93,7 +107,29 @@ static gboolean cat_apply(gpointer data) {
   cat_scheduled = 0;
   g_mutex_unlock(&cat_mutex);
   vfo_id_set_center(VFO_A, f);
+  // a re-centre caused by the Kenwood must not be sent back to it
+  ui_last_freq = vfo[VFO_A].ctun ? vfo[VFO_A].ctun_frequency : vfo[VFO_A].frequency;
   return G_SOURCE_REMOVE;
+}
+
+//
+// Main loop, every 50 ms: if the receiver was tuned in piHPSDR-IF, ask the
+// CAT thread to move the Kenwood there (only the latest target is kept).
+//
+static gboolean ui_watch(gpointer data) {
+  if (receivers < 1 || receiver[0] == NULL) { return G_SOURCE_CONTINUE; }
+  long long f = vfo[VFO_A].ctun ? vfo[VFO_A].ctun_frequency : vfo[VFO_A].frequency;
+  if (ui_last_freq < 0) {
+    ui_last_freq = f;
+  } else if (f != ui_last_freq) {
+    ui_last_freq = f;
+    if (ifpan_cat_write && ifpan_cat_connected) {
+      g_mutex_lock(&cat_mutex);
+      cat_set_target = f;
+      g_mutex_unlock(&cat_mutex);
+    }
+  }
+  return G_SOURCE_CONTINUE;
 }
 
 static int cat_connect(void) {
@@ -122,19 +158,27 @@ static int cat_connect(void) {
 }
 
 //
-// Send "f\n" and read one line. Returns the frequency, or -1 on error.
+// Read one line from rigctld. Returns 0, or -1 if the connection failed.
 //
-static long long cat_get_freq(int sock) {
-  char line[64];
+static int cat_read_line(int sock, char *line, size_t size) {
   size_t len = 0;
-  if (send(sock, "f\n", 2, MSG_NOSIGNAL) != 2) { return -1; }
-  while (len < sizeof(line) - 1) {
+  while (len < size - 1) {
     ssize_t n = recv(sock, &line[len], 1, 0);
     if (n <= 0) { return -1; }
     if (line[len] == '\n') { break; }
     len++;
   }
   line[len] = 0;
+  return 0;
+}
+
+//
+// Send "f\n" and read one line. Returns the frequency, or -1 on error.
+//
+static long long cat_get_freq(int sock) {
+  char line[64];
+  if (send(sock, "f\n", 2, MSG_NOSIGNAL) != 2) { return -1; }
+  if (cat_read_line(sock, line, sizeof(line)) < 0) { return -1; }
   if (strncmp(line, "RPRT", 4) == 0) { return -1; }   // rigctld error report
   char *end;
   long long f = strtoll(line, &end, 10);
@@ -142,8 +186,25 @@ static long long cat_get_freq(int sock) {
   return f;
 }
 
+//
+// Send "F <freq>\n" and read the "RPRT n" reply. Returns -1 if the
+// connection failed, otherwise 0 (a refusal by the radio is only logged).
+//
+static int cat_set_freq(int sock, long long f) {
+  char cmd[32], line[64];
+  int len = snprintf(cmd, sizeof(cmd), "F %lld\n", f);
+  if (send(sock, cmd, len, MSG_NOSIGNAL) != len) { return -1; }
+  if (cat_read_line(sock, line, sizeof(line)) < 0) { return -1; }
+  if (strncmp(line, "RPRT 0", 6) != 0) {
+    t_print("%s: rigctld refused F %lld: %s\n", __func__, f, line);
+  }
+  return 0;
+}
+
 static gpointer cat_thread(gpointer data) {
   int sock = -1;
+  long long hold_freq = 0;            // frequency just sent to the Kenwood
+  gint64 hold_until = 0;              // until then, ignore other readings
   t_print("%s: rigctld at %s:%d, IF=%lld Hz\n", __func__, ifpan_rigctld_host, ifpan_rigctld_port, ifpan_if_freq);
   for (;;) {
     if (sock < 0) {
@@ -156,6 +217,26 @@ static gpointer cat_thread(gpointer data) {
       ifpan_cat_connected = 1;
       g_idle_add(ext_vfo_update, NULL);
     }
+    //
+    // piHPSDR-IF -> Kenwood: send the latest requested frequency, if any
+    //
+    long long target;
+    g_mutex_lock(&cat_mutex);
+    target = cat_set_target;
+    cat_set_target = 0;
+    g_mutex_unlock(&cat_mutex);
+    if (target > 0) {
+      if (cat_set_freq(sock, target) < 0) {
+        t_print("%s: rigctld connection lost\n", __func__);
+        ifpan_cat_connected = 0;
+        g_idle_add(ext_vfo_update, NULL);
+        close(sock);
+        sock = -1;
+        continue;
+      }
+      hold_freq = target;
+      hold_until = g_get_monotonic_time() + CAT_SET_HOLD_US;
+    }
     long long f = cat_get_freq(sock);
     if (f < 0) {
       t_print("%s: rigctld connection lost\n", __func__);
@@ -164,6 +245,21 @@ static gpointer cat_thread(gpointer data) {
       close(sock);
       sock = -1;
       continue;
+    }
+    //
+    // Right after a set, the radio may still report the old frequency:
+    // ignore such readings so the display does not jump back. The Kenwood
+    // rounds to 10 Hz, so accept anything within 10 Hz of the target.
+    //
+    if (hold_until != 0) {
+      if (llabs(f - hold_freq) < 10) {
+        hold_until = 0;
+      } else if (g_get_monotonic_time() < hold_until) {
+        usleep(ifpan_poll_ms * 1000);
+        continue;
+      } else {
+        hold_until = 0;
+      }
     }
     //
     // Compare with the display centre rather than with the previous
@@ -187,4 +283,5 @@ static gpointer cat_thread(gpointer data) {
 void ifpan_start(void) {
   if (cat_thread_id != NULL) { return; }
   cat_thread_id = g_thread_new("ifpan_cat", cat_thread, NULL);
+  g_timeout_add(50, ui_watch, NULL);
 }

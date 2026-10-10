@@ -41,6 +41,7 @@ extern char      ifpan_rigctld_host[64];
 extern int       ifpan_rigctld_port;
 extern int       ifpan_poll_ms;
 extern int       ifpan_cat_connected; // 1 while rigctld answers
+extern int       ifpan_cat_write;     // 1: tuning in piHPSDR-IF also tunes the Kenwood
 
 extern long long ifpan_hw_frequency(void);
 extern void      ifpan_start(void);

@@ -44,6 +44,7 @@ extern int       ifpan_cat_connected; // 1 while rigctld answers
 extern int       ifpan_cat_write;     // 1: tuning in piHPSDR-IF also tunes the Kenwood
 extern int       ifpan_follow_vfo;    // 1: the receiver follows the Kenwood dial
 extern int       ifpan_kenwood_mode;  // index into ifpan_mode_names[], -1: unknown
+extern int       ifpan_kenwood_smeter; // S-meter in dB relative to S9, -999: unknown
 extern const char *ifpan_mode_names[];
 
 extern void      ifpan_set_follow(int on);

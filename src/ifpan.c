@@ -69,6 +69,8 @@ int       ifpan_cat_write = 1;
 int       ifpan_follow_vfo = 0;
 int       ifpan_rigctld_cache_ms = 0;
 int       ifpan_kenwood_mode = -1;
+int       ifpan_kenwood_smeter = -999;
+#define CAT_SMETER_EVERY 3            // read the S-meter every 3 polls
 
 //
 // Kenwood mode as shown next to "TS" (short names), and the Hamlib names
@@ -245,6 +247,24 @@ static int cat_get_mode(int sock) {
 }
 
 //
+// Send "l STRENGTH\n". Returns 0 and the S-meter in dB relative to S9 in
+// *db, -1 if the connection failed, -2 if the radio did not answer.
+//
+static int cat_get_strength(int sock, int *db) {
+  char line[64];
+  const char *cmd = "l STRENGTH\n";
+  int len = strlen(cmd);
+  if (send(sock, cmd, len, MSG_NOSIGNAL) != len) { return -1; }
+  if (cat_read_line(sock, line, sizeof(line)) < 0) { return -1; }
+  if (strncmp(line, "RPRT", 4) == 0) { return -2; }
+  char *end;
+  long v = strtol(line, &end, 10);
+  if (end == line) { return -2; }
+  *db = (int) v;
+  return 0;
+}
+
+//
 // Set the rigctld frequency cache timeout. Returns -1 if the connection failed.
 //
 static int cat_set_cache(int sock, int ms) {
@@ -277,6 +297,7 @@ static gpointer cat_thread(gpointer data) {
   gint64 hold_until = 0;              // until then, ignore other readings
   int trouble = 0;                    // a CAT problem has been reported (log once)
   int mode_count = 0;                 // polls until the next mode read (0: now)
+  int smeter_count = 0;               // polls until the next S-meter read
   t_print("%s: rigctld at %s:%d, IF=%lld Hz\n", __func__, ifpan_rigctld_host, ifpan_rigctld_port, ifpan_if_freq);
   for (;;) {
     if (sock < 0) {
@@ -370,6 +391,21 @@ static gpointer cat_thread(gpointer data) {
         ifpan_kenwood_mode = m;
         g_idle_add(ext_vfo_update, NULL);
       }
+    }
+    //
+    // Kenwood S-meter, shown next to the piHPSDR-IF meter (the meter is
+    // redrawn continuously, so only the value is stored here)
+    //
+    if (smeter_count-- <= 0) {
+      smeter_count = CAT_SMETER_EVERY;
+      int db;
+      int rc = cat_get_strength(sock, &db);
+      if (rc == -1) {
+        close(sock);
+        sock = -1;
+        continue;
+      }
+      ifpan_kenwood_smeter = (rc == 0) ? db : -999;
     }
     //
     // Right after a set, the radio may still report the old frequency:

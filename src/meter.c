@@ -32,6 +32,9 @@
 #include "theme.h"
 #include "version.h"
 #include "vfo.h"
+#ifdef IFPAN
+  #include "ifpan.h"
+#endif
 
 static GtkWidget *meter;
 static cairo_surface_t *meter_surface = NULL;
@@ -743,19 +746,54 @@ void rxmeter_update(int fps, double rxlvl, double peak, double gain, double out)
     cairo_set_font_size(cr, 16.0 * scalfac);
 #ifdef IFPAN
     //
-    // receive-only: no Mic line, centre Gain/Out vertically
+    // IF panadapter: the TS-570D S-meter (read by CAT) instead of the
+    // piHPSDR Mic/Gain/Out readouts, in S units and in dB relative to S9.
+    // Same colour as the "TS" readout, grey while CAT is down. Values are
+    // right-aligned so their width does not move anything.
     //
+    (void) max_peak;
+    (void) max_gain;
+    (void) max_out;
     Y1 = 0.5 * (Y0 + Y1);
     Y2 = Y1 + 20.0 * scalfac;
-#endif
+    int db = ifpan_kenwood_smeter;
+    int known = ifpan_cat_connected && db > -999;
+    if (known) {
+      cairo_set_source_rgba(cr, COLOUR_ATTN);
+    } else {
+      cairo_set_source_rgba(cr, COLOUR_SHADE);
+    }
+    cairo_move_to(cr, 5, Y1);
+    cairo_show_text(cr, "TS");
+    cairo_move_to(cr, 5, Y2);
+    cairo_show_text(cr, "dB");
+    if (!known) {
+      snprintf(sf, sizeof(sf), "--");
+    } else if (db > 0) {
+      snprintf(sf, sizeof(sf), "S9+%d", db);
+    } else {
+      int s = 9 + (db - 3) / 6;          // ~6 dB per S unit, rounded
+      if (s < 0) { s = 0; }
+      snprintf(sf, sizeof(sf), "S%d", s);
+    }
+    cairo_text_extents(cr, sf, &extents);
+    cairo_move_to(cr, ADD_METER_WIDTH - extents.width - 2.0, Y1);
+    cairo_show_text(cr, sf);
+    if (known) {
+      snprintf(sf, sizeof(sf), "%+d", db);
+    } else {
+      snprintf(sf, sizeof(sf), "--");
+    }
+    cairo_text_extents(cr, sf, &extents);
+    cairo_move_to(cr, ADD_METER_WIDTH - extents.width - 2.0, Y2);
+    cairo_show_text(cr, sf);
+#else
     //
     // RX info on additional meter
     //
-#ifndef IFPAN
     snprintf(sf, sizeof(sf), "Mic");
     cairo_move_to(cr, 5, Y0);
     cairo_show_text(cr, sf);
-#endif
     snprintf(sf, sizeof(sf), "Gain");
     cairo_move_to(cr, 5, Y1);
     cairo_show_text(cr, sf);
@@ -765,12 +803,10 @@ void rxmeter_update(int fps, double rxlvl, double peak, double gain, double out)
     //
     // BTW %0.0f takes care of correct rounding
     //
-#ifndef IFPAN
     snprintf(sf, sizeof(sf), "%0.0f", max_peak);
     cairo_text_extents(cr, sf, &extents);
     cairo_move_to(cr, ADD_METER_WIDTH - extents.width - 2.0, Y0);
     cairo_show_text(cr, sf);
-#endif
     snprintf(sf, sizeof(sf), "%0.0f", max_gain);
     cairo_text_extents(cr, sf, &extents);
     cairo_move_to(cr, ADD_METER_WIDTH - extents.width - 2.0, Y1);
@@ -779,6 +815,7 @@ void rxmeter_update(int fps, double rxlvl, double peak, double gain, double out)
     cairo_text_extents(cr, sf, &extents);
     cairo_move_to(cr, ADD_METER_WIDTH - extents.width - 2.0, Y2);
     cairo_show_text(cr, sf);
+#endif
     cairo_stroke(cr);
   }
   switch (meter_type) {

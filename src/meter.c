@@ -606,6 +606,49 @@ static void txmeter_powerbar(cairo_t *cr, double frac, double pk, const char *pw
   }
 }
 
+#ifdef IFPAN
+//
+// IF panadapter: while the Kenwood transmits, the main meter shows its
+// power and SWR (read by CAT) with piHPSDR's own TX meter faces, full scale
+// 100 W (dual-scale: power bar; the other types: edgewise). TS-570D raw
+// values are bar dots 0..30: power 5 W per dot (measured 10 / 25 / 50 W =
+// 2 / 5 / 10); SWR = 60 / (30 - n) - 1, as Hamlib does for the TS-850 and
+// TS-870 (same meter generation): 0 = 1.0, 10 = 2.0, 20 = 5.0.
+//
+static void ifpan_txmeter(cairo_t *cr, int fps) {
+  static double pk = 0.0;
+  static int pk_count = 0;
+  char pwrstr[32];
+  double pwr = (ifpan_kenwood_pwr < 0) ? 0.0 : 5.0 * ifpan_kenwood_pwr;
+  double swr = 1.0;
+  if (ifpan_kenwood_swr >= 0) {
+    swr = (ifpan_kenwood_swr >= 24) ? 9.9 : 60.0 / (30.0 - ifpan_kenwood_swr) - 1.0;
+  }
+  int swr_alarm = (swr > 3.0);
+  double frac = pwr / 100.0;
+  if (frac > 1.0) { frac = 1.0; }
+  //
+  // peak-hold as on the piHPSDR TX meter: instant attack, hold 1.5 s,
+  // then slow release
+  //
+  if (frac > pk) {
+    pk = frac;
+    pk_count = (3 * fps) / 2;
+  } else if (pk_count > 0) {
+    pk_count--;
+  } else {
+    pk -= 0.125 / fps;
+    if (pk < 0.0) { pk = 0.0; }
+  }
+  snprintf(pwrstr, sizeof(pwrstr), "%dW", (int)(pwr + 0.5));
+  if (meter_type == DUALSCALE) {
+    txmeter_powerbar(cr, frac, pk, pwrstr, swr, swr_alarm, 10.0, 2);
+  } else {
+    txmeter_edgewise(cr, frac, pk, pwrstr, swr, swr_alarm, 10.0, 2, 0.0, 1);
+  }
+}
+#endif
+
 void rxmeter_update(int fps, double rxlvl, double peak, double gain, double out) {
   if (!meter_surface) { return; }
   const double min_rxlvl = -200.0;
@@ -754,41 +797,28 @@ void rxmeter_update(int fps, double rxlvl, double peak, double gain, double out)
     (void) max_peak;
     (void) max_gain;
     (void) max_out;
-    if (ifpan_kenwood_tx && ifpan_cat_connected) {
-      //
-      // The Kenwood transmits: its TX meters (read by CAT) on three lines,
-      // in red. Raw values from the radio (bar dots, 0..30):
-      //  - PWR: measured on the TS-570D, 10 W = 2, 50 W = 10 (5 W per dot);
-      //  - SWR: 60 / (30 - n) - 1, as Hamlib does for the TS-850/TS-870
-      //    (same meter generation): 0 = 1.0, 10 = 2.0, 20 = 5.0;
-      //  - ALC: raw dots.
-      //
-      const char *lbl[3] = { "PWR", "SWR", "ALC" };
-      double ys[3] = { Y0, Y1, Y2 };
-      int pwr = ifpan_kenwood_pwr, swr = ifpan_kenwood_swr, alc = ifpan_kenwood_alc;
-      cairo_set_source_rgba(cr, COLOUR_ALARM);
-      for (int i = 0; i < 3; i++) {
-        cairo_move_to(cr, 5, ys[i]);
-        cairo_show_text(cr, lbl[i]);
-        if (i == 0) {
-          if (pwr < 0) { snprintf(sf, sizeof(sf), "--"); }
-          else { snprintf(sf, sizeof(sf), "%dW", 5 * pwr); }
-        } else if (i == 1) {
-          if (swr < 0) { snprintf(sf, sizeof(sf), "--"); }
-          else if (swr >= 30) { snprintf(sf, sizeof(sf), "HIGH"); }
-          else { snprintf(sf, sizeof(sf), "%.1f", 60.0 / (30.0 - swr) - 1.0); }
-        } else {
-          if (alc < 0) { snprintf(sf, sizeof(sf), "--"); }
-          else { snprintf(sf, sizeof(sf), "%d", alc); }
-        }
-        cairo_text_extents(cr, sf, &extents);
-        cairo_move_to(cr, ADD_METER_WIDTH - extents.width - 2.0, ys[i]);
-        cairo_show_text(cr, sf);
-      }
-      goto ifpan_meter_done;
-    }
     Y1 = 0.5 * (Y0 + Y1);
     Y2 = Y1 + 20.0 * scalfac;
+    if (ifpan_kenwood_tx && ifpan_cat_connected) {
+      //
+      // The Kenwood transmits (PWR and SWR are on the main meter, see
+      // ifpan_txmeter): "TS TX" and the ALC (raw bar dots), in red.
+      //
+      cairo_set_source_rgba(cr, COLOUR_ALARM);
+      cairo_move_to(cr, 5, Y1);
+      cairo_show_text(cr, "TS");
+      cairo_move_to(cr, 5, Y2);
+      cairo_show_text(cr, "ALC");
+      cairo_text_extents(cr, "TX", &extents);
+      cairo_move_to(cr, ADD_METER_WIDTH - extents.width - 2.0, Y1);
+      cairo_show_text(cr, "TX");
+      if (ifpan_kenwood_alc < 0) { snprintf(sf, sizeof(sf), "--"); }
+      else { snprintf(sf, sizeof(sf), "%d", ifpan_kenwood_alc); }
+      cairo_text_extents(cr, sf, &extents);
+      cairo_move_to(cr, ADD_METER_WIDTH - extents.width - 2.0, Y2);
+      cairo_show_text(cr, sf);
+      goto ifpan_meter_done;
+    }
     int db = ifpan_kenwood_smeter;
     int known = ifpan_cat_connected && db > -999;
     if (known) {
@@ -852,6 +882,14 @@ ifpan_meter_done:
 #endif
     cairo_stroke(cr);
   }
+#ifdef IFPAN
+  if (ifpan_kenwood_tx && ifpan_cat_connected) {
+    ifpan_txmeter(cr, fps);
+    cairo_destroy(cr);
+    gtk_widget_queue_draw (meter);
+    return;
+  }
+#endif
   switch (meter_type) {
   case ANALOG: {
     //

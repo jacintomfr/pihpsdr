@@ -527,50 +527,45 @@ void soapy_protocol_init(void) {
 #ifdef IFPAN
 //
 // IF panadapter: the Pluto LO sits ifpan_lo_offset (D) above the IF so that
-// its DC spike is not on the Kenwood frequency. In the (I/Q-swapped as
-// selected) stream the IF centre is then at delta = +D (swap) or -D (no swap),
-// because swapping I and Q mirrors the spectrum. Rotating every sample by
-// -delta puts the IF (= Kenwood VFO) back to the centre of the display and
-// leaves the DC spike at -delta.
+// its DC spike is not on the Kenwood frequency. In the raw stream the IF
+// centre is therefore at -D. Every raw sample is rotated by +D, at the radio
+// sample rate and BEFORE the resampler and the optional I/Q swap, so that
+// the IF (= Kenwood VFO) is at DC: it ends up in the centre of the display,
+// the resampler's pass band is centred on it (no roll-off notch inside the
+// span at reduced sample rates), and the DC spike sits D away from it.
 //
 static double rot_re[2] = { 1.0, 1.0 }, rot_im[2] = { 0.0, 0.0 };  // oscillator
 static double step_re[2], step_im[2];                               // per-sample step
-static double step_hz[2] = { 0.0, 0.0 };
+static long long step_hz[2] = { 0, 0 };
 static int    step_rate[2] = { 0, 0 };
 static int    renorm[2] = { 0, 0 };
 
-static inline void ifpan_add_iq_samples(RECEIVER *rx, double isample, double qsample) {
-  int id = rx->id & 1;
-  double delta = soapy_iqswap ? (double)ifpan_lo_offset : -(double)ifpan_lo_offset;
-  if (delta != step_hz[id] || rx->sample_rate != step_rate[id]) {
-    double w = -2.0 * M_PI * delta / (double)rx->sample_rate;
+static inline void ifpan_rotate(int id, double *isample, double *qsample) {
+  id &= 1;
+  if (ifpan_lo_offset == 0) { return; }
+  if (ifpan_lo_offset != step_hz[id] || soapy_radio_sample_rate != step_rate[id]) {
+    double w = 2.0 * M_PI * (double)ifpan_lo_offset / (double)soapy_radio_sample_rate;
     step_re[id] = cos(w);
     step_im[id] = sin(w);
-    step_hz[id] = delta;
-    step_rate[id] = rx->sample_rate;
+    step_hz[id] = ifpan_lo_offset;
+    step_rate[id] = soapy_radio_sample_rate;
   }
-  if (delta != 0.0) {
-    double ore = rot_re[id], oim = rot_im[id];
-    double i2 = isample * ore - qsample * oim;
-    double q2 = isample * oim + qsample * ore;
-    isample = i2;
-    qsample = q2;
-    double nre = ore * step_re[id] - oim * step_im[id];
-    double nim = ore * step_im[id] + oim * step_re[id];
-    if (++renorm[id] >= 4096) {   // keep |oscillator| = 1
-      double m = 1.0 / sqrt(nre * nre + nim * nim);
-      nre *= m;
-      nim *= m;
-      renorm[id] = 0;
-    }
-    rot_re[id] = nre;
-    rot_im[id] = nim;
+  double ore = rot_re[id], oim = rot_im[id];
+  double i2 = *isample * ore - *qsample * oim;
+  double q2 = *isample * oim + *qsample * ore;
+  *isample = i2;
+  *qsample = q2;
+  double nre = ore * step_re[id] - oim * step_im[id];
+  double nim = ore * step_im[id] + oim * step_re[id];
+  if (++renorm[id] >= 4096) {   // keep |oscillator| = 1
+    double m = 1.0 / sqrt(nre * nre + nim * nim);
+    nre *= m;
+    nim *= m;
+    renorm[id] = 0;
   }
-  rx_add_iq_samples(rx, isample, qsample);
+  rot_re[id] = nre;
+  rot_im[id] = nim;
 }
-#define RX_ADD_IQ ifpan_add_iq_samples
-#else
-#define RX_ADD_IQ rx_add_iq_samples
 #endif
 
 static void process_rx_buffer(RECEIVER *rx, const float *rxbuff, const int elements, const int micflag) {
@@ -595,17 +590,25 @@ static void process_rx_buffer(RECEIVER *rx, const float *rxbuff, const int eleme
     //
     int rxrc = rx->resample_count;
     for (int i = 0; i < elements; i++) {
+#ifdef IFPAN
+      isample = (double)rxbuff[i * 2];
+      qsample = (double)rxbuff[(i * 2) + 1];
+      ifpan_rotate(rx->id, &isample, &qsample);
+      rx->resample_input[rxrc++] = isample;
+      rx->resample_input[rxrc++] = qsample;
+#else
       rx->resample_input[rxrc++] = (double)rxbuff[i * 2];
       rx->resample_input[rxrc++] = (double)rxbuff[(i * 2) + 1];
+#endif
       if (rxrc >= 2 * max_rx_samples) {
         int samples = xresample(rx->resampler);
         for (int j = 0; j < samples; j++) {
           isample = rx->resample_output[j * 2];
           qsample = rx->resample_output[(j * 2) + 1];
           if (soapy_iqswap) {
-            RX_ADD_IQ(rx, qsample, isample);
+            rx_add_iq_samples(rx, qsample, isample);
           } else {
-            RX_ADD_IQ(rx, isample, qsample);
+            rx_add_iq_samples(rx, isample, qsample);
           }
           if (transmitter != NULL && micflag) {
             mic_samples++;
@@ -631,10 +634,13 @@ static void process_rx_buffer(RECEIVER *rx, const float *rxbuff, const int eleme
     for (int i = 0; i < elements; i++) {
       isample = (double)rxbuff[i * 2];
       qsample = (double)rxbuff[(i * 2) + 1];
+#ifdef IFPAN
+      ifpan_rotate(rx->id, &isample, &qsample);
+#endif
       if (soapy_iqswap) {
-        RX_ADD_IQ(rx, qsample, isample);
+        rx_add_iq_samples(rx, qsample, isample);
       } else {
-        RX_ADD_IQ(rx, isample, qsample);
+        rx_add_iq_samples(rx, isample, qsample);
       }
       if (transmitter != NULL && micflag) {
         mic_samples++;

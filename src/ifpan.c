@@ -20,7 +20,7 @@
 // IF panadapter: CAT tracking of the Kenwood TS-570D through Hamlib's
 // rigctld (which owns the serial port), e.g.
 //
-//   rigctld -m 2016 -r /dev/ttyUSB0 -s 9600
+//   rigctld -m 2004 -r /dev/ttyUSB0 -s 9600
 //
 // A thread polls the VFO frequency ("f") and, when it changes, hands it
 // to the GTK main loop which moves the display centre. The PlutoSDR LO

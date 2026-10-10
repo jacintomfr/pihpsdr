@@ -157,7 +157,7 @@ void vfo_menu(GtkWidget *parent, int id) {
   dialog = gtk_dialog_new();
   gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(parent));
   char title[64];
-  snprintf(title, sizeof(title), "piHPSDR - VFO %s", myvfo == 0 ? "A" : "B");
+  snprintf(title, sizeof(title), APP_NAME " - VFO %s", myvfo == 0 ? "A" : "B");
   GtkWidget *headerbar = gtk_header_bar_new();
   gtk_window_set_titlebar(GTK_WINDOW(dialog), headerbar);
   gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(headerbar), TRUE);

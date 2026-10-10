@@ -51,7 +51,7 @@ void about_menu(GtkWidget *parent) {
   dialog = gtk_dialog_new();
   gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(parent));
   char title[64];
-  snprintf(title, sizeof(title), "piHPSDR - About");
+  snprintf(title, sizeof(title), APP_NAME " - About");
   GtkWidget *headerbar = gtk_header_bar_new();
   gtk_window_set_titlebar(GTK_WINDOW(dialog), headerbar);
   gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(headerbar), TRUE);
@@ -69,6 +69,14 @@ void about_menu(GtkWidget *parent) {
   g_signal_connect (close_b, "button-press-event", G_CALLBACK(close_cb), NULL);
   gtk_grid_attach(GTK_GRID(grid), close_b, 0, row, 4, 1);
   row++;
+#ifdef IFPAN
+  snprintf(text, sizeof(text), APP_NAME ": receive-only IF panadapter (TS-570D + PlutoSDR) by CU2ED, based on");
+  label = gtk_label_new(text);
+  gtk_widget_set_name(label, "med_txt");
+  gtk_widget_set_halign(label, GTK_ALIGN_START);
+  gtk_grid_attach(GTK_GRID(grid), label, 1, row, 19, 1);
+  row++;
+#endif
   snprintf(text, sizeof(text), "piHPSDR by John Melton (G0ORX/N6LYT) and Christoph van Wüllen (DL1YCF)");
   label = gtk_label_new(text);
   gtk_widget_set_name(label, "med_txt");

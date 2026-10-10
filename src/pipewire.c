@@ -398,7 +398,7 @@ int audio_open_output(RECEIVER *rx) {
                                   PW_KEY_MEDIA_CATEGORY, "Playback",
                                   PW_KEY_MEDIA_ROLE, "DSP",
                                   PW_KEY_NODE_NAME, "pihpsdr-rx",
-                                  PW_KEY_NODE_DESCRIPTION, "piHPSDR Playback",
+                                  PW_KEY_NODE_DESCRIPTION, APP_NAME " Playback",
                                   PW_KEY_TARGET_OBJECT, rx->audio_name,
                                   PW_KEY_NODE_LATENCY, PIPEWIRE_QUANTUM_PLAYBACK,
                                   NULL
@@ -546,7 +546,7 @@ int audio_open_input(TRANSMITTER *tx) {
                                   PW_KEY_MEDIA_TYPE, "Audio",
                                   PW_KEY_MEDIA_CATEGORY, "Capture",
                                   PW_KEY_MEDIA_ROLE, "DSP",
-                                  PW_KEY_NODE_NAME, "piHPSDR capture",
+                                  PW_KEY_NODE_NAME, APP_NAME " capture",
                                   PW_KEY_TARGET_OBJECT, tx->audio_name,
                                   PW_KEY_NODE_LATENCY, PIPEWIRE_QUANTUM_CAPTURE,
                                   NULL

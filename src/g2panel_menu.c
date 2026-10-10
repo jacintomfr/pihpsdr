@@ -104,7 +104,7 @@ void g2panel_menu(GtkWidget *parent) {
   GtkWidget *headerbar = gtk_header_bar_new();
   gtk_window_set_titlebar(GTK_WINDOW(dialog), headerbar);
   gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(headerbar), TRUE);
-  gtk_header_bar_set_title(GTK_HEADER_BAR(headerbar), "piHPSDR - G2 panel Switch/Encoder Assignments");
+  gtk_header_bar_set_title(GTK_HEADER_BAR(headerbar), APP_NAME " - G2 panel Switch/Encoder Assignments");
   g_signal_connect (dialog, "delete_event", G_CALLBACK (close_cb), NULL);
   g_signal_connect (dialog, "destroy", G_CALLBACK (close_cb), NULL);
   GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
@@ -127,7 +127,7 @@ void g2panel_menu(GtkWidget *parent) {
   gtk_widget_set_halign(last_label, GTK_ALIGN_START);
   gtk_grid_attach(GTK_GRID(grid), last_label, 5, row, 3, 1);
   row++;
-  w = gtk_label_new("piHPSDR command assigned");
+  w = gtk_label_new(APP_NAME " command assigned");
   gtk_widget_set_name(w, "medium_button");
   gtk_widget_set_halign(w, GTK_ALIGN_START);
   gtk_widget_set_valign(w, GTK_ALIGN_CENTER);

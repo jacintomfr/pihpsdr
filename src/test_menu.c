@@ -24,6 +24,7 @@
 #include <gtk/gtk.h>
 #include <gdk/gdk.h>
 
+#include "appname.h"
 #include "actions.h"
 #include "message.h"
 
@@ -165,7 +166,7 @@ void test_menu(GtkWidget *parent) {
   GtkWidget *headerbar = gtk_header_bar_new();
   gtk_window_set_titlebar(GTK_WINDOW(dialog), headerbar);
   gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(headerbar), TRUE);
-  gtk_header_bar_set_title(GTK_HEADER_BAR(headerbar), "piHPSDR - Test Commands");
+  gtk_header_bar_set_title(GTK_HEADER_BAR(headerbar), APP_NAME " - Test Commands");
   g_signal_connect (dialog, "delete_event", G_CALLBACK (delete_cb), NULL);
   GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
   GtkWidget *grid = gtk_grid_new();

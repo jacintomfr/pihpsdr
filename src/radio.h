@@ -21,6 +21,7 @@
 #define _RADIO_H_
 
 #include "adc.h"
+#include "appname.h"
 #include "discovered.h"
 #include "receiver.h"
 #include "transmitter.h"

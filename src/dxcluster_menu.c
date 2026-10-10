@@ -145,7 +145,7 @@ void dxcluster_menu(GtkWidget *parent) {
   gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(parent));
   GtkWidget *headerbar = gtk_header_bar_new();
   gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(headerbar), TRUE);
-  gtk_header_bar_set_title(GTK_HEADER_BAR(headerbar), "piHPSDR - DX Cluster");
+  gtk_header_bar_set_title(GTK_HEADER_BAR(headerbar), APP_NAME " - DX Cluster");
   gtk_window_set_titlebar(GTK_WINDOW(dialog), headerbar);
   g_signal_connect(dialog, "delete-event", G_CALLBACK(on_delete_event), NULL);
   GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));

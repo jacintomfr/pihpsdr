@@ -8,6 +8,7 @@ GNUmakefile
 *.orig
 make.config.pihpsdr
 /pihpsdr
+/pihpsdr-if
 pihpsdr.app
 hpsdrsim
 wdspWisdom*

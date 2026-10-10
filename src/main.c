@@ -203,7 +203,7 @@ static void activate_pihpsdr(GtkApplication *app, gpointer data) {
   //
   top_window = gtk_application_window_new (app);
   gtk_widget_set_size_request(top_window, 100, 100);
-  gtk_window_set_title (GTK_WINDOW (top_window), "piHPSDR");
+  gtk_window_set_title (GTK_WINDOW (top_window), APP_NAME);
   //
   // do not use GTK_WIN_POS_CENTER_ALWAYS, since this will let the
   // window jump back to the center each time the window is
@@ -269,7 +269,7 @@ static void activate_pihpsdr(GtkApplication *app, gpointer data) {
     gtk_widget_set_valign(image, GTK_ALIGN_FILL | GTK_ALIGN_START);
   }
   int row = 0;
-  label = gtk_label_new("piHPSDR V3");
+  label = gtk_label_new(APP_NAME " V3");
   gtk_widget_set_halign(label, GTK_ALIGN_START);
   gtk_widget_set_name(label, "big_txt");
   gtk_grid_attach(GTK_GRID(topgrid), label, 1, row++, 4, 1);
@@ -300,7 +300,7 @@ int main(int argc, char **argv) {
   // If invoked with -V, print version and FPGA firmware compatibility information
   //
   if (argc >= 2 && !strcmp("-V", argv[1])) {
-    fprintf(stderr, "piHPSDR version %s(%s); built %s\n", build_version, build_commit, build_date);
+    fprintf(stderr, APP_NAME " version %s(%s); built %s\n", build_version, build_commit, build_date);
     fprintf(stderr, "Compile-time options      : %sAudioModule=%s\n", build_options, build_audio);
     exit(0);
   }

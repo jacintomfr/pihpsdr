@@ -160,7 +160,7 @@ void audio_get_cards() {
   n_output_devices = 0;
   pa_glib_mainloop *main_loop = pa_glib_mainloop_new(NULL);
   pa_mainloop_api *main_loop_api = pa_glib_mainloop_get_api(main_loop);
-  pa_context *pa_ctx = pa_context_new(main_loop_api, "piHPSDR");
+  pa_context *pa_ctx = pa_context_new(main_loop_api, APP_NAME);
   pa_context_connect(pa_ctx, NULL, 0, NULL);
   pa_context_set_state_callback(pa_ctx, state_cb, NULL);
   g_thread_new("PAenum", enumerate_thread, (gpointer)pa_ctx);
@@ -220,7 +220,7 @@ int audio_open_output(RECEIVER *rx) {
     return -1;
   }
   ad->pastream   = pa_simple_new(NULL, // Use the default server.
-                                 "piHPSDR",          // Our application's name.
+                                 APP_NAME,           // Our application's name.
                                  PA_STREAM_PLAYBACK,
                                  rx->audio_name,
                                  stream_id,          // Description of our stream.
@@ -320,7 +320,7 @@ int audio_open_input(TRANSMITTER *tx) {
   }
   audio_data *ad = g_new(audio_data, 1);
   ad->pastream = pa_simple_new(NULL,      // Use the default server.
-                               "piHPSDR",                   // Our application's name.
+                               APP_NAME,                    // Our application's name.
                                PA_STREAM_RECORD,
                                tx->audio_name,
                                "TX",                        // Description of our stream.
@@ -455,7 +455,7 @@ static int do_rxtx(gpointer data) {
     attr.minreq    = (uint32_t) -1;
     attr.fragsize  = (uint32_t) -1;
     ad->pastream = pa_simple_new(NULL, // Use the default server.
-                                 "piHPSDR",          // Our application's name.
+                                 APP_NAME,           // Our application's name.
                                  PA_STREAM_PLAYBACK,
                                  rx->audio_name,
                                  stream_id,          // Description of our stream.
@@ -625,7 +625,7 @@ static int do_txrx(gpointer data) {
     attr.minreq    = (uint32_t) -1;
     attr.fragsize  = (uint32_t) -1;
     ad->pastream = pa_simple_new(NULL, // Use the default server.
-                                 "piHPSDR",          // Our application's name.
+                                 APP_NAME,           // Our application's name.
                                  PA_STREAM_PLAYBACK,
                                  rx->audio_name,
                                  stream_id,          // Description of our stream.

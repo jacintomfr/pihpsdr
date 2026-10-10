@@ -93,19 +93,19 @@ void encoder_menu(GtkWidget *parent) {
   char title[64];
   switch (controller) {
   case NO_CONTROLLER:
-    snprintf(title, sizeof(title), "piHPSDR - No Encoders");
+    snprintf(title, sizeof(title), APP_NAME " - No Encoders");
     break;
   case CONTROLLER1:
-    snprintf(title, sizeof(title), "piHPSDR - Controller 1 Encoder Actions");
+    snprintf(title, sizeof(title), APP_NAME " - Controller 1 Encoder Actions");
     break;
   case CONTROLLER2_V1:
-    snprintf(title, sizeof(title), "piHPSDR - Controller 2 V1 Encoder Actions");
+    snprintf(title, sizeof(title), APP_NAME " - Controller 2 V1 Encoder Actions");
     break;
   case CONTROLLER2_V2:
-    snprintf(title, sizeof(title), "piHPSDR - Controller 2 V2 Encoder Actions");
+    snprintf(title, sizeof(title), APP_NAME " - Controller 2 V2 Encoder Actions");
     break;
   case G2V1_PANEL:
-    snprintf(title, sizeof(title), "piHPSDR - G2V1 FrontPanel Encoder Actions");
+    snprintf(title, sizeof(title), APP_NAME " - G2V1 FrontPanel Encoder Actions");
     break;
   }
   GtkWidget *headerbar = gtk_header_bar_new();

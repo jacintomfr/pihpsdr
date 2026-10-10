@@ -248,30 +248,35 @@ echo "... creating Desktop Icons"
 echo
 echo "=============================================================="
 
-rm -f $HOME/Desktop/pihpsdr.desktop
-rm -f $HOME/.local/share/applications/pihpsdr.desktop
+#
+# piHPSDR-IF (IF panadapter fork) uses its own binary, start script and
+# desktop entry, so that it can live next to an original piHPSDR install
+# without touching its desktop icon or start script.
+#
+rm -f $HOME/Desktop/pihpsdr-if.desktop
+rm -f $HOME/.local/share/applications/pihpsdr-if.desktop
 
-cat <<EOT > $TARGET/pihpsdr.sh
+cat <<EOT > $TARGET/pihpsdr-if.sh
 cd $TARGET
-$TARGET/pihpsdr >log 2>&1
+$TARGET/pihpsdr-if >log 2>&1
 EOT
-chmod +x $TARGET/pihpsdr.sh
+chmod +x $TARGET/pihpsdr-if.sh
 
-cat <<EOT > $TARGET/pihpsdr.desktop
+cat <<EOT > $TARGET/pihpsdr-if.desktop
 #!/usr/bin/env xdg-open
 [Desktop Entry]
 Version=1.0
 Type=Application
 Terminal=false
-Name[eb_GB]=piHPSDR
-Exec=$TARGET/pihpsdr.sh
+Name[eb_GB]=piHPSDR-IF
+Exec=$TARGET/pihpsdr-if.sh
 Icon=$TARGET/piHPSDR_logo.png
-Name=piHPSDR
+Name=piHPSDR-IF
 EOT
 
-cp $TARGET/pihpsdr.desktop $HOME/Desktop
+cp $TARGET/pihpsdr-if.desktop $HOME/Desktop
 mkdir -p $HOME/.local/share/applications
-cp $TARGET/pihpsdr.desktop $HOME/.local/share/applications
+cp $TARGET/pihpsdr-if.desktop $HOME/.local/share/applications
 
 cp $PIHPSDR/piHPSDR_logo.png $TARGET
 

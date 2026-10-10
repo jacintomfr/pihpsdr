@@ -57,6 +57,7 @@
   #include <IOKit/pwr_mgt/IOPMLib.h>
 #endif
 
+#include "appname.h"
 #include "message.h"
 
 void startup(const char *path) {
@@ -93,9 +94,10 @@ void startup(const char *path) {
     unlink(filename);
   }
   //
-  // Look whether file pihpsdr.sh or directory release/pihpsdr exists
+  // Look whether the start script (pihpsdr.sh, or pihpsdr-if.sh for the IF
+  // panadapter, see appname.h) or directory release/pihpsdr exists
   //
-  rc = stat("pihpsdr.sh", &statbuf);
+  rc = stat(APP_SCRIPT, &statbuf);
   if (rc == 0 && (S_ISREG(statbuf.st_mode) || S_ISLNK(statbuf.st_mode))) { found = 1;}
   rc = stat("release/pihpsdr", &statbuf);
   if (rc == 0 && S_ISDIR(statbuf.st_mode)) { found = 1;}
@@ -108,7 +110,7 @@ void startup(const char *path) {
   }
   //
   // Try to locate
-  // - on LINUX: $HOME/.config/pihpsdr
+  // - on LINUX: $HOME/.config/pihpsdr (IF panadapter: $HOME/.config/pihpsdr-if)
   // - on MacOS: $HOME/Library/Application Support/piHPSDR
   // and if this exists, chdir to that directory.
   //
@@ -125,7 +127,7 @@ void startup(const char *path) {
     return;
   }
 #ifdef __APPLE__
-  snprintf(workdir, sizeof(workdir), "%s/Library/Application Support/piHPSDR", homedir);
+  snprintf(workdir, sizeof(workdir), "%s/Library/Application Support/" APP_NAME, homedir);
   if (stat(workdir, &statbuf) < 0) {
     mkdir (workdir, 0700);
   }
@@ -138,7 +140,7 @@ void startup(const char *path) {
   if (stat(workdir, &statbuf) < 0) {
     mkdir (workdir, 0700);
   }
-  snprintf(workdir, sizeof(workdir), "%s/.config/pihpsdr", homedir);
+  snprintf(workdir, sizeof(workdir), "%s/.config/" APP_DIR, homedir);
   if (stat(workdir, &statbuf) < 0) {
     mkdir (workdir, 0700);
   }

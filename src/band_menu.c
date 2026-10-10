@@ -120,7 +120,7 @@ void band_menu(GtkWidget *parent, int id) {
   gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(parent));
   char title[64];
   myvfo = id;
-  snprintf(title, sizeof(title), "piHPSDR - Band (VFO-%s)", myvfo == 0 ? "A" : "B");
+  snprintf(title, sizeof(title), APP_NAME " - Band (VFO-%s)", myvfo == 0 ? "A" : "B");
   GtkWidget *headerbar = gtk_header_bar_new();
   gtk_window_set_titlebar(GTK_WINDOW(dialog), headerbar);
   gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(headerbar), TRUE);

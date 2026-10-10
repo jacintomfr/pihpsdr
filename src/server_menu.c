@@ -155,7 +155,7 @@ static void* network_bkgd_thread(void *arg) {
             UPNP_DeletePortMapping(urls.controlURL, data.first.servicetype, port_str, "TCP", NULL);
             error = UPNP_AddPortMapping(urls.controlURL, data.first.servicetype,
                                         port_str, port_str,
-                                        lan_addr, "piHPSDR remote", "TCP",
+                                        lan_addr, APP_NAME " remote", "TCP",
                                         NULL,    /* remoteHost — NULL = any */
                                         "0");    /* leaseDuration — 0 = permanent */
             FreeUPNPUrls(&urls);
@@ -299,7 +299,7 @@ void server_menu(GtkWidget *parent) {
   GtkWidget *headerbar = gtk_header_bar_new();
   gtk_window_set_titlebar(GTK_WINDOW(dialog), headerbar);
   gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(headerbar), TRUE);
-  gtk_header_bar_set_title(GTK_HEADER_BAR(headerbar), "piHPSDR - Server");
+  gtk_header_bar_set_title(GTK_HEADER_BAR(headerbar), APP_NAME " - Server");
   g_signal_connect (dialog, "delete_event", G_CALLBACK (close_cb), NULL);
   GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
   GtkWidget *grid = gtk_grid_new();

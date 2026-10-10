@@ -598,7 +598,7 @@ static void discovery(void) {
   GtkWidget *headerbar = gtk_header_bar_new();
   gtk_window_set_titlebar(GTK_WINDOW(discovery_dialog), headerbar);
   gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(headerbar), TRUE);
-  gtk_header_bar_set_title(GTK_HEADER_BAR(headerbar), "piHPSDR - Discovery");
+  gtk_header_bar_set_title(GTK_HEADER_BAR(headerbar), APP_NAME " - Discovery");
   g_signal_connect(discovery_dialog, "delete_event", G_CALLBACK(close_cb), NULL);
   g_signal_connect(discovery_dialog, "destroy", G_CALLBACK(close_cb), NULL);
   GtkWidget *content;

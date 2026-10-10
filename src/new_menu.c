@@ -531,7 +531,7 @@ void new_menu(void) {
     GtkWidget *headerbar = gtk_header_bar_new();
     gtk_window_set_titlebar(GTK_WINDOW(main_menu), headerbar);
     gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(headerbar), TRUE);
-    gtk_header_bar_set_title(GTK_HEADER_BAR(headerbar), "piHPSDR - Menu");
+    gtk_header_bar_set_title(GTK_HEADER_BAR(headerbar), APP_NAME " - Menu");
     g_signal_connect (main_menu, "delete_event", G_CALLBACK (close_cb), NULL);
     g_signal_connect (main_menu, "destroy", G_CALLBACK (close_cb), NULL);
     GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(main_menu));

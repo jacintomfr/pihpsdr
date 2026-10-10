@@ -1145,7 +1145,7 @@ static gpointer client_tcp_thread(gpointer arg) {
       if (protocol == SOAPYSDR_PROTOCOL) {
         radio->soapy.sample_rate = soapy_radio_sample_rate;
       }
-      snprintf(title, sizeof(title), "piHPSDR: %s remote at %s", radio->name, server);
+      snprintf(title, sizeof(title), APP_NAME ": %s remote at %s", radio->name, server);
       g_idle_add(ext_set_title, (gpointer)title);
     }
     break;

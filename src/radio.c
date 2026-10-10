@@ -1352,14 +1352,14 @@ void radio_start_radio(void) {
   case NEW_PROTOCOL:
     if (have_saturn_xdma) {
       // radio has no ip and MAC
-      snprintf(text, sizeof(text), "piHPSDR: %s (%s v%d) on %s",
+      snprintf(text, sizeof(text), APP_NAME ": %s (%s v%d) on %s",
                radio->name,
                p,
                radio->software_version,
                iface);
     } else if (device == DEVICE_OZY) {
       // radio has no ip, and name is "Ozy USB"
-      snprintf(text, sizeof(text), "piHPSDR: %s (%s %s)",
+      snprintf(text, sizeof(text), APP_NAME ": %s (%s %s)",
                radio->name,
                p,
                version);
@@ -1368,7 +1368,7 @@ void radio_start_radio(void) {
       // it does not fit  in windows 640 pixels wide.
       // if needed, the MAC address of the radio can be
       // found in the ABOUT menu.
-      snprintf(text, sizeof(text), "piHPSDR: %s (%s %s) %s on %s",
+      snprintf(text, sizeof(text), APP_NAME ": %s (%s %s) %s on %s",
                radio->name,
                p,
                version,
@@ -1377,7 +1377,7 @@ void radio_start_radio(void) {
     }
     break;
   case SOAPYSDR_PROTOCOL:
-    snprintf(text, sizeof(text), "piHPSDR: %s (%s %s)",
+    snprintf(text, sizeof(text), APP_NAME ": %s (%s %s)",
              radio->name,
              p,
              version);

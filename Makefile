@@ -460,7 +460,11 @@ LIBS=	$(LDFLAGS) $(AUDIO_LIBS) $(USBOZY_LIBS) $(GTK_LIBS) $(GPIO_LIBS) \
 #
 ##############################################################################
 
+ifeq ($(IFPAN),ON)
+PROGRAM=pihpsdr-if
+else
 PROGRAM=pihpsdr
+endif
 
 ##############################################################################
 #

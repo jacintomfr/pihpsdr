@@ -110,7 +110,7 @@ void agc_menu(GtkWidget *parent) {
   // This guards against changing the active receiver while the menu is open
   //
   myrx = active_receiver;
-  snprintf(title, sizeof(title), "piHPSDR - AGC (RX%d)", myrx->id + 1);
+  snprintf(title, sizeof(title), APP_NAME " - AGC (RX%d)", myrx->id + 1);
   GtkWidget *headerbar = gtk_header_bar_new();
   gtk_window_set_titlebar(GTK_WINDOW(dialog), headerbar);
   gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(headerbar), TRUE);

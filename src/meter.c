@@ -754,6 +754,39 @@ void rxmeter_update(int fps, double rxlvl, double peak, double gain, double out)
     (void) max_peak;
     (void) max_gain;
     (void) max_out;
+    if (ifpan_kenwood_tx && ifpan_cat_connected) {
+      //
+      // The Kenwood transmits: its TX meters (read by CAT) on three lines,
+      // in red. Raw values from the radio (bar dots, 0..30):
+      //  - PWR: measured on the TS-570D, 10 W = 2, 50 W = 10 (5 W per dot);
+      //  - SWR: 60 / (30 - n) - 1, as Hamlib does for the TS-850/TS-870
+      //    (same meter generation): 0 = 1.0, 10 = 2.0, 20 = 5.0;
+      //  - ALC: raw dots.
+      //
+      const char *lbl[3] = { "PWR", "SWR", "ALC" };
+      double ys[3] = { Y0, Y1, Y2 };
+      int pwr = ifpan_kenwood_pwr, swr = ifpan_kenwood_swr, alc = ifpan_kenwood_alc;
+      cairo_set_source_rgba(cr, COLOUR_ALARM);
+      for (int i = 0; i < 3; i++) {
+        cairo_move_to(cr, 5, ys[i]);
+        cairo_show_text(cr, lbl[i]);
+        if (i == 0) {
+          if (pwr < 0) { snprintf(sf, sizeof(sf), "--"); }
+          else { snprintf(sf, sizeof(sf), "%dW", 5 * pwr); }
+        } else if (i == 1) {
+          if (swr < 0) { snprintf(sf, sizeof(sf), "--"); }
+          else if (swr >= 30) { snprintf(sf, sizeof(sf), "HIGH"); }
+          else { snprintf(sf, sizeof(sf), "%.1f", 60.0 / (30.0 - swr) - 1.0); }
+        } else {
+          if (alc < 0) { snprintf(sf, sizeof(sf), "--"); }
+          else { snprintf(sf, sizeof(sf), "%d", alc); }
+        }
+        cairo_text_extents(cr, sf, &extents);
+        cairo_move_to(cr, ADD_METER_WIDTH - extents.width - 2.0, ys[i]);
+        cairo_show_text(cr, sf);
+      }
+      goto ifpan_meter_done;
+    }
     Y1 = 0.5 * (Y0 + Y1);
     Y2 = Y1 + 20.0 * scalfac;
     int db = ifpan_kenwood_smeter;
@@ -787,6 +820,7 @@ void rxmeter_update(int fps, double rxlvl, double peak, double gain, double out)
     cairo_text_extents(cr, sf, &extents);
     cairo_move_to(cr, ADD_METER_WIDTH - extents.width - 2.0, Y2);
     cairo_show_text(cr, sf);
+ifpan_meter_done:
 #else
     //
     // RX info on additional meter

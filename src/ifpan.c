@@ -76,6 +76,18 @@ int       ifpan_kenwood_smeter = -999;
 #define CAT_SMETER_EVERY 3            // read the S-meter every 3 polls
 
 //
+// Kenwood transmitting (Kenwood TCP only, from the "IF;" status): the RX
+// audio can be muted (ifpan.tx_mute, Radio menu), and the meter shows the
+// TS-570D TX meters instead of its S-meter. Raw meter values as the radio
+// reports them (-1: not read yet); meter.c turns them into W / SWR.
+//
+int       ifpan_tx_mute = 1;
+int       ifpan_kenwood_tx = 0;
+int       ifpan_kenwood_pwr = -1;     // "SM;" while transmitting
+int       ifpan_kenwood_swr = -1;     // "RM1nnnn;"
+int       ifpan_kenwood_alc = -1;     // "RM3nnnn;"
+
+//
 // CAT link: either Hamlib rigctld (which owns the serial port), or the
 // radio's own Kenwood protocol over TCP straight to an RS-232/WiFi bridge
 // (ESP32/ts570_wifi_bridge, or ser2net/socat), without rigctld.
@@ -124,6 +136,7 @@ void ifpan_save_state(void) {
   SetPropI0("ifpan.cat_backend",   ifpan_cat_backend);
   SetPropS0("ifpan.kenwood_host",  ifpan_kenwood_host);
   SetPropI0("ifpan.kenwood_port",  ifpan_kenwood_port);
+  SetPropI0("ifpan.tx_mute",       ifpan_tx_mute);
 }
 
 void ifpan_restore_state(void) {
@@ -138,6 +151,7 @@ void ifpan_restore_state(void) {
   GetPropI0("ifpan.cat_backend",   ifpan_cat_backend);
   GetPropS0("ifpan.kenwood_host",  ifpan_kenwood_host);
   GetPropI0("ifpan.kenwood_port",  ifpan_kenwood_port);
+  GetPropI0("ifpan.tx_mute",       ifpan_tx_mute);
   if (ifpan_cat_backend != IFPAN_CAT_KENWOOD) { ifpan_cat_backend = IFPAN_CAT_RIGCTLD; }
   if (ifpan_poll_ms < 20) { ifpan_poll_ms = 20; }
   // keep the IF well inside the Pluto span (+/- 384 kHz at 768 kHz)
@@ -283,14 +297,28 @@ static int kw_setup(int sock) {
   return 0;
 }
 
-// "FA;" -> "FA00014074000;"
+//
+// "IF;" -> "IF00014220000      000000 0002000008 ;": the VFO frequency
+// (digits 2..12) and, at position 28, 1 while transmitting (same position
+// as Hamlib's kenwood_get_ptt). One read gives both, so the TX state costs
+// no extra command.
+//
 static long long kw_get_freq(int sock) {
   char frame[64];
-  int rc = kw_query(sock, "FA;", "FA", frame, sizeof(frame));
+  char digits[12];
+  int rc = kw_query(sock, "IF;", "IF", frame, sizeof(frame));
   if (rc < 0) { return rc; }
+  if (strlen(frame) < 30) { return -2; }
+  memcpy(digits, frame + 2, 11);
+  digits[11] = 0;
   char *end;
-  long long f = strtoll(frame + 2, &end, 10);
-  if (end == frame + 2 || f <= 0) { return -2; }
+  long long f = strtoll(digits, &end, 10);
+  if (end == digits || f <= 0) { return -2; }
+  int tx = (frame[28] == '1');
+  if (tx != ifpan_kenwood_tx) {
+    ifpan_kenwood_tx = tx;
+    g_idle_add(ext_vfo_update, NULL);
+  }
   return f;
 }
 
@@ -324,6 +352,47 @@ static int kw_get_strength(int sock, int *db) {
   if (len < 6) { return -2; }
   int raw = atoi(frame + len - 4);
   *db = (raw <= 9) ? (raw - 9) * 6 : (raw - 9) * 10;
+  return 0;
+}
+
+//
+// TX meters, once per poll while the Kenwood transmits:
+//  - "SM;" reads the power meter in TX;
+//  - "RM;" reads only the meter selected on the radio ("RMpnnnn;", p = 1 SWR,
+//    2 COMP, 3 ALC); "RM1;" / "RM3;" select one. SWR and ALC are read in
+//    turn: each poll reads the meter selected on the previous poll, then
+//    selects the other one. The meter the user had selected is put back
+//    when the radio returns to receive.
+// Returns 0, or -1 if the connection failed.
+//
+static int kw_meter_user = 0;         // RM selection before TX (0: not in TX)
+
+static int kw_tx_meters(int sock) {
+  char frame[64];
+  char cmd[8];
+  if (!ifpan_kenwood_tx) {
+    if (kw_meter_user != 0) {
+      snprintf(cmd, sizeof(cmd), "RM%d;", kw_meter_user);
+      kw_meter_user = 0;
+      ifpan_kenwood_pwr = ifpan_kenwood_swr = ifpan_kenwood_alc = -1;
+      if (send(sock, cmd, strlen(cmd), MSG_NOSIGNAL) != (ssize_t) strlen(cmd)) { return -1; }
+    }
+    return 0;
+  }
+  int rc = kw_query(sock, "SM;", "SM", frame, sizeof(frame));
+  if (rc == -1) { return -1; }
+  if (rc == 0 && strlen(frame) >= 6) { ifpan_kenwood_pwr = atoi(frame + strlen(frame) - 4); }
+  rc = kw_query(sock, "RM;", "RM", frame, sizeof(frame));
+  if (rc == -1) { return -1; }
+  if (rc == 0 && strlen(frame) >= 7) {
+    int sel = frame[2] - '0';
+    int val = atoi(frame + 3);
+    if (kw_meter_user == 0) { kw_meter_user = (sel >= 1 && sel <= 3) ? sel : 2; }
+    if (sel == 1) { ifpan_kenwood_swr = val; }
+    if (sel == 3) { ifpan_kenwood_alc = val; }
+    snprintf(cmd, sizeof(cmd), "RM%d;", sel == 1 ? 3 : 1);
+    if (send(sock, cmd, strlen(cmd), MSG_NOSIGNAL) != (ssize_t) strlen(cmd)) { return -1; }
+  }
   return 0;
 }
 
@@ -576,9 +645,15 @@ static gpointer cat_thread(gpointer data) {
     }
     //
     // Kenwood S-meter, shown next to the piHPSDR-IF meter (the meter is
-    // redrawn continuously, so only the value is stored here)
+    // redrawn continuously, so only the value is stored here); while the
+    // Kenwood transmits, its TX meters instead (Kenwood TCP only)
     //
-    if (smeter_count-- <= 0) {
+    if (ifpan_cat_backend == IFPAN_CAT_KENWOOD && kw_tx_meters(sock) < 0) {
+      close(sock);
+      sock = -1;
+      continue;
+    }
+    if (!ifpan_kenwood_tx && smeter_count-- <= 0) {
       smeter_count = CAT_SMETER_EVERY;
       int db;
       int rc = be_get_strength(sock, &db);

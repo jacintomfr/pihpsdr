@@ -912,6 +912,13 @@ void radio_menu(GtkWidget *parent) {
     gtk_grid_attach(GTK_GRID(grid), Btn, 5, row, 2, 1);
     g_signal_connect(Btn, "toggled", G_CALLBACK(follow_cb), NULL);
     row++;
+    // mute the RX audio while the Kenwood transmits (TX state via Kenwood TCP)
+    Btn = gtk_check_button_new_with_label("Mute when TS in TX");
+    gtk_widget_set_halign(Btn, GTK_ALIGN_END);
+    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (Btn), ifpan_tx_mute);
+    gtk_grid_attach(GTK_GRID(grid), Btn, 5, row, 2, 1);
+    g_signal_connect(Btn, "toggled", G_CALLBACK(toggle_cb), &ifpan_tx_mute);
+    row++;
     //
     // CAT link to the Kenwood: rigctld, or Kenwood CAT over TCP straight to
     // an RS-232/WiFi bridge at "host:port"

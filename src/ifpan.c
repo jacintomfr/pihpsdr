@@ -59,6 +59,7 @@ int       ifpan_rigctld_port = 4532;
 int       ifpan_poll_ms = 50;
 int       ifpan_cat_connected = 0;
 int       ifpan_cat_write = 1;
+int       ifpan_follow_vfo = 0;
 
 #define CAT_SET_HOLD_US 400000        // ignore stale readings this long after a set
 
@@ -86,6 +87,7 @@ void ifpan_save_state(void) {
   SetPropI0("ifpan.rigctld_port",  ifpan_rigctld_port);
   SetPropI0("ifpan.poll_ms",       ifpan_poll_ms);
   SetPropI0("ifpan.cat_write",     ifpan_cat_write);
+  SetPropI0("ifpan.follow_vfo",    ifpan_follow_vfo);
 }
 
 void ifpan_restore_state(void) {
@@ -95,6 +97,7 @@ void ifpan_restore_state(void) {
   GetPropI0("ifpan.poll_ms",       ifpan_poll_ms);
   GetPropI0("ifpan.lo_offset",     ifpan_lo_offset);
   GetPropI0("ifpan.cat_write",     ifpan_cat_write);
+  GetPropI0("ifpan.follow_vfo",    ifpan_follow_vfo);
   if (ifpan_poll_ms < 20) { ifpan_poll_ms = 20; }
   // keep the IF well inside the Pluto span (+/- 384 kHz at 768 kHz)
   if (ifpan_lo_offset >  200000) { ifpan_lo_offset =  200000; }
@@ -111,6 +114,22 @@ static gboolean cat_apply(gpointer data) {
   // a re-centre caused by the Kenwood must not be sent back to it
   ui_last_freq = vfo[VFO_A].ctun ? vfo[VFO_A].ctun_frequency : vfo[VFO_A].frequency;
   return G_SOURCE_REMOVE;
+}
+
+//
+// "Follow Kenwood": the receiver always sits on the Kenwood frequency, so
+// turning the Kenwood dial tunes piHPSDR-IF too (instead of keeping the
+// station being heard, which is the default CTUN behaviour). Switching it
+// on moves the receiver to the Kenwood frequency at once (main thread).
+//
+void ifpan_set_follow(int on) {
+  ifpan_follow_vfo = on;
+  if (on && receivers > 0 && receiver[0] != NULL && vfo[VFO_A].ctun) {
+    vfo[VFO_A].ctun_frequency = vfo[VFO_A].frequency;
+    rx_frequency_changed(receiver[0]);
+    ui_last_freq = vfo[VFO_A].ctun_frequency;   // not to be echoed to the Kenwood
+    g_idle_add(ext_vfo_update, NULL);
+  }
 }
 
 //

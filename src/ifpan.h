@@ -42,6 +42,9 @@ extern int       ifpan_rigctld_port;
 extern int       ifpan_poll_ms;
 extern int       ifpan_cat_connected; // 1 while rigctld answers
 extern int       ifpan_cat_write;     // 1: tuning in piHPSDR-IF also tunes the Kenwood
+extern int       ifpan_follow_vfo;    // 1: the receiver follows the Kenwood dial
+
+extern void      ifpan_set_follow(int on);
 
 extern long long ifpan_hw_frequency(void);
 extern void      ifpan_start(void);

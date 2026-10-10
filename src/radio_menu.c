@@ -33,6 +33,9 @@
 #ifdef SOAPYSDR
   #include "soapy_protocol.h"
 #endif
+#ifdef IFPAN
+  #include "ifpan.h"
+#endif
 #include "vfo.h"
 
 static GtkWidget *dialog = NULL;
@@ -144,6 +147,12 @@ static void rx_gain_calibration_value_changed_cb(GtkWidget *widget, gpointer dat
 static void vfo_divisor_value_changed_cb(GtkWidget *widget, gpointer data) {
   vfo_encoder_divisor = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(widget));
 }
+
+#ifdef IFPAN
+static void follow_cb(GtkWidget *widget, gpointer data) {
+  ifpan_set_follow(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)));
+}
+#endif
 
 static void toggle_cb(GtkWidget *widget, gpointer data) {
   int *value = (int *) data;
@@ -847,6 +856,18 @@ void radio_menu(GtkWidget *parent) {
     gtk_grid_attach(GTK_GRID(grid), Btn, 5, row, 2, 1);
     g_signal_connect(Btn, "toggled", G_CALLBACK(toggle_cb), &soapy_iqswap);
     row++;
+#ifdef IFPAN
+    //
+    // IF panadapter: receiver follows the Kenwood dial (else it keeps the
+    // station being heard while the Kenwood is tuned)
+    //
+    Btn = gtk_check_button_new_with_label("Follow Kenwood");
+    gtk_widget_set_halign(Btn, GTK_ALIGN_END);
+    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (Btn), ifpan_follow_vfo);
+    gtk_grid_attach(GTK_GRID(grid), Btn, 5, row, 2, 1);
+    g_signal_connect(Btn, "toggled", G_CALLBACK(follow_cb), NULL);
+    row++;
+#endif
     for (int id = 0; id < RECEIVERS; id++) {
       if (radio->soapy.rx[id].has_automatic_gain) {
         char text[64];

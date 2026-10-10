@@ -2018,8 +2018,10 @@ void vfo_id_set_center(int id, long long f) {
   if (vfo[id].frequency == f) { return; }
   vfo[id].frequency = f;
   long long half = (long long)rx->sample_rate / 2LL;
-  if (vfo[id].ctun_frequency + rx->filter_low < f - half ||
+  if (ifpan_follow_vfo ||
+      vfo[id].ctun_frequency + rx->filter_low < f - half ||
       vfo[id].ctun_frequency + rx->filter_high > f + half) {
+    // "Follow Kenwood", or the station left the span: receiver on the Kenwood frequency
     vfo[id].ctun_frequency = f;
   }
   vfo_id_adjust_band(id, vfo[id].ctun_frequency);

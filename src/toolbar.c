@@ -47,9 +47,8 @@ enum ACTION tb_actions[MAX_TB_FUNCTIONS][MAX_TB_BUTTONS] = {
 // an old props file.
 //
 static int ifpan_hidden_action(enum ACTION a) {
+  // (MOX and PTT stay: they key the Kenwood by CAT, see ifpan_ptt)
   switch (a) {
-  case MOX:
-  case PTT:
   case TUNE:
   case TUNE_DRIVE:
   case TUNE_FULL:

@@ -71,7 +71,17 @@ static void get_info(char *DriverHost) {
   snprintf(discovered[devices].soapy.hostname, sizeof(discovered[devices].soapy.hostname), "%s", hostname);
   SoapySDRKwargs_set(&args, "driver", driver);
   if (hostname[0] != 0) {
-    SoapySDRKwargs_set(&args, "hostname", hostname);
+    if (strcmp(driver, "plutosdr") == 0 && strcmp(hostname, "USB") != 0) {
+      //
+      // SoapyPlutoSDR (with recent libiio) only opens a network Pluto
+      // reliably when given an explicit libiio URI
+      //
+      char uri[160];
+      snprintf(uri, sizeof(uri), "ip:%s", hostname);
+      SoapySDRKwargs_set(&args, "uri", uri);
+    } else {
+      SoapySDRKwargs_set(&args, "hostname", hostname);
+    }
   }
   //
   // In case more than one RTLsdr or SDRplay devices are connected,

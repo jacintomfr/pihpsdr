@@ -58,6 +58,9 @@
 #include "radio.h"
 #include "receiver.h"
 #include "rigctl.h"
+#ifdef IFPAN
+#include "ifpan.h"
+#endif
 #include "rx_panadapter.h"
 #include "server_menu.h"
 #include "sliders.h"
@@ -879,6 +882,14 @@ static void radio_create_visual(void) {
       radio_has_transmitter = (radio->soapy.tx_channels != 0);
       break;
     }
+#ifdef IFPAN
+    //
+    // IF panadapter: strictly receive-only, whatever the hardware can do.
+    // Without a transmitter object, no TX stream is set up and every
+    // MOX/TUNE/VOX/CW/two-tone path is a no-op.
+    //
+    radio_has_transmitter = 0;
+#endif
     if (radio_has_transmitter) {
       if (duplex) {
         transmitter = tx_create_transmitter(CHANNEL_TX, 4 * tx_dialog_width, tx_dialog_width, tx_dialog_height);
@@ -1564,6 +1575,9 @@ void radio_start_radio(void) {
   if (SerialPorts[MAX_SERIAL].enable) {
     SerialPorts[MAX_SERIAL].enable = launch_serial_ptt(MAX_SERIAL);
   }
+#ifdef IFPAN
+  ifpan_start();   // follow the TS-570D VFO via rigctld
+#endif
 #ifdef SOAPYSDR
   if (protocol == SOAPYSDR_PROTOCOL) {
     if (!have_lime) {
@@ -2098,6 +2112,9 @@ void radio_set_pan(int id, int value) {
 }
 
 void radio_set_mox(int state) {
+#ifdef IFPAN
+  return;   // receive-only
+#endif
   if (radio_is_remote) {
     send_mox(cl_sock_tcp, state);
     return;
@@ -2359,6 +2376,9 @@ void radio_toggle_tune(void) {
 }
 
 void radio_set_tune(int state) {
+#ifdef IFPAN
+  return;   // receive-only
+#endif
   if (radio_is_remote) {
     send_tune(cl_sock_tcp, state);
     return;
@@ -3137,6 +3157,12 @@ static void radio_restore_state(void) {
     GetPropI0("split",                                       split);
     GetPropI0("duplex",                                      duplex);
     GetPropI0("sat_mode",                                    sat_mode);
+#ifdef IFPAN
+    ifpan_restore_state();
+    split = 0;
+    duplex = 0;
+    sat_mode = SAT_NONE;
+#endif
     GetPropI0("radio.display_warnings",                      display_warnings);
     GetPropI0("radio.display_pacurr",                        display_pacurr);
     GetPropI0("radio.ptt_delay",                             ptt_delay);
@@ -3360,6 +3386,9 @@ void radio_save_state(void) {
     SetPropI0("split",                                       split);
     SetPropI0("duplex",                                      duplex);
     SetPropI0("sat_mode",                                    sat_mode);
+#ifdef IFPAN
+    ifpan_save_state();
+#endif
     SetPropI0("radio.display_warnings",                      display_warnings);
     SetPropI0("radio.display_pacurr",                        display_pacurr);
     SetPropI0("radio.ptt_delay",                             ptt_delay);

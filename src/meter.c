@@ -741,12 +741,21 @@ void rxmeter_update(int fps, double rxlvl, double peak, double gain, double out)
     double Y2 =  Y1 + 20.0 * scalfac;
     cairo_set_source_rgba(cr, COLOUR_OK);
     cairo_set_font_size(cr, 16.0 * scalfac);
+#ifdef IFPAN
+    //
+    // receive-only: no Mic line, centre Gain/Out vertically
+    //
+    Y1 = 0.5 * (Y0 + Y1);
+    Y2 = Y1 + 20.0 * scalfac;
+#endif
     //
     // RX info on additional meter
     //
+#ifndef IFPAN
     snprintf(sf, sizeof(sf), "Mic");
     cairo_move_to(cr, 5, Y0);
     cairo_show_text(cr, sf);
+#endif
     snprintf(sf, sizeof(sf), "Gain");
     cairo_move_to(cr, 5, Y1);
     cairo_show_text(cr, sf);
@@ -756,10 +765,12 @@ void rxmeter_update(int fps, double rxlvl, double peak, double gain, double out)
     //
     // BTW %0.0f takes care of correct rounding
     //
+#ifndef IFPAN
     snprintf(sf, sizeof(sf), "%0.0f", max_peak);
     cairo_text_extents(cr, sf, &extents);
     cairo_move_to(cr, ADD_METER_WIDTH - extents.width - 2.0, Y0);
     cairo_show_text(cr, sf);
+#endif
     snprintf(sf, sizeof(sf), "%0.0f", max_gain);
     cairo_text_extents(cr, sf, &extents);
     cairo_move_to(cr, ADD_METER_WIDTH - extents.width - 2.0, Y1);

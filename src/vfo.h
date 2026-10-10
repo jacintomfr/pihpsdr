@@ -127,6 +127,9 @@ extern void       vfo_id_rit_onoff(int id, int enable);
 extern void       vfo_id_rit_incr(int id, int incr);
 extern void       vfo_id_rit_value(int id, long long value);
 extern void       vfo_id_set_frequency(int id, long long f);
+#ifdef IFPAN
+extern void       vfo_id_set_center(int id, long long f);
+#endif
 extern void       vfo_id_ctun_update(int id, int state);
 extern void       vfo_vfos_changed(void);
 extern void       vfo_num_pad(int val, int vfo);

@@ -27,6 +27,75 @@
 #include "toolbar.h"
 
 int tb_function[MAX_TB_ROWS] = {0, 1, 2};
+#ifdef IFPAN
+//
+// IF panadapter (receive-only): RX/DSP functions only
+//
+enum ACTION tb_actions[MAX_TB_FUNCTIONS][MAX_TB_BUTTONS] = {
+  { MENU_NOISE,     NR,             NB,             SNB,        MENU_MODE,  MENU_FILTER, MENU_AGC,    FUNCTION },
+  { ZOOM_MINUS,     ZOOM_PLUS,      PAN_MINUS,      PAN_PLUS,   FILTER_MINUS, FILTER_PLUS, MUTE,      FUNCTION },
+  { ANF,            AGC,            CW_AUDIOPEAKFILTER, ZEROBEAT, MENU_RX,  MENU_RADIO,  LOCK,        FUNCTION },
+  { MENU_FREQUENCY, MENU_MEMORY,    MENU_VFO,       RIT_ENABLE, RIT_PLUS,   RIT_MINUS,   RIT_CLEAR,   FUNCTION },
+  { MENU_MAIN,      MENU_RADIO,     MENU_RX,        MENU_AGC,   MENU_NOISE, MENU_FILTER, MENU_MODE,   FUNCTION },
+  { VFO_STEP_MINUS, VFO_STEP_PLUS,  ZEROBEAT,       NOTCH1_EN,  NOTCH2_EN,  NOTCH3_EN,   MUTE,        FUNCTION }
+};
+
+//
+// Actions that make no sense without a transmitter (or that would break
+// the CAT-locked display centre, such as CTUN which is always on).
+// Such buttons get an empty label and do nothing, even if they come from
+// an old props file.
+//
+static int ifpan_hidden_action(enum ACTION a) {
+  switch (a) {
+  case MOX:
+  case PTT:
+  case TUNE:
+  case TUNE_DRIVE:
+  case TUNE_FULL:
+  case TUNE_MEMORY:
+  case DRIVE:
+  case TWO_TONE:
+  case TX_NOISE:
+  case MENU_TX:
+  case PS:
+  case MENU_PS:
+  case VOX:
+  case VOXLEVEL:
+  case MIC_GAIN:
+  case LINEIN_GAIN:
+  case COMP_ENABLE:
+  case COMPRESSION:
+  case DUPLEX:
+  case SPLIT:
+  case SAT:
+  case RSAT:
+  case XIT:
+  case XIT_CLEAR:
+  case XIT_ENABLE:
+  case XIT_MINUS:
+  case XIT_PLUS:
+  case RITXIT:
+  case RITXIT_CLEAR:
+  case RITSELECT:
+  case CW_KEYER_KEYDOWN:
+  case CW_KEYER_PTT:
+  case CW_KEYER_SPEED:
+  case CW_LEFT:
+  case CW_RIGHT:
+  case CW_TXT_1:
+  case CW_TXT_2:
+  case CW_TXT_3:
+  case CW_TXT_4:
+  case CW_TXT_5:
+  case CTUN:
+  case REPLAY:
+    return 1;
+  default:
+    return 0;
+  }
+}
+#else
 enum ACTION tb_actions[MAX_TB_FUNCTIONS][MAX_TB_BUTTONS] = {
   { MOX,   TUNE,           TWO_TONE,       MENU_NOISE, MENU_BAND,   MENU_MODE,  MENU_FILTER, FUNCTION },
   { SPLIT, MENU_BANDSTACK, CTUN,           RIT_PLUS,   RIT_MINUS,   XIT_PLUS,   XIT_MINUS,   FUNCTION },
@@ -35,6 +104,7 @@ enum ACTION tb_actions[MAX_TB_FUNCTIONS][MAX_TB_BUTTONS] = {
   { MOX,   MENU_FREQUENCY, MENU_MEMORY,    RIT_ENABLE, RIT_PLUS,    RIT_MINUS,  RIT_CLEAR,   FUNCTION },
   { MOX,   MENU_FREQUENCY, MENU_MEMORY,    XIT_ENABLE, XIT_PLUS,    XIT_MINUS,  XIT_CLEAR,   FUNCTION }
 };
+#endif
 
 static GtkWidget *toolbar_grid = NULL;
 
@@ -73,6 +143,12 @@ void update_toolbar_labels(void) {
           snprintf(lbl, sizeof(lbl), "FNC(%d)", tb_function[i]);
           gtk_button_set_label(GTK_BUTTON(btn), lbl);
         } else {
+#ifdef IFPAN
+          if (ifpan_hidden_action(tb_actions[func][j])) {
+            gtk_button_set_label(GTK_BUTTON(btn), "");
+            continue;
+          }
+#endif
           gtk_button_set_label(GTK_BUTTON(btn),
                                ActionTable[tb_actions[func][j]].button_str);
         }
@@ -108,6 +184,9 @@ static gboolean toolbar_button_press_cb(GtkWidget *widget, GdkEventButton *event
     }
     update_toolbar_labels();
   } else {
+#ifdef IFPAN
+    if (ifpan_hidden_action(tb_actions[tb_function[row]][btn])) { return FALSE; }
+#endif
     schedule_action(tb_actions[tb_function[row]][btn], PRESSED, 0);
   }
   return FALSE;
@@ -119,6 +198,9 @@ static gboolean toolbar_button_released_cb(GtkWidget *widget, GdkEventButton *ev
   int btn = val % 100;
   if (btn != MAX_TB_BUTTONS - 1) {
     int row = val / 100;
+#ifdef IFPAN
+    if (ifpan_hidden_action(tb_actions[tb_function[row]][btn])) { return FALSE; }
+#endif
     schedule_action(tb_actions[tb_function[row]][btn], RELEASED, 0);
   }
   return FALSE;

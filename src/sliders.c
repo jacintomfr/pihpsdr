@@ -41,11 +41,22 @@
 #include "radio.h"
 #include "sliders.h"
 
+#ifdef IFPAN
+//
+// IF panadapter (receive-only): no Mic/Drive/VOX/Cmpr sliders
+//
+enum ACTION slider_functions[NUM_SLIDERS] = {
+  AF_GAIN,         AGC_GAIN,    RF_GAIN,
+  ZOOM,            PAN,         SQUELCH,
+  PANADAPTER_LOW,  ATTENUATION, NO_ACTION
+};
+#else
 enum ACTION slider_functions[NUM_SLIDERS] = {
   ZOOM,         AGC_GAIN, DRIVE,
   ATTENUATION,  AF_GAIN,  MIC_GAIN,
   PAN,    SQUELCH,  COMPRESSION
 };
+#endif
 
 static GtkWidget *sliders_grid = NULL;
 

@@ -45,6 +45,9 @@
 #include "radio.h"
 #include "receiver.h"
 #include "transmitter.h"
+#ifdef IFPAN
+#include "ifpan.h"
+#endif
 #include "new_protocol.h"
 #include "vfo.h"
 #include "channel.h"
@@ -904,6 +907,119 @@ static gboolean vfo_draw_cb (GtkWidget *widget,
 // is determined by the current vfo layout
 // Elements whose x-coordinate is zero are not drawn
 //
+#ifdef IFPAN
+//
+// IF panadapter VFO bar: the single (Kenwood) VFO dial on the left,
+// using the full bar height, and all indicators on the right in three
+// rows. Every indicator gets a fixed-width slot measured from its
+// widest possible text, so nothing moves when a value changes.
+// The dial is as large as the remaining width allows.
+//
+typedef struct {
+  double s2, s3;       // font sizes of the Hz and MHz.kHz parts
+  double right;        // right edge of the dial
+  double base;         // baseline of the dial
+  double gap;          // gap between kHz and Hz parts
+} IFPAN_DIAL;
+
+static void ifpan_layout(cairo_t *cr, const VFO_BAR_LAYOUT *src, double width,
+                         VFO_BAR_LAYOUT *dst, IFPAN_DIAL *dial) {
+  //
+  // Row contents: { pointer to x, pointer to y, template }.
+  // A NULL template means the filter graphic (fixed 85 pixels).
+  //
+  typedef struct { int *x; int *y; const char *tmpl; } SLOT;
+  *dst = *src;
+  dst->vfo_b_l = -1;
+  dst->ps_x = dst->xit_x = dst->cmpr_x = dst->dexp_x = dst->vox_x = 0;
+  dst->split_x = dst->sat_x = dst->dup_x = dst->div_x = dst->multifn_x = 0;
+  int have_filter = (src->filter_x != 0);
+  SLOT row1[] = {
+    { &dst->mode_x, &dst->mode_y, "CWU 1.0kP 800 Hz" },
+    { &dst->agc_x,  &dst->agc_y,  "AGC slow" },
+    { &dst->cat_x,  &dst->cat_y,  "TS 28.888.88" },   // Kenwood VFO (see below)
+  };
+  SLOT row2[] = {
+    { &dst->nr_x,   &dst->nr_y,   "NR2" },
+    { &dst->nb_x,   &dst->nb_y,   "NB2" },
+    { &dst->anf_x,  &dst->anf_y,  "ANF" },
+    { &dst->snb_x,  &dst->snb_y,  "SNB" },
+    { &dst->eq_x,   &dst->eq_y,   "RxEQ" },
+    { &dst->filter_x, &dst->filter_y, NULL },
+  };
+  SLOT row3[] = {
+    { &dst->lock_x, &dst->lock_y, "Locked" },
+    { &dst->zoom_x, &dst->zoom_y, "Zoom 8" },
+    { &dst->ctun_x, &dst->ctun_y, "CTUN" },
+    { &dst->step_x, &dst->step_y, "Step 100kHz" },
+    { &dst->rit_x,  &dst->rit_y,  "RIT -9999" },
+  };
+  struct { SLOT *s; int n; int y; } rows[3] = {
+    { row1, 3, src->mode_y },
+    { row2, have_filter ? 6 : 5, (src->mode_y + src->lock_y) / 2 },
+    { row3, 5, src->lock_y },
+  };
+  if (!have_filter) { dst->filter_x = 0; }
+  cairo_text_extents_t e;
+  double sep = 0.6 * src->size1;
+  double rowlen[3], maxlen = 0.0;
+  cairo_set_font_size(cr, src->size1);
+  for (int r = 0; r < 3; r++) {
+    rowlen[r] = 0.0;
+    for (int i = 0; i < rows[r].n; i++) {
+      double w = 85.0;
+      if (rows[r].s[i].tmpl) {
+        cairo_text_extents(cr, rows[r].s[i].tmpl, &e);
+        w = e.x_advance;
+      }
+      rowlen[r] += w + (i > 0 ? sep : 0.0);
+    }
+    if (rowlen[r] > maxlen) { maxlen = rowlen[r]; }
+  }
+  //
+  // Right block: left-aligned at x0, each row spread over the full
+  // block width (extra space shared out between the slots)
+  //
+  double x0 = width - maxlen;
+  for (int r = 0; r < 3; r++) {
+    double extra = (rows[r].n > 1) ? (maxlen - rowlen[r]) / (rows[r].n - 1) : 0.0;
+    double x = x0;
+    for (int i = 0; i < rows[r].n; i++) {
+      double w = 85.0;
+      if (rows[r].s[i].tmpl) {
+        cairo_text_extents(cr, rows[r].s[i].tmpl, &e);
+        w = e.x_advance;
+      }
+      *rows[r].s[i].x = (int)(x + 0.5);
+      // the filter graphic is drawn 20..80 px right of filter_x, 15 px above filter_y
+      *rows[r].s[i].y = rows[r].s[i].tmpl ? rows[r].y : rows[r].y + (int)(0.1 * src->size1);
+      if (rows[r].s[i].tmpl == NULL) { *rows[r].s[i].x -= 20; }
+      x += w + sep + extra;
+    }
+  }
+  //
+  // Dial: as large as the width left of the right block allows,
+  // limited by the bar height. Template "88.888" + "888".
+  //
+  double avail = x0 - 1.5 * src->size1 - src->vfo_a_l;
+  dial->gap = src->size2 / 3.0;
+  cairo_text_extents_t e3, e2;
+  cairo_set_font_size(cr, src->size3);
+  cairo_text_extents(cr, "88.888", &e3);
+  cairo_set_font_size(cr, src->size2);
+  cairo_text_extents(cr, "888", &e2);
+  double k_h = avail / (e3.x_advance + dial->gap + e2.x_advance);
+  double k_v = (src->height - 0.25 * src->height) / e3.height;
+  double k = (k_h < k_v) ? k_h : k_v;
+  if (k < 1.0) { k = 1.0; }
+  dial->s3 = k * src->size3;
+  dial->s2 = k * src->size2;
+  dial->gap *= k;
+  dial->right = src->vfo_a_l + k * (e3.x_advance + e2.x_advance) + dial->gap;
+  dial->base = 0.5 * (src->height + k * e3.height);
+}
+#endif
+
 void vfo_update(void) {
   char wid[6];
   cairo_text_extents_t extents;
@@ -957,6 +1073,12 @@ void vfo_update(void) {
   cairo_set_source_rgba(cr, COLOUR_VFO_BACKGND);
   cairo_paint (cr);
   cairo_select_font_face(cr, DISPLAY_FONT_FACE, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
+#ifdef IFPAN
+  static VFO_BAR_LAYOUT ifl;
+  IFPAN_DIAL dial;
+  ifpan_layout(cr, current_vfo_layout, cairo_image_surface_get_width(vfo_surface) - 5.0, &ifl, &dial);
+  vfl = &ifl;
+#endif
   // -----------------------------------------------------------
   //
   // Draw a picture showing the actual and default filter edges
@@ -1017,6 +1139,13 @@ void vfo_update(void) {
     break;
     case modeCWL:
     case modeCWU:
+#ifdef IFPAN
+      // receive-only: keyer speed is meaningless, show the CW pitch only
+      snprintf(temp_text, sizeof(temp_text), "%s %s%s %d Hz", mode_string[vfo[id].mode],
+               wid, vfo[id].cwAudioPeakFilter ? "P" : "",
+               cw_keyer_sidetone_frequency);
+      break;
+#endif
       if (vfo[id].cwAudioPeakFilter) {
         snprintf(temp_text, sizeof(temp_text), "%s %sP %dwpm %dHz", mode_string[vfo[id].mode],
                  wid,
@@ -1079,6 +1208,41 @@ void vfo_update(void) {
   int f_k; // kHz part
   int f_h; // Hz  part
   if (transmitter != NULL) { oob = transmitter->out_of_band; }
+#ifdef IFPAN
+  // -----------------------------------------------------------
+  //
+  // IF panadapter: single (Kenwood) VFO dial, sized and placed by
+  // ifpan_layout(), right-aligned on a fixed-width template.
+  //
+  // -----------------------------------------------------------
+  (void) bf;
+  (void) oob;
+  (void) txvfo;
+  if (vfo[0].entered_frequency[0]) {
+    cairo_set_source_rgba(cr, COLOUR_ATTN);
+    cairo_set_font_size(cr, dial.s3);
+    cairo_move_to(cr, vfl->vfo_a_l, dial.base);
+    cairo_show_text(cr, vfo[0].entered_frequency);
+  } else {
+    cairo_set_source_rgba(cr, COLOUR_OK);
+    f_m = af / 1000000LL;
+    f_k = (af - 1000000LL * f_m) / 1000;
+    f_h = (af - 1000000LL * f_m - 1000 * f_k);
+    double pos = dial.right;
+    cairo_set_font_size(cr, dial.s2);
+    snprintf(temp_text, sizeof(temp_text), "%03d", f_h);
+    cairo_text_extents(cr, temp_text, &extents);
+    pos -= extents.x_advance;
+    cairo_move_to(cr, pos, dial.base);
+    cairo_show_text(cr, temp_text);
+    cairo_set_font_size(cr, dial.s3);
+    snprintf(temp_text, sizeof(temp_text), "%0d.%03d", f_m, f_k);
+    cairo_text_extents(cr, temp_text, &extents);
+    pos -= (extents.x_advance + dial.gap);
+    cairo_move_to(cr, pos, dial.base);
+    cairo_show_text(cr, temp_text);
+  }
+#else
   // -----------------------------------------------------------
   //
   // Draw VFO A Dial.
@@ -1177,6 +1341,7 @@ void vfo_update(void) {
       cairo_show_text(cr, temp_text);
     }
   }
+#endif
   //
   // Everything that follows uses font size 1
   //
@@ -1474,6 +1639,24 @@ void vfo_update(void) {
   // Draw string indicating CAT status
   //
   // -----------------------------------------------------------
+#ifdef IFPAN
+  //
+  // IF panadapter: the "CAT" slot shows the Kenwood VFO frequency
+  // (= display centre), coloured when rigctld answers, grey if not.
+  //
+  if (vfl->cat_x != 0) {
+    long long kf = vfo[0].frequency;
+    cairo_move_to(cr, vfl->cat_x, vfl->cat_y);
+    if (ifpan_cat_connected) {
+      cairo_set_source_rgba(cr, COLOUR_ATTN);
+    } else {
+      cairo_set_source_rgba(cr, COLOUR_SHADE);
+    }
+    snprintf(temp_text, sizeof(temp_text), "TS %lld.%03lld.%02lld", kf / 1000000LL,
+             (kf / 1000LL) % 1000LL, (kf / 10LL) % 100LL);
+    cairo_show_text(cr, temp_text);
+  }
+#else
   if (vfl->cat_x != 0) {
     cairo_move_to(cr, vfl->cat_x, vfl->cat_y);
     if (cat_control > 0) {
@@ -1483,6 +1666,7 @@ void vfo_update(void) {
     }
     cairo_show_text(cr, "CAT");
   }
+#endif
   // -----------------------------------------------------------
   //
   // Draw string indicating VOX status
@@ -1516,7 +1700,7 @@ void vfo_update(void) {
   // Draw string indicating SPLIT status
   //
   // -----------------------------------------------------------
-  if (vfl->split_x != 0) {
+  if (transmitter != NULL && vfl->split_x != 0) {
     cairo_move_to(cr, vfl->split_x, vfl->split_y);
     if (split) {
       cairo_set_source_rgba(cr, COLOUR_ALARM);
@@ -1530,7 +1714,7 @@ void vfo_update(void) {
   // Draw string indicating SAT status
   //
   // -----------------------------------------------------------
-  if (vfl->sat_x != 0) {
+  if (transmitter != NULL && vfl->sat_x != 0) {
     cairo_move_to(cr, vfl->sat_x, vfl->sat_y);
     if (sat_mode != SAT_NONE) {
       cairo_set_source_rgba(cr, COLOUR_ALARM);
@@ -1814,6 +1998,35 @@ void vfo_id_set_frequency(int v, long long f) {
   }
   g_idle_add(ext_vfo_update, NULL);
 }
+
+#ifdef IFPAN
+//
+// IF panadapter: the display centre follows the Kenwood VFO (via CAT).
+// CTUN is forced on, so tuning inside piHPSDR only moves the demodulator
+// within the span and never moves the centre away from the Kenwood VFO.
+// A station keeps its RF frequency when the Kenwood dial is turned, so
+// ctun_frequency is left alone unless it falls out of the new span.
+// The PlutoSDR LO is not changed (see soapy_protocol_set_rx_frequency).
+//
+void vfo_id_set_center(int id, long long f) {
+  if (id >= receivers || receiver[id] == NULL) { return; }
+  const RECEIVER *rx = receiver[id];
+  if (!vfo[id].ctun) {
+    vfo[id].ctun = 1;
+    vfo[id].ctun_frequency = vfo[id].frequency;
+  }
+  if (vfo[id].frequency == f) { return; }
+  vfo[id].frequency = f;
+  long long half = (long long)rx->sample_rate / 2LL;
+  if (vfo[id].ctun_frequency + rx->filter_low < f - half ||
+      vfo[id].ctun_frequency + rx->filter_high > f + half) {
+    vfo[id].ctun_frequency = f;
+  }
+  vfo_id_adjust_band(id, vfo[id].ctun_frequency);
+  rx_frequency_changed(receiver[id]);
+  g_idle_add(ext_vfo_update, NULL);
+}
+#endif
 
 //
 // Set CTUN state of a VFO

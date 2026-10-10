@@ -37,6 +37,9 @@
 #include "discovered.h"
 #include "ext.h"
 #include "filter.h"
+#ifdef IFPAN
+#include "ifpan.h"
+#endif
 #include "main.h"
 #include "message.h"
 #include "mode.h"
@@ -90,6 +93,17 @@ const double lime_tx_bw =   768000.0;
 //       (note RX1/RX2 share the LO)
 //
 static int lime_mute_rx2 = 0;
+
+//
+// IF panadapter: receive-only. Every function that could set up, start,
+// tune, gain up or feed the TX path returns immediately.
+//
+#ifdef IFPAN
+#define NO_TX() return
+static long long ifpan_tuned[2] = { -1, -1 };  // IF the Pluto RX LO was last set to
+#else
+#define NO_TX()
+#endif
 
 void soapy_protocol_change_rx_sample_rate(RECEIVER *rx) {
   ASSERT_SERVER();
@@ -363,6 +377,7 @@ void soapy_protocol_start_dual_receiver(RECEIVER *rx1, RECEIVER *rx2) {
 }
 
 void soapy_protocol_create_transmitter(const TRANSMITTER *tx) {
+  NO_TX();
   ASSERT_SERVER();
   if (!soapy_device) { return; }
   int rc;
@@ -420,6 +435,7 @@ void soapy_protocol_create_transmitter(const TRANSMITTER *tx) {
 }
 
 void soapy_protocol_start_transmitter(void) {
+  NO_TX();
   //
   // call activateStream on tx_stream
   //
@@ -448,6 +464,7 @@ void soapy_protocol_stop_receivers(void) {
 }
 
 void soapy_protocol_stop_transmitter(void) {
+  NO_TX();
   //
   // call deactivateStream on tx_stream
   // Normally there is no need to call this functions, since the delivery of
@@ -480,7 +497,13 @@ void soapy_protocol_init(void) {
   // initialise the radio
   SoapySDRKwargs_set(&args, "driver", radio->name);
   if (strncmp(radio->soapy.hostname, "USB", 3)) {
-    SoapySDRKwargs_set(&args, "hostname", radio->soapy.hostname);
+    if (strcmp(radio->name, "plutosdr") == 0) {
+      char uri[160];
+      snprintf(uri, sizeof(uri), "ip:%s", radio->soapy.hostname);
+      SoapySDRKwargs_set(&args, "uri", uri);   // see soapy_discovery.c
+    } else {
+      SoapySDRKwargs_set(&args, "hostname", radio->soapy.hostname);
+    }
   }
   if (strcmp(radio->name, "rtlsdr") == 0) {
     snprintf(temp, sizeof(temp), "%d", radio->soapy.rtlsdr_count);
@@ -490,6 +513,9 @@ void soapy_protocol_init(void) {
     snprintf(temp, sizeof(temp), "SDRplay Dev%d", radio->soapy.sdrplay_count);
     SoapySDRKwargs_set(&args, "label", temp);
   }
+#ifdef IFPAN
+  ifpan_tuned[0] = ifpan_tuned[1] = -1;
+#endif
   soapy_device = SoapySDRDevice_make(&args);
   if (soapy_device == NULL) {
     t_print("%s: MakeDevice failed: %s\n", __func__, SoapySDRDevice_lastError());
@@ -650,6 +676,7 @@ static gpointer soapy_receive_dual_thread(gpointer data) {
 
 
 void soapy_protocol_iq_samples(const double isample, const double qsample) {
+  NO_TX();
   ASSERT_SERVER();
   if (!soapy_device) { return; }
   int flags = 0;
@@ -696,6 +723,24 @@ void soapy_protocol_set_rx_frequency(const int id) {
   ASSERT_SERVER();
   if (!soapy_device) { return; }
   int rc;
+#ifdef IFPAN
+  //
+  // IF panadapter: the Pluto stays on the TS-570D 1st IF whatever the VFO
+  // does. The VFO only moves the display (and the CTUN offset in WDSP).
+  // Re-tune the hardware only if the IF/calibration actually changed, so
+  // that turning the Kenwood dial never disturbs the RX stream.
+  //
+  long long fif = ifpan_hw_frequency();
+  if (id < 0 || id > 1 || ifpan_tuned[id] == fif) { return; }
+  rc = SoapySDRDevice_setFrequency(soapy_device, SOAPY_SDR_RX, id, (double)fif, NULL);
+  if (rc != 0) {
+    t_print("%s: RX%d IF failed: %s\n", __func__, id + 1, SoapySDR_errToStr(rc));
+  } else {
+    ifpan_tuned[id] = fif;
+    t_print("%s: RX%d locked to IF %lld Hz\n", __func__, id + 1, fif);
+  }
+  return;
+#endif
   long long f = calibrated_frequency(vfo[id].frequency - vfo[id].lo);
   if (have_lime) {
     //
@@ -783,6 +828,7 @@ void soapy_protocol_set_rx_frequency(const int id) {
 }
 
 void soapy_protocol_set_tx_frequency(void) {
+  NO_TX();
   ASSERT_SERVER();
   if (!soapy_device) { return; }
   if (transmitter != NULL) {
@@ -846,6 +892,7 @@ void soapy_protocol_set_rx_antenna(const int id, int ant) {
 }
 
 void soapy_protocol_set_tx_antenna(int ant) {
+  NO_TX();
   ASSERT_SERVER();
   if (!soapy_device) { return; }
   if (ant >= (int) radio->soapy.tx.antennas) { ant = (int) radio->soapy.tx.antennas - 1; }
@@ -905,6 +952,7 @@ void soapy_protocol_set_rx_gain_element(const int id, const char *name, const do
 }
 
 void soapy_protocol_set_tx_gain(const double gain) {
+  NO_TX();
   ASSERT_SERVER();
   if (!soapy_device) { return; }
   int rc;
@@ -915,6 +963,7 @@ void soapy_protocol_set_tx_gain(const double gain) {
 }
 
 void soapy_protocol_set_tx_gain_element(const char *name, const double gain) {
+  NO_TX();
   ASSERT_SERVER();
   if (!soapy_device) { return; }
   int rc;
@@ -965,6 +1014,7 @@ void soapy_protocol_set_automatic_gain(const int id, const int mode) {
 }
 
 void soapy_protocol_rxtx(const TRANSMITTER *tx) {
+  NO_TX();
   ASSERT_SERVER();
   if (!soapy_device) { return; }
   //
@@ -1003,6 +1053,7 @@ void soapy_protocol_rxtx(const TRANSMITTER *tx) {
 }
 
 void soapy_protocol_txrx(void) {
+  NO_TX();
   ASSERT_SERVER();
   if (!soapy_device) { return; }
   //

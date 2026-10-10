@@ -380,6 +380,32 @@ void rx_panadapter_update(RECEIVER *rx) {
     cairo_move_to(cr, 48.0, knee_y);
     cairo_show_text(cr, "-G");
   }
+#ifdef IFPAN
+  //
+  // IF panadapter: the Kenwood VFO is the display centre. Mark it with
+  // a dashed line, or with an arrow at the edge when zoomed away from it.
+  //
+  if (rx->id == 0) {
+    double kx = rx->cBp;
+    cairo_set_source_rgba(cr, COLOUR_ATTN);
+    if (kx >= 0.0 && kx <= mywidth) {
+      const double dash[] = { 6.0 * scalfac, 4.0 * scalfac };
+      cairo_set_dash(cr, dash, 2, 0.0);
+      cairo_set_line_width(cr, PAN_LINE_THICK);
+      cairo_move_to(cr, kx, 0.0);
+      cairo_line_to(cr, kx, myheight);
+      cairo_stroke(cr);
+      cairo_set_dash(cr, dash, 0, 0.0);
+    } else {
+      const char *t = (kx < 0.0) ? "< TS" : "TS >";
+      cairo_set_font_size(cr, 14.0 * scalfac);
+      cairo_text_extents(cr, t, &extents);
+      double tx = (kx < 0.0) ? 4.0 : mywidth - extents.width - 4.0;
+      cairo_move_to(cr, tx, 30.0 * scalfac);
+      cairo_show_text(cr, t);
+    }
+  }
+#endif
   // cursor
   if (active) {
     cairo_set_source_rgba(cr, COLOUR_ALARM);

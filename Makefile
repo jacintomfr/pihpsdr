@@ -37,7 +37,8 @@ endif
 GPIO=ON
 MIDI=ON
 USBOZY=OFF
-SOAPYSDR=OFF
+SOAPYSDR=ON
+IFPAN=ON
 PORTFORWARD=ON
 TCI=ON
 ifeq ($(MACOS), YES)
@@ -55,6 +56,7 @@ endif
 # MIDI         | If ON, compile with MIDI support (needs support from operating system)
 # USBOZY       | If ON, piHPSDR can talk to legacy USB OZY radios (needs  libusb-1.0)
 # SOAPYSDR     | If ON, piHPSDR can talk to radios via SoapySDR library
+# IFPAN        | If ON, RX-only IF panadapter (TS-570D 1st IF, PlutoSDR, rigctld). Needs SOAPYSDR
 # TCI          | If ON, activate TCI server (needs libwebsockets)
 # AUDIO        | Select audio module (ALSA, PULSE, PORTAUDO, PIPEWIRE)
 #
@@ -395,12 +397,27 @@ endif
 
 ##############################################################################
 #
+# IF panadapter (Kenwood TS-570D 1st IF via PlutoSDR, CAT via rigctld).
+# This makes piHPSDR strictly receive-only. Requires SOAPYSDR=ON.
+#
+##############################################################################
+
+ifeq ($(IFPAN),ON)
+ifneq ($(SOAPYSDR),ON)
+$(error IFPAN=ON requires SOAPYSDR=ON)
+endif
+IFPAN_OPTIONS=-D IFPAN
+IFPAN_OBJS=src/ifpan.o
+endif
+
+##############################################################################
+#
 # All the command-line options to compile the *.c files
 #
 ##############################################################################
 
 OPTIONS=$(MIDI_OPTIONS) $(USBOZY_OPTIONS) \
-	$(GPIO_OPTIONS) $(SOAPYSDR_OPTIONS) \
+	$(GPIO_OPTIONS) $(SOAPYSDR_OPTIONS) $(IFPAN_OPTIONS) \
 	$(ANDROMEDA_OPTIONS) \
 	$(STEMLAB_OPTIONS) \
 	$(SERVER_OPTIONS) \
@@ -653,12 +670,12 @@ src/waterfall.o
 #
 ##############################################################################
 
-$(PROGRAM):  $(OBJS) $(AUDIO_OBJS) $(USBOZY_OBJS) $(SOAPYSDR_OBJS) \
+$(PROGRAM):  $(OBJS) $(AUDIO_OBJS) $(USBOZY_OBJS) $(SOAPYSDR_OBJS) $(IFPAN_OBJS) \
 		$(MIDI_OBJS) $(STEMLAB_OBJS) $(TTS_OBJS) $(TCI_OBJS)
 	$(COMPILE) -c -o src/version.o src/version.c
 	@+make -C libspecbleach
 	@+make -C wdsp
-	$(LINK) -o $(PROGRAM) $(OBJS) $(AUDIO_OBJS) $(USBOZY_OBJS) $(SOAPYSDR_OBJS) \
+	$(LINK) -o $(PROGRAM) $(OBJS) $(AUDIO_OBJS) $(USBOZY_OBJS) $(SOAPYSDR_OBJS) $(IFPAN_OBJS) \
 		$(MIDI_OBJS) $(STEMLAB_OBJS) $(TTS_OBJS) $(TCI_OBJS) \
 		$(LIBS)
 
@@ -792,12 +809,12 @@ DEPEND:
 #############################################################################
 
 .PHONY: app
-app:	$(OBJS) $(AUDIO_OBJS) $(USBOZY_OBJS)  $(SOAPYSDR_OBJS) $(TCI_OBJS) \
+app:	$(OBJS) $(AUDIO_OBJS) $(USBOZY_OBJS)  $(SOAPYSDR_OBJS) $(IFPAN_OBJS) $(TCI_OBJS) \
 		$(MIDI_OBJS) $(STEMLAB_OBJS) $(SERVER_OBJS) $(TTS_OBJS)
 	@+make -C libspecbleach
 	@+make -C wdsp
 	$(LINK) -headerpad_max_install_names -o $(PROGRAM) $(OBJS) $(AUDIO_OBJS) $(USBOZY_OBJS)  \
-		$(SOAPYSDR_OBJS) $(MIDI_OBJS) $(STEMLAB_OBJS) $(SERVER_OBJS) $(TTS_OBJS) \
+		$(SOAPYSDR_OBJS) $(IFPAN_OBJS) $(MIDI_OBJS) $(STEMLAB_OBJS) $(SERVER_OBJS) $(TTS_OBJS) \
 		$(TCI_OBJS) $(LIBS) $(LDFLAGS)
 	@rm -rf pihpsdr.app
 	@mkdir -p pihpsdr.app/Contents/MacOS

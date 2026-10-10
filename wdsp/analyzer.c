@@ -1827,6 +1827,43 @@ void SetDisplayNumAverage (int disp, int pixout, int num)
 	}
 }
 
+//
+// piHPSDR-IF: move the averaging history by n pixels (n > 0: towards lower
+// pixel indices; the pixels freed at the edge repeat the last old value),
+// so that the average follows signals that move across the display when
+// an external receiver (whose IF is displayed) is tuned.
+//
+static void shift_pixels (double *s, int len, int n)
+{
+	int i;
+	if (n > 0)
+	{
+		memmove (s, s + n, (len - n) * sizeof (double));
+		for (i = len - n; i < len; i++) s[i] = s[len - n - 1];
+	}
+	else
+	{
+		n = -n;
+		memmove (s + n, s, (len - n) * sizeof (double));
+		for (i = 0; i < n; i++) s[i] = s[n];
+	}
+}
+
+PORT
+void ShiftDisplayAverage (int disp, int pixout, int n)
+{
+	DP a = pdisp[disp];
+	int j, len = a->num_pixels;
+	if (n == 0 || len < 2) return;
+	if (n >= len) n = len - 1;
+	if (n <= -len) n = 1 - len;
+	EnterCriticalSection (&a->ResampleSection);
+	shift_pixels (a->av_sum[pixout], len, n);
+	for (j = 0; j < dMAX_AVERAGE; j++)
+		shift_pixels (a->av_buff[pixout][j], len, n);
+	LeaveCriticalSection (&a->ResampleSection);
+}
+
 PORT
 void SetDisplayAvBackmult (int disp, int pixout, double mult)
 {

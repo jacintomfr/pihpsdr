@@ -177,6 +177,7 @@ extern void SetDisplayDetectorMode (int disp, int pixout, int mode);
 extern void SetDisplayAverageMode (int disp, int pixout, int mode);
 extern void SetDisplayNumAverage (int disp, int pixout, int num);
 extern void SetDisplayAvBackmult (int disp, int pixout, double mult);
+extern void ShiftDisplayAverage (int disp, int pixout, int n);   // piHPSDR-IF
 extern void SetDisplaySampleRate (int disp, int rate);
 extern void SetDisplayNormOneHz (int disp, int pixout, int norm);
 extern double GetDisplayENB (int disp);

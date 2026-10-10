@@ -46,6 +46,11 @@ extern int       ifpan_follow_vfo;    // 1: the receiver follows the Kenwood dia
 extern int       ifpan_kenwood_mode;  // index into ifpan_mode_names[], -1: unknown
 extern int       ifpan_kenwood_smeter; // S-meter in dB relative to S9, -999: unknown
 extern const char *ifpan_mode_names[];
+extern int       ifpan_tx_mute;       // 1: mute the RX audio while the Kenwood transmits
+extern int       ifpan_kenwood_tx;    // 1: the Kenwood is transmitting (Kenwood TCP only)
+extern int       ifpan_kenwood_pwr;   // raw TX meters, -1: not read yet
+extern int       ifpan_kenwood_swr;
+extern int       ifpan_kenwood_alc;
 
 extern void      ifpan_set_follow(int on);
 

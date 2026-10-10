@@ -52,6 +52,9 @@
   #include "tci_audio.h"
 #endif
 #include "transmitter.h"
+#ifdef IFPAN
+  #include "ifpan.h"
+#endif
 #include "vfo.h"
 #include "waterfall.h"
 
@@ -1204,6 +1207,13 @@ static void rx_process_buffer(RECEIVER *rx) {
       left_sample = 0.0;
       right_sample = 0.0;
     }
+#ifdef IFPAN
+    // the Kenwood transmits: its IF tap would only carry our own signal
+    if (ifpan_tx_mute && ifpan_kenwood_tx && ifpan_cat_connected) {
+      left_sample = 0.0;
+      right_sample = 0.0;
+    }
+#endif
     switch (rx->audio_channel) {
     case STEREO:
       break;

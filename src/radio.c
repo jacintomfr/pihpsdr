@@ -977,6 +977,9 @@ static void radio_create_visual(void) {
 
 void radio_stop_program(void) {
   t_print("%s: Start shutdown sequence\n", __func__);
+#ifdef IFPAN
+  ifpan_stop();   // Kenwood back to RX if piHPSDR-IF keyed it
+#endif
 #ifdef GPIO
   gpio_close();
   t_print("%s: GPIO closed\n", __func__);

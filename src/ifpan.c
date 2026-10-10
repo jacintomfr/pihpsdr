@@ -88,6 +88,15 @@ int       ifpan_kenwood_swr = -1;     // "RM1nnnn;"
 int       ifpan_kenwood_alc = -1;     // "RM3nnnn;"
 
 //
+// PTT from piHPSDR-IF (toolbar PTT / MOX): the CAT thread sends "TX;" /
+// "RX;" (rigctld: "T 1" / "T 0"); the microphone stays on the radio. Only
+// the latest request is kept. A TX request is dropped while CAT is down,
+// an RX request is kept until it has been sent.
+//
+static int ptt_request = -1;          // -1: none, 0: RX, 1: TX (cat_mutex)
+static volatile int ptt_keyed = 0;    // 1: piHPSDR-IF has put the Kenwood in TX
+
+//
 // CAT link: either Hamlib rigctld (which owns the serial port), or the
 // radio's own Kenwood protocol over TCP straight to an RS-232/WiFi bridge
 // (ESP32/ts570_wifi_bridge, or ser2net/socat), without rigctld.
@@ -245,6 +254,30 @@ static int cat_connect(void) {
 
 void ifpan_cat_reconnect(void) {
   cat_reconnect = 1;
+}
+
+//
+// PTT request from the toolbar (main thread): 1 TX, 0 RX, -1 toggle (MOX)
+//
+void ifpan_ptt(int on) {
+  if (on < 0) { on = !(ifpan_kenwood_tx || ptt_keyed); }
+  if (on && !ifpan_cat_connected) {
+    t_print("%s: TX refused, no CAT link to the Kenwood\n", __func__);
+    return;
+  }
+  g_mutex_lock(&cat_mutex);
+  ptt_request = on;
+  g_mutex_unlock(&cat_mutex);
+}
+
+//
+// On exit: if piHPSDR-IF keyed the Kenwood, put it back to receive
+// (wait up to 1 s for the CAT thread to send it)
+//
+void ifpan_stop(void) {
+  if (!ptt_keyed) { return; }
+  ifpan_ptt(0);
+  for (int i = 0; i < 100 && ptt_keyed; i++) { usleep(10000); }
 }
 
 // ---------------------------------------------------------------------
@@ -516,6 +549,25 @@ static int be_get_strength(int sock, int *db) {
   return (ifpan_cat_backend == IFPAN_CAT_KENWOOD) ? kw_get_strength(sock, db) : cat_get_strength(sock, db);
 }
 
+//
+// PTT: Kenwood "TX;" / "RX;" (no answer), rigctld "T 1" / "T 0" (reply
+// "RPRT n"). Returns -1 if the connection failed.
+//
+static int be_set_ptt(int sock, int on) {
+  if (ifpan_cat_backend == IFPAN_CAT_KENWOOD) {
+    const char *cmd = on ? "TX;" : "RX;";
+    return (send(sock, cmd, 3, MSG_NOSIGNAL) == 3) ? 0 : -1;
+  }
+  char line[64];
+  const char *cmd = on ? "T 1\n" : "T 0\n";
+  if (send(sock, cmd, 4, MSG_NOSIGNAL) != 4) { return -1; }
+  if (cat_read_line(sock, line, sizeof(line)) < 0) { return -1; }
+  if (strncmp(line, "RPRT 0", 6) != 0) {
+    t_print("%s: rigctld refused %s", __func__, cmd);
+  }
+  return 0;
+}
+
 static gpointer cat_thread(gpointer data) {
   int sock = -1;
   long long hold_freq = 0;            // frequency just sent to the Kenwood
@@ -591,6 +643,31 @@ static gpointer cat_thread(gpointer data) {
       }
       hold_freq = target;
       hold_until = g_get_monotonic_time() + CAT_SET_HOLD_US;
+    }
+    //
+    // piHPSDR-IF PTT (toolbar PTT / MOX) -> Kenwood
+    //
+    int ptt;
+    g_mutex_lock(&cat_mutex);
+    ptt = ptt_request;
+    ptt_request = -1;
+    g_mutex_unlock(&cat_mutex);
+    if (ptt >= 0) {
+      if (be_set_ptt(sock, ptt) < 0) {
+        if (ptt == 0) {               // RX must not get lost
+          g_mutex_lock(&cat_mutex);
+          if (ptt_request < 0) { ptt_request = 0; }
+          g_mutex_unlock(&cat_mutex);
+        }
+        t_print("%s: %s connection lost\n", __func__, cat_name());
+        ifpan_cat_connected = 0;
+        g_idle_add(ext_vfo_update, NULL);
+        close(sock);
+        sock = -1;
+        continue;
+      }
+      ptt_keyed = ptt;
+      t_print("%s: PTT %s sent to the Kenwood\n", __func__, ptt ? "TX" : "RX");
     }
     long long f = be_get_freq(sock);
     if (f == -2) {
@@ -703,10 +780,12 @@ static gpointer cat_thread(gpointer data) {
     gint64 wait_end = g_get_monotonic_time() + (gint64)ifpan_poll_ms * div * 1000;
     while (g_get_monotonic_time() < wait_end) {
       long long pending;
+      int ptt_pending;
       g_mutex_lock(&cat_mutex);
       pending = cat_set_target;
+      ptt_pending = ptt_request;
       g_mutex_unlock(&cat_mutex);
-      if (pending > 0 || cat_reconnect) { break; }
+      if (pending > 0 || ptt_pending >= 0 || cat_reconnect) { break; }
       usleep(10000);
     }
   }

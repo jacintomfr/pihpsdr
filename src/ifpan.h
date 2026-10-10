@@ -63,6 +63,8 @@ extern void      ifpan_cat_reconnect(void);   // apply new CAT settings now
 
 extern long long ifpan_hw_frequency(void);
 extern void      ifpan_start(void);
+extern void      ifpan_stop(void);    // on exit: Kenwood back to RX if we keyed it
+extern void      ifpan_ptt(int on);   // toolbar PTT / MOX: 1 TX, 0 RX, -1 toggle
 extern void      ifpan_save_state(void);
 extern void      ifpan_restore_state(void);
 

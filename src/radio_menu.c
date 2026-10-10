@@ -912,6 +912,18 @@ void radio_menu(GtkWidget *parent) {
     gtk_grid_attach(GTK_GRID(grid), Btn, 5, row, 2, 1);
     g_signal_connect(Btn, "toggled", G_CALLBACK(follow_cb), NULL);
     row++;
+    //
+    // Tuning in piHPSDR-IF (click, wheel, keypad) also tunes the Kenwood.
+    // Off: only the piHPSDR-IF receiver moves inside the IF span, so the
+    // spectrum stays still (like CTUN on a direct-sampling SDR); the
+    // Kenwood stays where it is (and transmits there).
+    //
+    Btn = gtk_check_button_new_with_label("Clicks tune the TS");
+    gtk_widget_set_halign(Btn, GTK_ALIGN_END);
+    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (Btn), ifpan_cat_write);
+    gtk_grid_attach(GTK_GRID(grid), Btn, 5, row, 2, 1);
+    g_signal_connect(Btn, "toggled", G_CALLBACK(toggle_cb), &ifpan_cat_write);
+    row++;
     // mute the RX audio while the Kenwood transmits (TX state via Kenwood TCP)
     Btn = gtk_check_button_new_with_label("Mute when TS in TX");
     gtk_widget_set_halign(Btn, GTK_ALIGN_END);

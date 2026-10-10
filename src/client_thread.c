@@ -1584,7 +1584,9 @@ ReadErr:
   if (remote_auto_reconnect && strlen(client_host) > 0 && remote_started) {
     char *av[5];
     char port[10];
-    extern char **environ;
+#ifndef _WIN32
+    extern char **environ;   // MinGW: a macro, declared in <stdlib.h>
+#endif
     snprintf(port, sizeof(port), "%d", client_port);
     av[0] = client_pgm;
     av[1] = "-client";

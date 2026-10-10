@@ -137,6 +137,17 @@ void audio_get_cards(void) {
   n_output_devices = 0;
   for (int  i = 0; i < numDevices; i++ ) {
     const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo( i );
+#ifdef _WIN32
+    //
+    // Windows lists each device once per host API (MME, DirectSound, WASAPI,
+    // WDM-KS) under the same name. Devices are stored by name, so prefix the
+    // host API to make the names unique.
+    //
+    char devname[256];
+    snprintf(devname, sizeof(devname), "%s: %s", Pa_GetHostApiInfo(deviceInfo->hostApi)->name, deviceInfo->name);
+#else
+    const char *devname = deviceInfo->name;
+#endif
     if (deviceInfo->maxInputChannels > 0 && n_input_devices < MAX_AUDIO_DEVICES) {
       inputParameters.device = i;
       inputParameters.channelCount = 1;
@@ -149,8 +160,8 @@ void audio_get_cards(void) {
         // we copy the device name to local storage. This is referenced both
         // by the name and description element.
         //
-        input_devices[n_input_devices].name = g_strdup(deviceInfo->name);
-        input_devices[n_input_devices].description = g_strdup(deviceInfo->name);
+        input_devices[n_input_devices].name = g_strdup(devname);
+        input_devices[n_input_devices].description = g_strdup(devname);
         input_devices[n_input_devices].PortAudioDevice = i;
         input_devices[n_input_devices].channels = 1;
         n_input_devices++;
@@ -163,8 +174,8 @@ void audio_get_cards(void) {
       outputParameters.suggestedLatency = 0; /* ignored by Pa_IsFormatSupported() */
       outputParameters.hostApiSpecificStreamInfo = NULL;
       if (Pa_IsFormatSupported(NULL, &outputParameters, 48000.0) == paFormatIsSupported) {
-        output_devices[n_output_devices].name = g_strdup(deviceInfo->name);
-        output_devices[n_output_devices].description = g_strdup(deviceInfo->name);
+        output_devices[n_output_devices].name = g_strdup(devname);
+        output_devices[n_output_devices].description = g_strdup(devname);
         output_devices[n_output_devices].PortAudioDevice = i;
         output_devices[n_output_devices].channels = outputParameters.channelCount;
         n_output_devices++;

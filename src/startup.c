@@ -135,6 +135,17 @@ void startup(const char *path) {
   if (rc < 0 || !S_ISDIR(statbuf.st_mode)) {
     snprintf(workdir, sizeof(workdir), "%s", homedir);
   }
+#elif defined(_WIN32)
+  //
+  // Windows: $HOME only exists inside an MSYS2 shell, so a $HOME based path
+  // would differ between "started from MSYS2" and "started from Explorer".
+  // Use the per-user application data folder, %LOCALAPPDATA%\piHPSDR-IF.
+  //
+  const char *appdata = getenv("LOCALAPPDATA");
+  snprintf(workdir, sizeof(workdir), "%s/" APP_NAME, appdata ? appdata : homedir);
+  if (stat(workdir, &statbuf) < 0) {
+    mkdir (workdir, 0700);
+  }
 #else
   snprintf(workdir, sizeof(workdir), "%s/.config", homedir);
   if (stat(workdir, &statbuf) < 0) {

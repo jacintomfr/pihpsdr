@@ -1030,6 +1030,8 @@ void radio_shutdown(void) {
   //
 #ifdef __APPLE__
   (void) system("shutdown -h now");
+#elif defined(_WIN32)
+  (void) system("shutdown /s /t 0");   // "shutdown -h" would hibernate
 #else
   (void) system("sudo shutdown -h -P now");
 #endif
@@ -1042,7 +1044,11 @@ void radio_reboot(void) {
   // The following call may fail (e.g. missing admin privileges),
   // in this case the program simply exits.
   //
+#ifdef _WIN32
+  (void) system("shutdown /r /t 0");
+#else
   (void) system("sudo reboot");
+#endif
   _exit(0);
 }
 
@@ -1126,7 +1132,11 @@ void radio_start_radio(void) {
     SerialPorts[id].speed = 0;
     SerialPorts[id].autoreporting = 0;
     SerialPorts[id].g2 = 0;
+#ifdef _WIN32
+    snprintf(SerialPorts[id].port, sizeof(SerialPorts[id].port), "COM%d", id + 1);
+#else
     snprintf(SerialPorts[id].port, sizeof(SerialPorts[id].port), "/dev/ttyACM%d", id);
+#endif
   }
   //
   // On G2-Ultra systems, we need to know the serial port used for the

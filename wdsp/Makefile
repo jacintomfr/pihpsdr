@@ -6,6 +6,19 @@
 CFLAGS?= -pthread -O3 -D_GNU_SOURCE -Wno-parentheses -Wcast-align
 CFLAGS += -I../libspecbleach/include
 
+# Windows (MSYS2 MinGW64): WDSP compiles its *native* _WIN32 code path here
+# (it originates from Thetis on Windows), so linux_port.c is compiled empty.
+# analyzer.c passes 'volatile int *' to the Win32 Interlocked*() API which
+# expects 'volatile LONG *'; on Win64 both are 32 bit, so this is harmless,
+# but GCC >= 14 turns the mismatch into an error. The MSVC-style
+# __declspec(align()) in a few files is ignored by GCC (not needed there).
+# WDSP_NO_CONSOLE: wisdom.c would open a console window for the FFTW
+# planning messages and leave stdout (piHPSDR's log file) redirected to it;
+# piHPSDR shows the wisdom progress in its own window instead.
+ifneq (,$(findstring MINGW64,$(shell uname -s)))
+CFLAGS += -Wno-incompatible-pointer-types -Wno-attributes -DWDSP_NO_CONSOLE
+endif
+
 FFTWINCLUDE=`pkg-config --cflags fftw3`
 
 COMPILE=$(CC) $(CFLAGS) $(FFTWINCLUDE)

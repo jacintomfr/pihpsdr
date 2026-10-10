@@ -1,0 +1,4 @@
+/* Windows resource file: application icon for pihpsdr-if.exe (Explorer,
+ * taskbar and window title bar - GDK uses the exe's icon resource).
+ * The icon is release/pihpsdr/hpsdr_icon.png converted to .ico. */
+1 ICON "installer/pihpsdr.ico"

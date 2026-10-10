@@ -72,6 +72,27 @@ endif
 
 -include make.config.pihpsdr
 
+##############################################################################
+#
+# Windows (MSYS2 MinGW64), see WINDOWS/BUILD.md
+#
+# Under the MSYS2 "MINGW64" shell, uname -s reports e.g. MINGW64_NT-10.0-19045.
+# The POSIX compatibility layer (shim headers for sys/socket.h, termios.h, ...
+# plus getifaddrs/fcntl/termios emulation) lives in WINDOWS/compat and is only
+# used for this build, so the Linux/macOS builds are not affected at all.
+# There is no GPIO and no MIDI back-end on Windows; audio goes via PortAudio
+# (src/portaudio.c, as on macOS).
+#
+##############################################################################
+
+ifneq (,$(findstring MINGW64,$(UNAME_S)))
+WINDOWS:=YES
+override GPIO=OFF
+override MIDI=OFF
+override USBOZY=OFF
+override AUDIO=PORTAUDIO
+endif
+
 # Get git commit version and date
 GIT_DATE := $(firstword $(shell git --no-pager show --date=short --format="%ai" --name-only))
 GIT_VERSION := $(shell git describe --abbrev=0 --tags --always --dirty)
@@ -92,6 +113,26 @@ LINK?=   $(CC)
 #
 CFLAGS+=-pthread -I./src
 LINK+=-pthread
+
+#
+# Windows: -I WINDOWS/compat makes its shim headers (sys/socket.h, termios.h,
+#   ifaddrs.h, ...) be found instead of the (non-existing) system ones.
+# WIN32_LEAN_AND_MEAN/NOMINMAX/NOGDI keep <windows.h> from polluting the name
+#   space (winsock1 vs. winsock2, min/max, and the RELATIVE/ABSOLUTE/ERROR
+#   macros of <wingdi.h> which clash with piHPSDR identifiers).
+# _WIN32_WINNT=0x0A00 (Windows 10) makes inet_pton/inet_ntop etc. visible.
+# __USE_MINGW_ACCESS: access(path, X_OK) is an invalid-parameter error for the
+#   MS CRT; mingw's wrapper restores the POSIX behaviour.
+# _POSIX_THREAD_SAFE_FUNCTIONS: makes mingw declare gmtime_r()/localtime_r().
+# -mwindows: no console window (make WIN_CONSOLE=ON keeps one for debugging).
+#
+ifeq ($(WINDOWS), YES)
+CFLAGS+=-I./WINDOWS/compat -DWIN32_LEAN_AND_MEAN -DNOMINMAX -DNOGDI -D_WIN32_WINNT=0x0A00 \
+	-D__USE_MINGW_ACCESS -D_POSIX_THREAD_SAFE_FUNCTIONS=200112L
+ifneq ($(WIN_CONSOLE), ON)
+LDFLAGS+=-mwindows
+endif
+endif
 
 PKG_CONFIG = pkg-config
 
@@ -205,6 +246,10 @@ endif
 ifeq ($(LINUX), YES)
 SOAPYSDR_INCLUDE= -I/usr/local/include
 SOAPYSDR_LIBS= -L/usr/local/lib -lSoapySDR
+endif
+ifeq ($(WINDOWS), YES)
+SOAPYSDR_LIBS=`$(PKG_CONFIG) --libs soapysdr`
+SOAPYSDR_INCLUDE=`$(PKG_CONFIG) --cflags soapysdr`
 endif
 SOAPYSDR_OBJS= \
 src/soapy_discovery.o \
@@ -395,6 +440,18 @@ ifeq ($(MACOS), YES)
 SYS_LIBS=-framework IOKit
 endif
 
+#
+# Windows: Winsock2 + IP Helper (getifaddrs emulation), WinMM (1 ms timer
+# resolution), AVRT (WDSP thread priorities), ole32 for COM.
+# Text is drawn via fontconfig/FreeType (cairo-ft), see WINDOWS/compat/cairo.h.
+#
+ifeq ($(WINDOWS), YES)
+SYS_LIBS=-lws2_32 -liphlpapi -lwinmm -lavrt -lole32
+GTK_INCLUDE=`$(PKG_CONFIG) --cflags gtk+-3.0 cairo-ft fontconfig`
+GTK_LIBS=`$(PKG_CONFIG) --libs gtk+-3.0 cairo-ft fontconfig`
+WIN_OBJS=WINDOWS/compat/win_compat.o WINDOWS/compat/win_fonts.o WINDOWS/pihpsdr_res.o
+endif
+
 ##############################################################################
 #
 # IF panadapter (Kenwood TS-570D 1st IF via PlutoSDR, CAT via rigctld).
@@ -464,6 +521,12 @@ ifeq ($(IFPAN),ON)
 PROGRAM=pihpsdr-if
 else
 PROGRAM=pihpsdr
+endif
+
+# Windows: the linker appends .exe anyway; the target must carry it too,
+# otherwise make would never find its output and relink on every run.
+ifeq ($(WINDOWS), YES)
+PROGRAM:=$(PROGRAM).exe
 endif
 
 ##############################################################################
@@ -675,12 +738,12 @@ src/waterfall.o
 ##############################################################################
 
 $(PROGRAM):  $(OBJS) $(AUDIO_OBJS) $(USBOZY_OBJS) $(SOAPYSDR_OBJS) $(IFPAN_OBJS) \
-		$(MIDI_OBJS) $(STEMLAB_OBJS) $(TTS_OBJS) $(TCI_OBJS)
+		$(MIDI_OBJS) $(STEMLAB_OBJS) $(TTS_OBJS) $(TCI_OBJS) $(WIN_OBJS)
 	$(COMPILE) -c -o src/version.o src/version.c
 	@+make -C libspecbleach
 	@+make -C wdsp
 	$(LINK) -o $(PROGRAM) $(OBJS) $(AUDIO_OBJS) $(USBOZY_OBJS) $(SOAPYSDR_OBJS) $(IFPAN_OBJS) \
-		$(MIDI_OBJS) $(STEMLAB_OBJS) $(TTS_OBJS) $(TCI_OBJS) \
+		$(MIDI_OBJS) $(STEMLAB_OBJS) $(TTS_OBJS) $(TCI_OBJS) $(WIN_OBJS) \
 		$(LIBS)
 
 ##############################################################################
@@ -733,6 +796,13 @@ clean:
 	yes | rm -rf LINUX/SoapySDR
 	@make -C libspecbleach clean
 	@make -C wdsp clean
+ifeq ($(WINDOWS), YES)
+	rm -f WINDOWS/compat/*.o WINDOWS/*.o
+endif
+
+# Windows: application icon compiled into the exe
+WINDOWS/pihpsdr_res.o: WINDOWS/pihpsdr.rc WINDOWS/installer/pihpsdr.ico
+	windres -I WINDOWS -i WINDOWS/pihpsdr.rc -o $@
 
 #############################################################################
 #

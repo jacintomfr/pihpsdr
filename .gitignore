@@ -20,3 +20,6 @@ LINUX/SoapySDR
 LINUX/SoapyPlutoSDR
 LINUX/SoapyRTLSDR
 release/LatexManual/piHPSDR-Manual.pdf
+/build-win/
+/pihpsdr-if.exe
+/pihpsdr.exe

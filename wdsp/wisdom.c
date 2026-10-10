@@ -41,7 +41,7 @@ int WDSPwisdom (char* directory)
 	int wisdom_return = 0; // 0 from existing, 1 rebuilt
 	fftw_plan tplan;
 	int psize;
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(WDSP_NO_CONSOLE)
 	FILE *stream;
 #endif
 	double* fftin;
@@ -54,7 +54,7 @@ int WDSPwisdom (char* directory)
 	{
 		fftin =  (double *) malloc0 (maxsize * sizeof (complex));
 		fftout = (double *) malloc0 (maxsize * sizeof (complex));
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(WDSP_NO_CONSOLE)
 		AllocConsole();								// create console
 	    freopen_s(&stream, "conout$", "w", stdout); // redirect output to console
 #endif
@@ -107,7 +107,7 @@ int WDSPwisdom (char* directory)
 		fftw_export_wisdom_to_filename(wisdom_file);
 		_aligned_free (fftout);
 		_aligned_free (fftin);
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(WDSP_NO_CONSOLE)
 		FreeConsole();							// dismiss console
 #endif
 		wisdom_return = 1;

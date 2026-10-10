@@ -60,6 +60,7 @@
 #include "ifpan.h"
 #include "main.h"
 #include "message.h"
+#include "mode.h"
 #include "property.h"
 #include "radio.h"
 #include "receiver.h"
@@ -85,6 +86,7 @@ int       ifpan_kenwood_smeter = -999;
 // reports them (-1: not read yet); meter.c turns them into W / SWR.
 //
 int       ifpan_tx_mute = 1;
+int       ifpan_follow_mode = 1;      // receiver mode follows the Kenwood mode
 int       ifpan_kenwood_tx = 0;
 int       ifpan_kenwood_pwr = -1;     // "SM;" while transmitting
 int       ifpan_kenwood_swr = -1;     // "RM1nnnn;"
@@ -149,6 +151,7 @@ void ifpan_save_state(void) {
   SetPropS0("ifpan.kenwood_host",  ifpan_kenwood_host);
   SetPropI0("ifpan.kenwood_port",  ifpan_kenwood_port);
   SetPropI0("ifpan.tx_mute",       ifpan_tx_mute);
+  SetPropI0("ifpan.follow_mode",   ifpan_follow_mode);
 }
 
 void ifpan_restore_state(void) {
@@ -164,6 +167,7 @@ void ifpan_restore_state(void) {
   GetPropS0("ifpan.kenwood_host",  ifpan_kenwood_host);
   GetPropI0("ifpan.kenwood_port",  ifpan_kenwood_port);
   GetPropI0("ifpan.tx_mute",       ifpan_tx_mute);
+  GetPropI0("ifpan.follow_mode",   ifpan_follow_mode);
   if (ifpan_cat_backend != IFPAN_CAT_KENWOOD) { ifpan_cat_backend = IFPAN_CAT_RIGCTLD; }
   if (ifpan_poll_ms < 20) { ifpan_poll_ms = 20; }
   // keep the IF well inside the Pluto span (+/- 384 kHz at 768 kHz)
@@ -187,6 +191,31 @@ static void tuning_moved(long long df) {
   int n = (int)px;
   frac = px - n;
   if (n != 0) { ShiftDisplayAverage(receiver[0]->id, 0, n); }
+}
+
+//
+// "Follow TS mode" (main thread): when the Kenwood mode changes, the
+// piHPSDR-IF receiver switches to the same mode, so that the audio from
+// the SDR matches the radio. Kenwood CW is the upper side (CW-R lower),
+// FSK the lower side (FSK-R upper). Only changes of the Kenwood mode are
+// applied, so a mode chosen in piHPSDR-IF stays until the Kenwood changes.
+//
+static gboolean mode_apply(gpointer data) {
+  // same order as ifpan_mode_names[]: USB LSB CW CW-R AM FM FSK FSKR
+  static const int to_mode[8] = { modeUSB, modeLSB, modeCWU, modeCWL, modeAM, modeFMN, modeDIGL, modeDIGU };
+  int m = GPOINTER_TO_INT(data);
+  if (!ifpan_follow_mode || m < 0 || m > 7 || receivers < 1 || receiver[0] == NULL) { return G_SOURCE_REMOVE; }
+  if (vfo[VFO_A].mode != to_mode[m]) {
+    t_print("%s: Kenwood %s -> receiver %s\n", __func__, ifpan_mode_names[m], mode_string[to_mode[m]]);
+    vfo_id_mode_changed(VFO_A, to_mode[m]);
+  }
+  return G_SOURCE_REMOVE;
+}
+
+// Radio menu: switching "Follow TS mode" on applies the Kenwood mode at once
+void ifpan_set_follow_mode(int on) {
+  ifpan_follow_mode = on;
+  if (on && ifpan_kenwood_mode >= 0) { mode_apply(GINT_TO_POINTER(ifpan_kenwood_mode)); }
 }
 
 static gboolean cat_apply(gpointer data) {
@@ -753,6 +782,7 @@ static gpointer cat_thread(gpointer data) {
       if (m >= -1 && m != ifpan_kenwood_mode) {
         ifpan_kenwood_mode = m;
         g_idle_add(ext_vfo_update, NULL);
+        if (m >= 0) { g_idle_add(mode_apply, GINT_TO_POINTER(m)); }
       }
     }
     //

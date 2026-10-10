@@ -101,6 +101,7 @@ static int lime_mute_rx2 = 0;
 #ifdef IFPAN
 #define NO_TX() return
 static long long ifpan_tuned[2] = { -1, -1 };  // IF the Pluto RX LO was last set to
+static SoapySDRKwargs ifpan_args;              // device arguments, kept to reopen the SDR
 #else
 #define NO_TX()
 #endif
@@ -521,7 +522,11 @@ void soapy_protocol_init(void) {
     t_print("%s: MakeDevice failed: %s\n", __func__, SoapySDRDevice_lastError());
     g_idle_add(fatal_error, "FATAL: Soapy Make Device Failed");
   }
+#ifdef IFPAN
+  ifpan_args = args;              // kept for ifpan_reopen()
+#else
   SoapySDRKwargs_clear(&args);
+#endif
 }
 
 #ifdef IFPAN
@@ -686,6 +691,59 @@ static int rx_read_ok(int errcount) {
   return 0;
 }
 
+#if defined(IFPAN) && !(defined(SOAPY_SDR_API_VERSION) && (SOAPY_SDR_API_VERSION < 0x00080000))
+//
+// IF panadapter: the SDR may drop off its link (an RTL-SDR knocked off the
+// USB bus by RF while the Kenwood transmits, a Pluto network loss).
+// Re-activating the stream (rx_read_failed) cannot bring back a device
+// that has re-enumerated, so the receive thread closes the device and
+// opens it again with the same arguments, sample rate, gain, antenna and
+// IF frequency, every 2 s until it answers. While it is gone,
+// soapy_device is NULL, which all other entry points already check.
+//
+#define IFPAN_REOPEN
+#define IFPAN_REOPEN_ERRORS 15          // consecutive read errors before a reopen
+
+static int ifpan_reopen(const RECEIVER *rx) {
+  SoapySDRDevice *old = soapy_device;
+  int id = rx->id;
+  size_t channel = id;
+  soapy_device = NULL;
+  if (old != NULL) {
+    if (rx_stream != NULL) {
+      SoapySDRDevice_deactivateStream(old, rx_stream, 0, 0LL);
+      SoapySDRDevice_closeStream(old, rx_stream);
+      rx_stream = NULL;
+    }
+    SoapySDRDevice_unmake(old);
+  }
+  SoapySDRDevice *dev = SoapySDRDevice_make(&ifpan_args);
+  if (dev == NULL) { return -1; }
+  SoapySDRDevice_setSampleRate(dev, SOAPY_SDR_RX, channel, (double)soapy_radio_sample_rate);
+  if (SoapySDRDevice_setBandwidth(dev, SOAPY_SDR_RX, channel, (double)soapy_radio_sample_rate) != 0) {
+    SoapySDRDevice_setBandwidth(dev, SOAPY_SDR_RX, channel, 2000000.0);
+  }
+  SoapySDRStream *stream = SoapySDRDevice_setupStream(dev, SOAPY_SDR_RX, SOAPY_SDR_CF32, &channel, 1, NULL);
+  if (stream == NULL) {
+    SoapySDRDevice_unmake(dev);
+    return -1;
+  }
+  if (SoapySDRDevice_activateStream(dev, stream, 0, 0LL, 0) != 0) {
+    SoapySDRDevice_closeStream(dev, stream);
+    SoapySDRDevice_unmake(dev);
+    return -1;
+  }
+  rx_stream = stream;
+  soapy_device = dev;
+  ifpan_tuned[0] = ifpan_tuned[1] = -1;
+  soapy_protocol_set_automatic_gain(id, adc[id].agc);
+  soapy_protocol_set_rx_antenna(id, adc[id].antenna);
+  soapy_protocol_set_rx_frequency(id);
+  if (!adc[id].agc) { soapy_protocol_set_rx_gain(id); }
+  return 0;
+}
+#endif
+
 static void *soapy_receive_single_thread(void *arg) {
   ASSERT_SERVER(NULL);
   if (!soapy_device) { return NULL; }
@@ -705,6 +763,21 @@ static void *soapy_receive_single_thread(void *arg) {
   rxthread_running = TRUE;
   t_print("%s started, id=%d\n", __func__, id);
   while (rxthread_running) {
+#ifdef IFPAN_REOPEN
+    if (soapy_device == NULL || rx_stream == NULL ||
+        (errcount >= IFPAN_REOPEN_ERRORS && errcount % 5 == 0)) {
+      if (soapy_device == NULL) { usleep(2000000); }
+      if (!rxthread_running) { break; }
+      t_print("%s: reopening the SDR\n", __func__);
+      if (ifpan_reopen(rx) == 0) {
+        t_print("%s: SDR is back\n", __func__);
+        errcount = 0;
+      } else {
+        errcount++;
+      }
+      continue;
+    }
+#endif
     int elements = SoapySDRDevice_readStream(soapy_device, rx_stream, buffs, max_rx_samples, &flags, &timeNs,
       timeoutUs);
     if (elements <= 0) {
@@ -715,6 +788,12 @@ static void *soapy_receive_single_thread(void *arg) {
     process_rx_buffer(rx, rxbuff, elements, 1);
   }
   t_print("%s: deactivateStream\n", __func__);
+#ifdef IFPAN_REOPEN
+  if (soapy_device == NULL || rx_stream == NULL) {
+    g_free(rxbuff);
+    return NULL;
+  }
+#endif
   SoapySDRDevice_deactivateStream(soapy_device, rx_stream, 0, 0LL);
   /*
   t_print("%s: SoapySDRDevice_closeStream\n", __func__);

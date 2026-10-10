@@ -611,15 +611,17 @@ static void txmeter_powerbar(cairo_t *cr, double frac, double pk, const char *pw
 // IF panadapter: while the Kenwood transmits, the main meter shows its
 // power and SWR (read by CAT) with piHPSDR's own TX meter faces, full scale
 // 100 W (dual-scale: power bar; the other types: edgewise). TS-570D raw
-// values are bar dots 0..30: power 5 W per dot (measured 10 / 25 / 50 W =
-// 2 / 5 / 10); SWR = 60 / (30 - n) - 1, as Hamlib does for the TS-850 and
+// values are bar dots: power 5 W per dot up to 50 W, then 10 W per dot
+// (measured 10 / 25 / 50 / 100 W = 2 / 5 / 10 / 15, like the radio's own
+// bar scale); SWR = 60 / (30 - n) - 1, as Hamlib does for the TS-850 and
 // TS-870 (same meter generation): 0 = 1.0, 10 = 2.0, 20 = 5.0.
 //
 static void ifpan_txmeter(cairo_t *cr, int fps) {
   static double pk = 0.0;
   static int pk_count = 0;
   char pwrstr[32];
-  double pwr = (ifpan_kenwood_pwr < 0) ? 0.0 : 5.0 * ifpan_kenwood_pwr;
+  int n = ifpan_kenwood_pwr;
+  double pwr = (n < 0) ? 0.0 : (n <= 10) ? 5.0 * n : 50.0 + 10.0 * (n - 10);
   double swr = 1.0;
   if (ifpan_kenwood_swr >= 0) {
     swr = (ifpan_kenwood_swr >= 24) ? 9.9 : 60.0 / (30.0 - ifpan_kenwood_swr) - 1.0;

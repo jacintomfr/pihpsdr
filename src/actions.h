@@ -233,6 +233,9 @@ enum ACTION {
   ZOOM,
   ZOOM_MINUS,
   ZOOM_PLUS,
+#ifdef IFPAN
+  IFPAN_TS_HERE,     // piHPSDR-IF: tune the Kenwood to the RX frequency
+#endif
   ACTIONS
 };
 

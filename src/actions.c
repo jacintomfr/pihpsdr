@@ -266,6 +266,9 @@ ACTION_TABLE ActionTable[] = {
   {ZOOM,                "Zoom",                 "ZOOM",         AT_KNB | AT_ENC | AT_SLD},
   {ZOOM_MINUS,          "Zoom -",               "ZOOM-",        AT_BTN},
   {ZOOM_PLUS,           "Zoom +",               "ZOOM+",        AT_BTN},
+#ifdef IFPAN
+  {IFPAN_TS_HERE,       "TS to RX freq",        "TS here",      AT_BTN},
+#endif
   {ACTIONS,             "None",                 "NONE",         AT_NONE}
 };
 
@@ -1083,6 +1086,11 @@ int process_action(gpointer data) {
       repeat_timer_released = TRUE;
     }
     break;
+#ifdef IFPAN
+  case IFPAN_TS_HERE:
+    if (a->mode == PRESSED) { ifpan_ts_here(); }
+    break;
+#endif
   case MOX:
 #ifdef IFPAN
     // IF panadapter: key / unkey the Kenwood by CAT (toggle)

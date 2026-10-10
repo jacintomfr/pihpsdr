@@ -47,12 +47,14 @@ extern int       ifpan_kenwood_mode;  // index into ifpan_mode_names[], -1: unkn
 extern int       ifpan_kenwood_smeter; // S-meter in dB relative to S9, -999: unknown
 extern const char *ifpan_mode_names[];
 extern int       ifpan_tx_mute;       // 1: mute the RX audio while the Kenwood transmits
+extern int       ifpan_follow_mode;   // 1: the receiver mode follows the Kenwood mode
 extern int       ifpan_kenwood_tx;    // 1: the Kenwood is transmitting (Kenwood TCP only)
 extern int       ifpan_kenwood_pwr;   // raw TX meters, -1: not read yet
 extern int       ifpan_kenwood_swr;
 extern int       ifpan_kenwood_alc;
 
 extern void      ifpan_set_follow(int on);
+extern void      ifpan_set_follow_mode(int on);
 
 #define IFPAN_CAT_RIGCTLD 0           // Hamlib rigctld (TCP, rigctl protocol)
 #define IFPAN_CAT_KENWOOD 1           // Kenwood CAT over TCP (RS-232/WiFi bridge)

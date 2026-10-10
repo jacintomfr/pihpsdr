@@ -153,6 +153,10 @@ static void follow_cb(GtkWidget *widget, gpointer data) {
   ifpan_set_follow(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)));
 }
 
+static void follow_mode_cb(GtkWidget *widget, gpointer data) {
+  ifpan_set_follow_mode(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)));
+}
+
 //
 // CAT link: rigctld or Kenwood over TCP (address "host:port"); a change
 // makes the CAT thread reconnect at once
@@ -923,6 +927,13 @@ void radio_menu(GtkWidget *parent) {
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (Btn), ifpan_cat_write);
     gtk_grid_attach(GTK_GRID(grid), Btn, 5, row, 2, 1);
     g_signal_connect(Btn, "toggled", G_CALLBACK(toggle_cb), &ifpan_cat_write);
+    row++;
+    // receiver mode follows the Kenwood mode (USB, LSB, CW, ...)
+    Btn = gtk_check_button_new_with_label("Follow TS mode");
+    gtk_widget_set_halign(Btn, GTK_ALIGN_END);
+    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (Btn), ifpan_follow_mode);
+    gtk_grid_attach(GTK_GRID(grid), Btn, 5, row, 2, 1);
+    g_signal_connect(Btn, "toggled", G_CALLBACK(follow_mode_cb), NULL);
     row++;
     // mute the RX audio while the Kenwood transmits (TX state via Kenwood TCP)
     Btn = gtk_check_button_new_with_label("Mute when TS in TX");

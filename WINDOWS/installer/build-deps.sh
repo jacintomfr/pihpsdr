@@ -52,6 +52,41 @@ else
   ls -la "$SOAPYMOD"/libPlutoSDRSupport.dll
 fi
 
+# ---------------------------------------------------------------- RTL-SDR
+#
+# librtlsdr (osmocom) + SoapyRTLSDR (the "rtlsdr" SoapySDR module), so an
+# RTL-SDR dongle can be used on the IF instead of the Pluto (its tuner
+# covers 73.05 MHz). Not packaged by MSYS2. The dongle needs the WinUSB
+# driver (Zadig) on the user's PC.
+#
+RTLSDR_GIT=https://github.com/osmocom/rtl-sdr.git
+SOAPYRTL_GIT=https://github.com/pothosware/SoapyRTLSDR.git
+if [ -f "$MINGW/bin/librtlsdr.dll" ]; then
+  echo "==> librtlsdr already installed: $MINGW/bin/librtlsdr.dll"
+else
+  echo "==> librtlsdr (osmocom rtl-sdr)"
+  pacman -Q mingw-w64-x86_64-libusb >/dev/null 2>&1 || { echo "missing package mingw-w64-x86_64-libusb"; exit 1; }
+  [ -d "$DEPS/rtl-sdr" ] || git clone "$RTLSDR_GIT" "$DEPS/rtl-sdr"
+  # -std=gnu17: the bundled K&R-style getopt.c does not compile as C23,
+  # GCC 15+'s default ("too many arguments to function 'getenv'")
+  cmake -S "$DEPS/rtl-sdr" -B "$DEPS/rtl-sdr/build" -G "MSYS Makefiles" \
+        -DCMAKE_INSTALL_PREFIX=$MINGW -DCMAKE_BUILD_TYPE=Release -DINSTALL_UDEV_RULES=OFF \
+        -DCMAKE_C_FLAGS="-std=gnu17"
+  cmake --build "$DEPS/rtl-sdr/build" -j"$JOBS"
+  cmake --install "$DEPS/rtl-sdr/build"
+fi
+if [ -f "$SOAPYMOD/librtlsdrSupport.dll" ]; then
+  echo "==> SoapyRTLSDR already installed: $SOAPYMOD/librtlsdrSupport.dll"
+else
+  echo "==> SoapyRTLSDR"
+  [ -d "$DEPS/SoapyRTLSDR" ] || git clone "$SOAPYRTL_GIT" "$DEPS/SoapyRTLSDR"
+  cmake -S "$DEPS/SoapyRTLSDR" -B "$DEPS/SoapyRTLSDR/build" -G "MSYS Makefiles" \
+        -DCMAKE_INSTALL_PREFIX=$MINGW -DCMAKE_BUILD_TYPE=Release
+  cmake --build "$DEPS/SoapyRTLSDR/build" -j"$JOBS"
+  cmake --install "$DEPS/SoapyRTLSDR/build"
+  ls -la "$SOAPYMOD"/librtlsdrSupport.dll
+fi
+
 # ---------------------------------------------------------------- Hamlib rigctld
 HAMLIB=$DEPS/hamlib
 if [ -f "$HAMLIB/tests/.libs/rigctld.exe" ] || [ -f "$HAMLIB/tests/rigctld.exe" ]; then

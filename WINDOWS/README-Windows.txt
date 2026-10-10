@@ -2,8 +2,13 @@ piHPSDR-IF for Windows
 ======================
 
 piHPSDR-IF is piHPSDR built as a receive-only IF panadapter for a Kenwood
-TS-570D: an ADALM-Pluto (via SoapySDR) receives the TS-570D 1st IF, and the
-Kenwood's frequency is followed through Hamlib rigctld (CAT over TCP).
+TS-570D: an RTL-SDR dongle or an ADALM-Pluto (via SoapySDR) receives the
+TS-570D 1st IF (73.05 MHz), and the Kenwood's frequency is followed by CAT:
+either through Hamlib rigctld, or "Kenwood TCP" straight to an RS-232/WiFi
+bridge (Menu -> Radio -> "CAT via ...", address host:port).
+
+At 73 MHz an RTL-SDR (R820T tuner) receives better than the Pluto, whose RF
+input is designed for 325 MHz and up.
 
 Start Menu entries (folder "piHPSDR-IF")
 ----------------------------------------
@@ -30,6 +35,19 @@ Order of starting
 3. Start piHPSDR-IF. It expects rigctld at 127.0.0.1, port 4532 (rigctld's
    default; props entries ifpan.rigctld_host / ifpan.rigctld_port in the
    radio's props file in the settings folder).
+
+RTL-SDR
+-------
+* Windows binds RTL-SDR dongles to a DVB-T TV driver. Replace it ONCE with
+  WinUSB using Zadig (zadig.akeo.ie): Options -> List All Devices, select
+  "Bulk-In, Interface (Interface 0)" with USB ID 0BDA 2838, driver WinUSB,
+  "Replace Driver". Do not change the driver of any other device.
+* Plug it straight into a PC USB port (no long extension / unpowered hub).
+* In the Discovery window choose "rtlsdr". It runs at 1536 kS/s; use the RF
+  slider for its gain (0..49 dB) - lower it if very strong signals overload.
+* Diagnostics (command prompt in the bin folder):
+     rtl_test                            finds the dongle, tests samples
+     SoapySDRUtil --find="driver=rtlsdr"
 
 PlutoSDR
 --------

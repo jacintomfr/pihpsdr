@@ -51,12 +51,14 @@ cp -r "$MINGW/$PIXBUF/loaders" "$STAGE/$PIXBUF/"
 cp "$MINGW/$PIXBUF/loaders.cache" "$STAGE/$PIXBUF/"     # uses relative paths
 
 # SoapySDR finds its modules relative to libSoapySDR.dll (bin\..\lib\...).
-# Only the PlutoSDR module is shipped: piHPSDR-IF is built for the Pluto.
+# Shipped: the PlutoSDR module, and the RTL-SDR module when built (an
+# RTL-SDR dongle can also sit on the IF; it needs the WinUSB driver).
 mkdir -p "$STAGE/$SOAPYMOD"
 cp "$MINGW/$SOAPYMOD/libPlutoSDRSupport.dll" "$STAGE/$SOAPYMOD/"
+[ -f "$MINGW/$SOAPYMOD/librtlsdrSupport.dll" ] && cp "$MINGW/$SOAPYMOD/librtlsdrSupport.dll" "$STAGE/$SOAPYMOD/"
 
-# helper programs GLib may spawn, plus SoapySDR / libiio diagnostics tools
-for x in gspawn-win64-helper.exe gspawn-win64-helper-console.exe SoapySDRUtil.exe iio_info.exe; do
+# helper programs GLib may spawn, plus SoapySDR / libiio / RTL-SDR diagnostics tools
+for x in gspawn-win64-helper.exe gspawn-win64-helper-console.exe SoapySDRUtil.exe iio_info.exe rtl_test.exe; do
   [ -f "$MINGW/bin/$x" ] && cp "$MINGW/bin/$x" "$STAGE/bin/"
 done
 

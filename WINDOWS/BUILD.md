@@ -15,7 +15,7 @@ for the background of the pitfalls repeated briefly below.
 | `Makefile` | A `WINDOWS` section keyed on `uname -s` = `MINGW64*`: forces `GPIO=OFF MIDI=OFF USBOZY=OFF AUDIO=PORTAUDIO`, adds the compat layer, Windows libraries, the icon resource and `pihpsdr-if.exe` as target. Linux/macOS builds are unchanged. |
 | `wdsp/Makefile`, `wdsp/wisdom.c` | WDSP builds its native `_WIN32` code path; two warnings disabled and `WDSP_NO_CONSOLE` (no console window during the first-start FFTW planning; piHPSDR shows the progress itself). |
 | `src/` | Only small `_WIN32` blocks: settings folder `%LOCALAPPDATA%\piHPSDR-IF` (startup.c), `shutdown /s` / `/r` and `COMn` serial default (radio.c), PortAudio device names prefixed with the host API (portaudio.c), `environ` declaration (client_thread.c). |
-| `WINDOWS/installer/` | `build-deps.sh` (SoapyPlutoSDR + Hamlib rigctld), `build-exes.sh`, `stage.sh`, `build-msi.sh`, `pihpsdr-if.wxs`, icon, `start-rigctld-TS570D.bat`. |
+| `WINDOWS/installer/` | `build-deps.sh` (SoapyPlutoSDR, librtlsdr + SoapyRTLSDR, Hamlib rigctld), `build-exes.sh`, `stage.sh`, `build-msi.sh`, `pihpsdr-if.wxs`, icon, `start-rigctld-TS570D.bat`. |
 | `WINDOWS/README-Windows.txt` | Installed next to the program (Start Menu "read me"). |
 
 ## 2. Prerequisites (once per build PC)
@@ -51,7 +51,7 @@ C:\msys64\usr\bin\bash.exe -lc "cd /c/Users/jacin/Documents/pihpsdr-cu2ed-win &&
 temporary file in C:\Windows\".)
 
 ```bash
-WINDOWS/installer/build-deps.sh   # once: SoapyPlutoSDR -> /mingw64, Hamlib 4.5.5 rigctld -> build-win/deps
+WINDOWS/installer/build-deps.sh   # once: SoapyPlutoSDR, librtlsdr + SoapyRTLSDR -> /mingw64, Hamlib 4.5.5 rigctld -> build-win/deps
 WINDOWS/installer/build-exes.sh   # make clean + make -> build-win/exe/pihpsdr-if.exe
 WINDOWS/installer/stage.sh        # self-contained runtime folder build-win/stage
 WINDOWS/installer/build-msi.sh    # -> build-win/piHPSDR-IF-<x.y.n>-x64.msi
@@ -81,6 +81,14 @@ gives a higher version and the MSI upgrades an older install in place.
   DirectWrite toy-font path. piHPSDR's preferred fonts (Open Sans, ...) are
   not shipped; fontconfig falls back to the Windows fonts.
 
+### RTL-SDR
+
+librtlsdr (osmocom) and SoapyRTLSDR are not packaged by MSYS2; `build-deps.sh`
+builds both into `/mingw64`. librtlsdr's bundled `getopt.c` is K&R C and does
+not compile as C23 (GCC 15+ default), hence `-DCMAKE_C_FLAGS=-std=gnu17`. At
+the 73.05 MHz IF an RTL-SDR (R820T) receives better than the Pluto. On the
+user's PC the dongle needs the WinUSB driver (Zadig, see README-Windows.txt).
+
 ## 4. Installing
 
 Run `build-win\piHPSDR-IF-<version>-x64.msi` (needs administrator rights,
@@ -93,7 +101,7 @@ deskHPSDR install. The first start computes the WDSP FFT wisdom (a few
 minutes, progress shown in the start window).
 
 Bundled: GTK3 runtime, WDSP, SoapySDR + PlutoSDR module
-(`lib\SoapySDR\modules0.8-3\libPlutoSDRSupport.dll`), libiio,
+(`lib\SoapySDR\modules0.8-3\libPlutoSDRSupport.dll`, `librtlsdrSupport.dll`), libiio, librtlsdr + `rtl_test.exe`,
 libad9361, `rigctld.exe` (Hamlib 4.5.5, static), `SoapySDRUtil.exe`,
 `iio_info.exe`.
 

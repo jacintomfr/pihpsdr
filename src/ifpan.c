@@ -20,12 +20,19 @@
 // IF panadapter: CAT tracking of the Kenwood TS-570D through Hamlib's
 // rigctld (which owns the serial port), e.g.
 //
-//   rigctld -m 2004 -r /dev/ttyUSB0 -s 9600
+//   rigctld -m 2004 -r /dev/ttyUSB0 -s 57600
 //
-// A thread polls the VFO frequency ("f") and, when it changes, hands it
+// (TS-570D menu 35 = "576-1"; the radio needs a power cycle after changing
+// it). A thread polls the VFO frequency ("f") and, when it changes, hands it
 // to the GTK main loop which moves the display centre. The PlutoSDR LO
 // is never touched, so the RX stream is not interrupted while the
 // Kenwood dial is turned.
+//
+// rigctld caches the frequency (500 ms by default), which made the display
+// follow the dial in steps; on connecting, the cache is set to
+// ifpan.rigctld_cache_ms (default 0: every poll reads the radio, ~32 ms per
+// read at 57600 baud). If the radio does not answer, this is logged once
+// and the "TS" readout turns grey until it answers again.
 //
 // Two-way (ifpan.cat_write, default on): when the receiver is tuned in
 // piHPSDR-IF (click, wheel, keypad, ...), the new frequency is sent to the
@@ -60,6 +67,7 @@ int       ifpan_poll_ms = 50;
 int       ifpan_cat_connected = 0;
 int       ifpan_cat_write = 1;
 int       ifpan_follow_vfo = 0;
+int       ifpan_rigctld_cache_ms = 0;
 
 #define CAT_SET_HOLD_US 400000        // ignore stale readings this long after a set
 
@@ -88,6 +96,7 @@ void ifpan_save_state(void) {
   SetPropI0("ifpan.poll_ms",       ifpan_poll_ms);
   SetPropI0("ifpan.cat_write",     ifpan_cat_write);
   SetPropI0("ifpan.follow_vfo",    ifpan_follow_vfo);
+  SetPropI0("ifpan.rigctld_cache_ms", ifpan_rigctld_cache_ms);
 }
 
 void ifpan_restore_state(void) {
@@ -98,6 +107,7 @@ void ifpan_restore_state(void) {
   GetPropI0("ifpan.lo_offset",     ifpan_lo_offset);
   GetPropI0("ifpan.cat_write",     ifpan_cat_write);
   GetPropI0("ifpan.follow_vfo",    ifpan_follow_vfo);
+  GetPropI0("ifpan.rigctld_cache_ms", ifpan_rigctld_cache_ms);
   if (ifpan_poll_ms < 20) { ifpan_poll_ms = 20; }
   // keep the IF well inside the Pluto span (+/- 384 kHz at 768 kHz)
   if (ifpan_lo_offset >  200000) { ifpan_lo_offset =  200000; }
@@ -170,7 +180,8 @@ static int cat_connect(void) {
   }
   freeaddrinfo(res);
   if (sock >= 0) {
-    struct timeval tv = { 0, 500000 };
+    // long enough for rigctld's own retries when the radio does not answer
+    struct timeval tv = { 6, 0 };
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
   }
@@ -193,17 +204,30 @@ static int cat_read_line(int sock, char *line, size_t size) {
 }
 
 //
-// Send "f\n" and read one line. Returns the frequency, or -1 on error.
+// Send "f\n" and read one line. Returns the frequency, -1 if the connection
+// to rigctld failed, or -2 if rigctld answered but the radio did not.
 //
 static long long cat_get_freq(int sock) {
   char line[64];
   if (send(sock, "f\n", 2, MSG_NOSIGNAL) != 2) { return -1; }
   if (cat_read_line(sock, line, sizeof(line)) < 0) { return -1; }
-  if (strncmp(line, "RPRT", 4) == 0) { return -1; }   // rigctld error report
+  if (strncmp(line, "RPRT", 4) == 0) { return -2; }   // rigctld error report
   char *end;
   long long f = strtoll(line, &end, 10);
-  if (end == line || f <= 0) { return -1; }
+  if (end == line || f <= 0) { return -2; }
   return f;
+}
+
+//
+// Set the rigctld frequency cache timeout. Returns -1 if the connection failed.
+//
+static int cat_set_cache(int sock, int ms) {
+  char cmd[32], line[64];
+  int len = snprintf(cmd, sizeof(cmd), "\\set_cache %d\n", ms);
+  if (send(sock, cmd, len, MSG_NOSIGNAL) != len) { return -1; }
+  if (cat_read_line(sock, line, sizeof(line)) < 0) { return -1; }
+  t_print("%s: rigctld cache %d ms: %s\n", __func__, ms, line);
+  return 0;
 }
 
 //
@@ -225,6 +249,7 @@ static gpointer cat_thread(gpointer data) {
   int sock = -1;
   long long hold_freq = 0;            // frequency just sent to the Kenwood
   gint64 hold_until = 0;              // until then, ignore other readings
+  int trouble = 0;                    // a CAT problem has been reported (log once)
   t_print("%s: rigctld at %s:%d, IF=%lld Hz\n", __func__, ifpan_rigctld_host, ifpan_rigctld_port, ifpan_if_freq);
   for (;;) {
     if (sock < 0) {
@@ -233,9 +258,20 @@ static gpointer cat_thread(gpointer data) {
         usleep(1000000);
         continue;
       }
+      if (cat_set_cache(sock, ifpan_rigctld_cache_ms) < 0) {
+        // rigctld accepted the connection but is stuck opening the radio
+        if (!trouble) {
+          t_print("%s: rigctld not answering (radio off, wrong baud rate or cable?)\n", __func__);
+          trouble = 1;
+          ifpan_cat_connected = 0;
+          g_idle_add(ext_vfo_update, NULL);
+        }
+        close(sock);
+        sock = -1;
+        usleep(1000000);
+        continue;
+      }
       t_print("%s: connected to rigctld\n", __func__);
-      ifpan_cat_connected = 1;
-      g_idle_add(ext_vfo_update, NULL);
     }
     //
     // piHPSDR-IF -> Kenwood: send the latest requested frequency, if any
@@ -258,13 +294,36 @@ static gpointer cat_thread(gpointer data) {
       hold_until = g_get_monotonic_time() + CAT_SET_HOLD_US;
     }
     long long f = cat_get_freq(sock);
+    if (f == -2) {
+      //
+      // rigctld is there but the radio does not answer (off, wrong baud
+      // rate, cable): say so once, grey out "TS", and try again calmly.
+      //
+      if (!trouble) {
+        t_print("%s: Kenwood not answering (radio off, wrong baud rate or cable?)\n", __func__);
+        trouble = 1;
+        ifpan_cat_connected = 0;
+        g_idle_add(ext_vfo_update, NULL);
+      }
+      usleep(500000);
+      continue;
+    }
     if (f < 0) {
-      t_print("%s: rigctld connection lost\n", __func__);
-      ifpan_cat_connected = 0;
-      g_idle_add(ext_vfo_update, NULL);
+      if (!trouble) {
+        t_print("%s: rigctld connection lost\n", __func__);
+        trouble = 1;
+        ifpan_cat_connected = 0;
+        g_idle_add(ext_vfo_update, NULL);
+      }
       close(sock);
       sock = -1;
       continue;
+    }
+    if (trouble || !ifpan_cat_connected) {
+      t_print("%s: Kenwood answering (%lld Hz)\n", __func__, f);
+      trouble = 0;
+      ifpan_cat_connected = 1;
+      g_idle_add(ext_vfo_update, NULL);
     }
     //
     // Right after a set, the radio may still report the old frequency:

@@ -46,6 +46,7 @@
 
 #include "ext.h"
 #include "ifpan.h"
+#include "main.h"
 #include "message.h"
 #include "property.h"
 #include "radio.h"
@@ -280,8 +281,56 @@ static gpointer cat_thread(gpointer data) {
   return NULL;
 }
 
+//
+// Window position: remembered in a small file of its own (written 1 s after
+// the window stops moving), so it also survives a killed program. Only works
+// where the window system lets clients place windows (X11, XWayland); under
+// Wayland the position always reads 0,0 and nothing is saved.
+//
+#define WINDOW_POS_FILE "ifpan-window.txt"
+static int win_x = 0, win_y = 0;
+static guint win_save_timer = 0;
+
+static gboolean win_save(gpointer data) {
+  win_save_timer = 0;
+  FILE *fp = fopen(WINDOW_POS_FILE, "w");
+  if (fp) {
+    fprintf(fp, "%d %d\n", win_x, win_y);
+    fclose(fp);
+  }
+  return G_SOURCE_REMOVE;
+}
+
+static gboolean win_moved(GtkWidget *widget, GdkEvent *event, gpointer data) {
+  int x, y;
+  gtk_window_get_position(GTK_WINDOW(widget), &x, &y);
+  if ((x != 0 || y != 0) && (x != win_x || y != win_y)) {
+    win_x = x;
+    win_y = y;
+    if (win_save_timer) { g_source_remove(win_save_timer); }
+    win_save_timer = g_timeout_add(1000, win_save, NULL);
+  }
+  return FALSE;
+}
+
+static void win_restore(void) {
+  int x, y;
+  FILE *fp = fopen(WINDOW_POS_FILE, "r");
+  if (fp) {
+    if (fscanf(fp, "%d %d", &x, &y) == 2 && x > -100 && y > -100) {
+      win_x = x;
+      win_y = y;
+      gtk_window_move(GTK_WINDOW(top_window), x, y);
+      t_print("%s: window placed at %d,%d\n", __func__, x, y);
+    }
+    fclose(fp);
+  }
+  g_signal_connect(top_window, "configure-event", G_CALLBACK(win_moved), NULL);
+}
+
 void ifpan_start(void) {
   if (cat_thread_id != NULL) { return; }
   cat_thread_id = g_thread_new("ifpan_cat", cat_thread, NULL);
   g_timeout_add(50, ui_watch, NULL);
+  win_restore();
 }

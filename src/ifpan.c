@@ -293,6 +293,19 @@ void ifpan_ptt(int on) {
 }
 
 //
+// Toolbar "TS here": tune the Kenwood to the frequency piHPSDR-IF is
+// receiving on (useful with "Clicks tune the TS" off, before transmitting).
+// Sent like a click with two-way CAT; the display then re-centres on it.
+//
+void ifpan_ts_here(void) {
+  if (!ifpan_cat_connected || receivers < 1 || receiver[0] == NULL) { return; }
+  long long f = vfo[VFO_A].ctun ? vfo[VFO_A].ctun_frequency : vfo[VFO_A].frequency;
+  g_mutex_lock(&cat_mutex);
+  cat_set_target = f;
+  g_mutex_unlock(&cat_mutex);
+}
+
+//
 // On exit: if piHPSDR-IF keyed the Kenwood, put it back to receive
 // (wait up to 1 s for the CAT thread to send it)
 //

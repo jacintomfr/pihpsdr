@@ -1,0 +1,141 @@
+<?xml version='1.0' encoding='windows-1252'?>
+<!--
+  WiX v3 installer for the Windows (MSYS2 MinGW64) build of piHPSDR-IF
+  (piHPSDR with IFPAN=ON: receive-only IF panadapter for a Kenwood TS-570D
+  with an ADALM-Pluto via SoapySDR, CAT through Hamlib rigctld).
+
+  The payload (exe, DLLs, GTK data, SoapySDR PlutoSDR module, rigctld.exe)
+  is the self-contained folder produced by WINDOWS/installer/stage.sh. It is
+  harvested into stagefiles.wxs by heat.exe (see build-msi.sh), so this file
+  only holds the product definition and the shortcuts.
+  Modelled on the deskHPSDR Windows installer (deskhpsdr.wxs).
+
+  Build:  WINDOWS/installer/build-msi.sh   (from the MSYS2 MINGW64 shell)
+-->
+<Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
+
+    <Product
+        Id='*'
+        Name='piHPSDR-IF'
+        UpgradeCode='5124DC4C-7FFF-4259-9882-54B22BECA53D'
+        Manufacturer='piHPSDR-IF (CU2ED Windows build)'
+        Language='1033'
+        Codepage='1252'
+        Version='$(var.Version)'>
+
+        <Package Id='*'
+            Keywords='Installer'
+            Description='piHPSDR-IF - IF panadapter (TS-570D + PlutoSDR) based on piHPSDR'
+            Manufacturer='piHPSDR-IF (CU2ED Windows build)'
+            InstallerVersion='500'
+            Languages='1033'
+            Compressed='yes'
+            InstallScope='perMachine'
+            Platform='x64'
+            SummaryCodepage='1252'/>
+
+        <!-- AllowSameVersionUpgrades: a rebuilt MSI with the same version
+             replaces the installed one instead of being installed twice. -->
+        <MajorUpgrade
+            Schedule='afterInstallInitialize'
+            AllowSameVersionUpgrades='yes'
+            DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.'/>
+
+        <Media Id='1' Cabinet='media1.cab' EmbedCab='yes' CompressionLevel='high'/>
+
+        <Directory Id='TARGETDIR' Name='SourceDir'>
+            <!--
+              Own folder / Start Menu entry / settings folder
+              (%LOCALAPPDATA%\piHPSDR-IF, see src/startup.c and src/appname.h),
+              so it never mixes with a piHPSDR or deskHPSDR install.
+            -->
+            <Directory Id='ProgramFiles64Folder' Name='PFiles'>
+                <!-- stage.sh layout: bin\, lib\, share\, etc\ -->
+                <Directory Id='APPLICATIONFOLDER' Name='piHPSDR-IF'/>
+            </Directory>
+            <Directory Id='ProgramMenuFolder'>
+                <Directory Id='ApplicationProgramsFolder' Name='piHPSDR-IF'/>
+            </Directory>
+            <Directory Id='DesktopFolder' Name='Desktop'/>
+        </Directory>
+
+        <DirectoryRef Id='ApplicationProgramsFolder'>
+            <Component Id='ApplicationShortcuts' Guid='122FB40A-16E2-4FC0-92A5-E92672C69C83'>
+                <!--
+                  The working directory does not matter: piHPSDR-IF changes to
+                  %LOCALAPPDATA%\piHPSDR-IF itself; GTK, fontconfig and SoapySDR
+                  find their data relative to bin\.
+                -->
+                <Shortcut Id='PiHpsdrIfShortcut'
+                    Name='piHPSDR-IF'
+                    Description='piHPSDR-IF: IF panadapter for the TS-570D with a PlutoSDR'
+                    Target='[APPLICATIONFOLDER]bin\pihpsdr-if.exe'
+                    WorkingDirectory='APPLICATIONFOLDER'
+                    Icon='ProductICO'/>
+                <Shortcut Id='RigctldShortcut'
+                    Name='Start rigctld (TS-570D)'
+                    Description='Hamlib rigctld for the Kenwood TS-570D (model 2004, 57600 baud) - asks for the COM port'
+                    Target='[APPLICATIONFOLDER]bin\start-rigctld-TS570D.bat'
+                    WorkingDirectory='APPLICATIONFOLDER'/>
+                <Shortcut Id='ReadmeShortcut'
+                    Name='piHPSDR-IF on Windows (read me)'
+                    Description='Pluto driver, rigctld and settings notes'
+                    Target='[APPLICATIONFOLDER]README-Windows.txt'/>
+                <Shortcut Id='ConfigFolderShortcut'
+                    Name='piHPSDR-IF settings and logs folder'
+                    Description='Settings (props files) and log files of piHPSDR-IF'
+                    Target='[LocalAppDataFolder]piHPSDR-IF'/>
+                <RemoveFolder Id='ApplicationProgramsFolder' On='uninstall'/>
+                <RegistryValue Root='HKCU' Key='Software\piHPSDR-IF' Name='installed' Type='integer' Value='1' KeyPath='yes'/>
+            </Component>
+        </DirectoryRef>
+
+        <DirectoryRef Id='DesktopFolder'>
+            <Component Id='DesktopShortcut' Guid='C9DB2A86-9E76-417A-BBE5-1951D817CB37'>
+                <Shortcut Id='PiHpsdrIfDesktopShortcut'
+                    Name='piHPSDR-IF'
+                    Description='piHPSDR-IF: IF panadapter for the TS-570D with a PlutoSDR'
+                    Target='[APPLICATIONFOLDER]bin\pihpsdr-if.exe'
+                    WorkingDirectory='APPLICATIONFOLDER'
+                    Icon='ProductICO'/>
+                <RegistryValue Root='HKCU' Key='Software\piHPSDR-IF' Name='desktop' Type='integer' Value='1' KeyPath='yes'/>
+            </Component>
+        </DirectoryRef>
+
+        <Feature
+            Id='Application'
+            Title='piHPSDR-IF'
+            Description='The piHPSDR-IF program with everything it needs (GTK3 runtime, WDSP, SoapySDR with the PlutoSDR module, libiio, Hamlib rigctld).'
+            Level='1'
+            ConfigurableDirectory='APPLICATIONFOLDER'
+            AllowAdvertise='no'
+            Display='expand'
+            Absent='disallow'>
+            <ComponentGroupRef Id='StageFiles'/>
+            <ComponentRef Id='ApplicationShortcuts'/>
+
+            <Feature
+                Id='Desktop'
+                Title='Desktop shortcut'
+                Description='A piHPSDR-IF shortcut on the desktop.'
+                Level='1'
+                AllowAdvertise='no'
+                Absent='allow'>
+                <ComponentRef Id='DesktopShortcut'/>
+            </Feature>
+        </Feature>
+
+        <SetProperty Id='ARPINSTALLLOCATION' Value='[APPLICATIONFOLDER]' After='CostFinalize'/>
+        <Icon Id='ProductICO' SourceFile='$(var.InstallerDir)\pihpsdr.ico'/>
+        <Property Id='ARPPRODUCTICON' Value='ProductICO'/>
+        <Property Id='ARPHELPLINK' Value='https://github.com/dl1ycf/pihpsdr'/>
+
+        <UI>
+            <UIRef Id='WixUI_FeatureTree'/>
+            <!-- no license page: skip straight from Welcome to the feature tree -->
+            <Publish Dialog='WelcomeDlg' Control='Next' Event='NewDialog' Value='CustomizeDlg' Order='99'>1</Publish>
+            <Publish Dialog='CustomizeDlg' Control='Back' Event='NewDialog' Value='WelcomeDlg' Order='99'>1</Publish>
+        </UI>
+        <Property Id='WIXUI_INSTALLDIR' Value='APPLICATIONFOLDER'/>
+    </Product>
+</Wix>

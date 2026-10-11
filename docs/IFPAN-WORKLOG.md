@@ -5,7 +5,7 @@ verified, and what is still open. Kept up to date with the work; the commit
 messages hold the per-change detail (hashes below are on `cu2ed` unless
 marked `windows-port`). RADE has its own document: `docs/RADE-IFPAN.md`.
 
-Last update: 2026-10-11 (MSI 3.1.118).
+Last update: 2026-10-11 (MSI 3.1.118 main line; 3.1.129 on the SDRplay branches).
 
 ## 1. What piHPSDR-IF is
 
@@ -211,6 +211,55 @@ radio drops CAT commands that arrive while it answers another client):
   fictitious position and save 16030,16012: every start put the window out
   of sight. Positions are now only used / saved on a monitor.
 
+### 4.12 SDRplay RSP1A clone (MSi2500 + MSi001, USB 1DF7:2500) (2026-10-11)
+Branches `sdrplay` / `windows-sdrplay`. Chosen path: **SoapyMiri +
+libmirisdr-5** (GPL, shipped in the MSI) instead of the closed SDRplay API
+(the old 3.07 that suits clones is no longer offered; 3.09+ give RSP1s a
+random serial; a clone failed verification with 3.06–3.09 elsewhere).
+
+What was found on this PC (all tests with exclusive access to the device):
+
+* **Driver: libusbK** (Zadig). With **WinUSB** the device never streamed:
+  bulk mode gave only timeouts (`async transfer status 2`), even freshly
+  plugged; isochronous mode crashed libusb in its event thread.
+* **Isochronous transfers.** SoapyMiri's default is bulk; libmirisdr's own
+  example uses isochronous when built with MinGW. With libusbK +
+  isochronous: 1.535 MS/s, no timeouts / overflows / errors, and three
+  close / reopen cycles **without replugging** (the "restream needs a
+  replug" problem reported upstream is a bulk-mode one).
+* **Old libusb in `C:\Windows\System32`** (1.0.24, from another program,
+  2023) is loaded before MSYS2's 1.0.30 by test programs; it lacks the
+  needed isochronous support. The MSI is not affected (`libusb-1.0.dll`
+  1.0.30 sits next to `pihpsdr-if.exe`).
+* USB descriptors: interface 0, alt 1 = isoc 3 x 1024, alt 2 = isoc 1024,
+  alt 3 = bulk 512, endpoint 0x81, high speed.
+
+Changes:
+* `939d629a` 1536k hardware rate for the `soapyMiri` driver (its minimum is
+  1.3 MS/s; 14-bit format at this rate).
+* `4257eb9b` RX streams (also the IFPAN reopen) ask SoapyMiri for
+  `transfer=ISOC` (`rx_stream_args()` in `soapy_protocol.c`).
+* `windows-sdrplay`: `build-deps.sh` builds libmirisdr-5 (library only, its
+  CLI tools do not build with MinGW) and SoapyMiri with
+  `WINDOWS/installer/soapymiri-transfer-mode.patch` (SoapyMiri kept the
+  transfer mode as a pointer into setupStream's arguments, read again in
+  activateStream); `stage.sh` ships `libsoapyMiriSupport.dll`
+  (`libmirisdr.dll` through the DLL closure).
+* `47e62de1` the MSi001's strong DC spike (SoapyMiri has no DC correction)
+  appeared at −LO offset with a weaker mirror at +LO offset, fixed on the
+  display whatever the Kenwood VFO: one-pole DC removal before the IF
+  rotation, and **"SDR LO offset (kHz)"** in the Radio menu (0..250 kHz,
+  also from a client; protocol 0x013100F4).
+
+Result (user, MSI 3.1.127–3.1.129): works, audio noticeably better than the
+RTL-SDR ("equal to the Hermes-Lite 2"); with **250 kHz offset at 384k**
+spike and mirror are out of sight. At 768k they come back weaker — an
+offset above 384 kHz would need a 3.072 MS/s hardware rate (aliasing at
+1.536 MS/s); the user stays at ≤ 384k. Recommended set-up: libusbK,
+isochronous, 1.536 MS/s, LO offset 250 kHz, USB3 port. Pending before
+merging into `cu2ed` / `windows-port`: close / reopen in the program and a
+long run.
+
 ## 5. Open items (2026-10-11)
 
 1. **ACC2 cable** (user is looking for the plug). Then test on a dummy load:
@@ -222,10 +271,10 @@ radio drops CAT commands that arrive while it answers another client):
    needs a locator field; runs on the server).
 3. **RADE phase 4 / Pi server**: aarch64 build with NEON, RNNoise model and
    RADE libraries on the Pi, CPU measurement on a Pi 4 (Pi 5 fallback).
-4. **SDRplay RSP1A clone** (1DF7:2500): plan A = the user's older SDRplay
-   API (version to be given) + SoapySDRPlay3 in the MSI; plan B = Zadig
-   WinUSB + SoapyMiri / libmirisdr (the two driver set-ups exclude each
-   other). Work on branches `sdrplay` / `windows-sdrplay`.
+4. **SDRplay RSP1A clone** (1DF7:2500): working with SoapyMiri (section
+   4.12); merge `sdrplay` / `windows-sdrplay` after the reopen and
+   long-run checks. For the Pi: build libmirisdr-5 + SoapyMiri there and
+   blacklist the kernel modules `msi2500` / `msi001`.
 5. Optional: panadapter "-80 dBm/H" label overlap; offer the upstream bug
    fixes of 4.6 to DL1YCF; ESP32 bridge on hardware.
 6. Ideas from the user: full TS-570D coverage — the user proposes further

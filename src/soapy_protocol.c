@@ -566,10 +566,24 @@ static double step_re[2], step_im[2];                               // per-sampl
 static long long step_hz[2] = { 0, 0 };
 static int    step_rate[2] = { 0, 0 };
 static int    renorm[2] = { 0, 0 };
+//
+// DC removal, before the rotation: the SDR's own DC spike (LO leakage / ADC
+// offset) sits at the LO, D away from the Kenwood VFO, where nothing of use
+// is. Very strong on the Mirics MSi001 (SoapyMiri has no DC correction).
+// A one-pole running mean (time constant 1 / (alpha * rate), ~6.5 ms at
+// 1.536 MS/s) is subtracted: a notch of a few ten Hz at the LO. Without an
+// LO offset the DC would be the VFO itself, so nothing is removed then.
+//
+#define IFPAN_DC_ALPHA 1.0e-4
+static double dc_i[2] = { 0.0, 0.0 }, dc_q[2] = { 0.0, 0.0 };
 
 static inline void ifpan_rotate(int id, double *isample, double *qsample) {
   id &= 1;
   if (ifpan_lo_offset == 0) { return; }
+  dc_i[id] += IFPAN_DC_ALPHA * (*isample - dc_i[id]);
+  dc_q[id] += IFPAN_DC_ALPHA * (*qsample - dc_q[id]);
+  *isample -= dc_i[id];
+  *qsample -= dc_q[id];
   if (ifpan_lo_offset != step_hz[id] || soapy_radio_sample_rate != step_rate[id]) {
     double w = 2.0 * M_PI * (double)ifpan_lo_offset / (double)soapy_radio_sample_rate;
     step_re[id] = cos(w);

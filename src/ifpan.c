@@ -126,6 +126,7 @@ static GMutex   cat_mutex;
 static long long cat_pending = 0;     // last frequency read, waiting for the main loop
 static int       cat_scheduled = 0;   // an idle callback is already queued
 static long long cat_set_target = 0;  // frequency to send to the Kenwood (0: none)
+static int       cat_set_mode = -1;   // mode to send to the Kenwood (ifpan_mode_names[] index, -1: none)
 static long long ui_last_freq = -1;   // receiver frequency last seen (main thread only)
 
 //
@@ -336,19 +337,28 @@ void ifpan_ts_here(void) {
 
 //
 // Band / band-stack chosen in piHPSDR-IF (main thread): the Kenwood is sent
-// to the new frequency, also with "Clicks tune the TS" off (choosing a
-// band is an explicit request). With "Follow TS mode", the receiver goes
-// back to the Kenwood mode (the band stack's own mode would not match the
-// radio, whose mode the frequency command does not change).
+// to the new frequency and to the band stack's mode, also with "Clicks
+// tune the TS" off (choosing a band is an explicit request). Modes the
+// Kenwood does not have (DSB, SAM, DRM, ...) are not sent.
 //
-void ifpan_band_changed(long long f) {
+void ifpan_band_changed(long long f, int mode) {
+  int m;
   if (!ifpan_cat_connected) { return; }
+  switch (mode) {
+  case modeUSB:  m = 0; break;
+  case modeLSB:  m = 1; break;
+  case modeCWU:  m = 2; break;
+  case modeCWL:  m = 3; break;
+  case modeAM:   m = 4; break;
+  case modeFMN:  m = 5; break;
+  case modeDIGL: m = 6; break;
+  case modeDIGU: m = 7; break;
+  default:       m = -1; break;
+  }
   g_mutex_lock(&cat_mutex);
   cat_set_target = f;
+  if (m >= 0) { cat_set_mode = m; }
   g_mutex_unlock(&cat_mutex);
-  if (ifpan_follow_mode && ifpan_kenwood_mode >= 0) {
-    g_idle_add(mode_apply, GINT_TO_POINTER(ifpan_kenwood_mode));
-  }
 }
 
 //
@@ -626,6 +636,28 @@ static int be_get_mode(int sock) {
   return (ifpan_cat_backend == IFPAN_CAT_KENWOOD) ? kw_get_mode(sock) : cat_get_mode(sock);
 }
 
+//
+// Set the Kenwood mode (index into ifpan_mode_names[]): Kenwood "MDn;" (no
+// answer), rigctld "M <mode> 0" (reply "RPRT n"). Returns -1 if the
+// connection failed.
+//
+static int be_set_mode(int sock, int m) {
+  char cmd[32], line[64];
+  if (ifpan_cat_backend == IFPAN_CAT_KENWOOD) {
+    // same order as ifpan_mode_names[]: USB LSB CW CW-R AM FM FSK FSKR
+    static const int md[8] = { 2, 1, 3, 7, 5, 4, 6, 9 };
+    int len = snprintf(cmd, sizeof(cmd), "MD%d;", md[m]);
+    return (send(sock, cmd, len, MSG_NOSIGNAL) == len) ? 0 : -1;
+  }
+  int len = snprintf(cmd, sizeof(cmd), "M %s 0\n", hamlib_mode_names[m]);
+  if (send(sock, cmd, len, MSG_NOSIGNAL) != len) { return -1; }
+  if (cat_read_line(sock, line, sizeof(line)) < 0) { return -1; }
+  if (strncmp(line, "RPRT 0", 6) != 0) {
+    t_print("%s: rigctld refused %s", __func__, cmd);
+  }
+  return 0;
+}
+
 static int be_get_strength(int sock, int *db) {
   return (ifpan_cat_backend == IFPAN_CAT_KENWOOD) ? kw_get_strength(sock, db) : cat_get_strength(sock, db);
 }
@@ -724,6 +756,25 @@ static gpointer cat_thread(gpointer data) {
       }
       hold_freq = target;
       hold_until = g_get_monotonic_time() + CAT_SET_HOLD_US;
+    }
+    //
+    // piHPSDR-IF band change -> Kenwood mode (index into ifpan_mode_names[])
+    //
+    int setmode;
+    g_mutex_lock(&cat_mutex);
+    setmode = cat_set_mode;
+    cat_set_mode = -1;
+    g_mutex_unlock(&cat_mutex);
+    if (setmode >= 0) {
+      if (be_set_mode(sock, setmode) < 0) {
+        t_print("%s: %s connection lost\n", __func__, cat_name());
+        ifpan_cat_connected = 0;
+        g_idle_add(ext_vfo_update, NULL);
+        close(sock);
+        sock = -1;
+        continue;
+      }
+      mode_count = 0;                 // read it back soon (TS readout)
     }
     //
     // piHPSDR-IF PTT (toolbar PTT / MOX) -> Kenwood

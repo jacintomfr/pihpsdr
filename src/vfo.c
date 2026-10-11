@@ -350,7 +350,7 @@ void vfo_id_band_changed(int id, int b) {
   vfo_vfos_changed();
 #ifdef IFPAN
   // the Kenwood goes to the new band (its VFO is the display centre)
-  if (id == VFO_A) { ifpan_band_changed(vfo[id].ctun ? vfo[id].ctun_frequency : vfo[id].frequency); }
+  if (id == VFO_A) { ifpan_band_changed(vfo[id].ctun ? vfo[id].ctun_frequency : vfo[id].frequency, vfo[id].mode); }
 #endif
 }
 
@@ -396,7 +396,7 @@ void vfo_id_bandstack_changed(int id, int b) {
   }
   vfo_vfos_changed();
 #ifdef IFPAN
-  if (id == VFO_A) { ifpan_band_changed(vfo[id].ctun ? vfo[id].ctun_frequency : vfo[id].frequency); }
+  if (id == VFO_A) { ifpan_band_changed(vfo[id].ctun ? vfo[id].ctun_frequency : vfo[id].frequency, vfo[id].mode); }
 #endif
 }
 

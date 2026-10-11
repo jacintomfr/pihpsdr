@@ -68,7 +68,7 @@ extern void      ifpan_start(void);
 extern void      ifpan_stop(void);    // on exit: Kenwood back to RX if we keyed it
 extern void      ifpan_ptt(int on);   // toolbar PTT / MOX: 1 TX, 0 RX, -1 toggle
 extern void      ifpan_ts_here(void); // toolbar "TS here": Kenwood to the RX frequency
-extern void      ifpan_band_changed(long long f);   // band menu: Kenwood to the new band
+extern void      ifpan_band_changed(long long f, int mode);   // band menu: Kenwood to the new band + mode
 
 //
 // TS-570 frequency coverage: the band menu and frequency checks use this

@@ -137,6 +137,17 @@ void ifpan_preamp_toggle(void) {
   preamp_request = (ifpan_kenwood_preamp == 1) ? 0 : 1;
   g_mutex_unlock(&cat_mutex);
 }
+
+static int       att_request = -1;    // toolbar ATT: 0 / 1 to send, -1: none
+int              ifpan_kenwood_att = -1;      // TS attenuator read by CAT: 0 / 1, -1 unknown
+
+// toolbar ATT (main thread): toggle the Kenwood attenuator
+void ifpan_att_toggle(void) {
+  if (!ifpan_cat_connected) { return; }
+  g_mutex_lock(&cat_mutex);
+  att_request = (ifpan_kenwood_att == 1) ? 0 : 1;
+  g_mutex_unlock(&cat_mutex);
+}
 static long long ui_last_freq = -1;   // receiver frequency last seen (main thread only)
 static int       ui_last_mode = -1;   // receiver mode last seen (main thread only)
 
@@ -695,6 +706,37 @@ static int be_get_preamp(int sock) {
   return atoi(frame) > 0;
 }
 
+//
+// TS-570 attenuator (18 dB): Kenwood "RA;" -> "RA00;" / "RA01;", set
+// "RA00;" / "RA01;"; rigctld "l ATT" -> 0 / 18, set "L ATT 0|18". Same
+// return values as the preamp functions.
+//
+static int be_get_att(int sock) {
+  char frame[64];
+  if (ifpan_cat_backend == IFPAN_CAT_KENWOOD) {
+    int rc = kw_query(sock, "RA;", "RA", frame, sizeof(frame));
+    if (rc < 0) { return rc; }
+    if (strlen(frame) < 4) { return -2; }
+    return atoi(frame + 2) > 0;
+  }
+  const char *cmd = "l ATT\n";
+  if (send(sock, cmd, strlen(cmd), MSG_NOSIGNAL) != (ssize_t) strlen(cmd)) { return -1; }
+  if (cat_read_line(sock, frame, sizeof(frame)) < 0) { return -1; }
+  if (strncmp(frame, "RPRT", 4) == 0) { return -2; }
+  return atoi(frame) > 0;
+}
+
+static int be_set_att(int sock, int on) {
+  char cmd[32], line[64];
+  if (ifpan_cat_backend == IFPAN_CAT_KENWOOD) {
+    int len = snprintf(cmd, sizeof(cmd), "RA%02d;", on ? 1 : 0);
+    return (send(sock, cmd, len, MSG_NOSIGNAL) == len) ? 0 : -1;
+  }
+  int len = snprintf(cmd, sizeof(cmd), "L ATT %d\n", on ? 18 : 0);
+  if (send(sock, cmd, len, MSG_NOSIGNAL) != len) { return -1; }
+  return (cat_read_line(sock, line, sizeof(line)) < 0) ? -1 : 0;
+}
+
 static int be_set_preamp(int sock, int on) {
   char cmd[32], line[64];
   if (ifpan_cat_backend == IFPAN_CAT_KENWOOD) {
@@ -779,6 +821,7 @@ static gpointer cat_thread(gpointer data) {
       ifpan_kenwood_mode = -1;
       ifpan_kenwood_smeter = -999;
       ifpan_kenwood_preamp = -1;
+      ifpan_kenwood_att = -1;
       g_idle_add(ext_vfo_update, NULL);
       t_print("%s: CAT now via %s (%s:%d)\n", __func__, cat_name(),
               ifpan_cat_backend == IFPAN_CAT_KENWOOD ? ifpan_kenwood_host : ifpan_rigctld_host,
@@ -958,6 +1001,18 @@ static gpointer cat_thread(gpointer data) {
         ifpan_kenwood_preamp = p;
         g_idle_add(ext_vfo_update, NULL);
       }
+      // attenuator state, likewise
+      p = be_get_att(sock);
+      if (p == -1) {
+        close(sock);
+        sock = -1;
+        continue;
+      }
+      if (p < 0) { p = -1; }
+      if (p != ifpan_kenwood_att) {
+        ifpan_kenwood_att = p;
+        g_idle_add(ext_vfo_update, NULL);
+      }
     }
     //
     // toolbar PRE -> Kenwood preamp, read back at once
@@ -969,6 +1024,20 @@ static gpointer cat_thread(gpointer data) {
     g_mutex_unlock(&cat_mutex);
     if (pre >= 0) {
       if (be_set_preamp(sock, pre) < 0) {
+        close(sock);
+        sock = -1;
+        continue;
+      }
+      mode_count = 0;
+    }
+    // toolbar ATT -> Kenwood attenuator, read back at once
+    int att;
+    g_mutex_lock(&cat_mutex);
+    att = att_request;
+    att_request = -1;
+    g_mutex_unlock(&cat_mutex);
+    if (att >= 0) {
+      if (be_set_att(sock, att) < 0) {
         close(sock);
         sock = -1;
         continue;

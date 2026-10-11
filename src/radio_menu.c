@@ -928,6 +928,13 @@ void radio_menu(GtkWidget *parent) {
     gtk_grid_attach(GTK_GRID(grid), Btn, 5, row, 2, 1);
     g_signal_connect(Btn, "toggled", G_CALLBACK(toggle_cb), &ifpan_cat_write);
     row++;
+    // experimental: follow the Kenwood dial from the spectrum itself (no CAT delay)
+    Btn = gtk_check_button_new_with_label("Track tuning (exp.)");
+    gtk_widget_set_halign(Btn, GTK_ALIGN_END);
+    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (Btn), ifpan_track);
+    gtk_grid_attach(GTK_GRID(grid), Btn, 5, row, 2, 1);
+    g_signal_connect(Btn, "toggled", G_CALLBACK(toggle_cb), &ifpan_track);
+    row++;
     // receiver mode follows the Kenwood mode (USB, LSB, CW, ...)
     Btn = gtk_check_button_new_with_label("Follow TS mode");
     gtk_widget_set_halign(Btn, GTK_ALIGN_END);

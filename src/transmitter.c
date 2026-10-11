@@ -67,8 +67,10 @@
 // IF panadapter: the WDSP TX chain only processes audio for the Kenwood,
 // which does the modulation itself. The output must stay audio: in AM the
 // carrier would be a DC level in it, in FM it would be an FM signal. So
-// all modes but LSB / USB / DIGL / DIGU / CW are processed as USB (whose
-// real part is the processed audio, with the TX filter as low .. high).
+// AM, FM and the other double-sided modes are processed as DSB (no
+// carrier; the real part is the processed audio, TX filter -high .. high),
+// which also shows a symmetric signal on the TX display as the Kenwood
+// sends it; LSB / USB / DIGL / DIGU / CW are kept.
 //
 static int ifpan_wdsp_txmode(int mode) {
   switch (mode) {
@@ -80,7 +82,7 @@ static int ifpan_wdsp_txmode(int mode) {
   case modeCWU:
     return mode;
   default:
-    return modeUSB;
+    return modeDSB;
   }
 }
 #endif
@@ -1602,7 +1604,13 @@ static void tx_full_buffer(TRANSMITTER *tx) {
     //
     // Note that mic sample amplification has to be done after VOX.
     //
+#ifdef IFPAN
+    // IF panadapter: no WDSP FM modulator (FM is sent as audio, the Kenwood
+    // does the pre-emphasis), so no extra gain
+    if (0) {
+#else
     if (txmode == modeFMN && !tx->tune) {
+#endif
       for (int i = 0; i < 2 * tx->samples; i += 2) {
         tx->mic_input_buffer[i] *= 5.6234;  // 20*Log(5.6234) is 15
       }

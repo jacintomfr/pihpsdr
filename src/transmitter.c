@@ -58,6 +58,29 @@
 #include "vfo.h"
 #include "waterfall.h"
 
+#ifdef IFPAN
+//
+// IF panadapter: the WDSP TX chain only processes audio for the Kenwood,
+// which does the modulation itself. The output must stay audio: in AM the
+// carrier would be a DC level in it, in FM it would be an FM signal. So
+// all modes but LSB / USB / DIGL / DIGU / CW are processed as USB (whose
+// real part is the processed audio, with the TX filter as low .. high).
+//
+static int ifpan_wdsp_txmode(int mode) {
+  switch (mode) {
+  case modeLSB:
+  case modeUSB:
+  case modeDIGL:
+  case modeDIGU:
+  case modeCWL:
+  case modeCWU:
+    return mode;
+  default:
+    return modeUSB;
+  }
+}
+#endif
+
 #define min(x,y) (x<y?x:y)
 #define max(x,y) (x<y?y:x)
 
@@ -2102,7 +2125,11 @@ void tx_set_filter(TRANSMITTER *tx) {
       break;
     }
   }
+#ifdef IFPAN
+  switch (ifpan_wdsp_txmode(txmode)) {
+#else
   switch (txmode) {
+#endif
   case modeCWL:
   case modeCWU:
     // WDSP is by-passed for CW, so this only applies to "TX noise"
@@ -2709,7 +2736,11 @@ void tx_set_mode(TRANSMITTER* tx, int mode) {
         radio_set_drive(drive_digi_max);
       }
     }
+#ifdef IFPAN
+    SetTXAMode(tx->id, ifpan_wdsp_txmode(mode));
+#else
     SetTXAMode(tx->id, mode);
+#endif
     tx_set_filter(tx);
   }
 }

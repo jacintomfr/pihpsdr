@@ -56,6 +56,9 @@ cp "$MINGW/$PIXBUF/loaders.cache" "$STAGE/$PIXBUF/"     # uses relative paths
 mkdir -p "$STAGE/$SOAPYMOD"
 cp "$MINGW/$SOAPYMOD/libPlutoSDRSupport.dll" "$STAGE/$SOAPYMOD/"
 [ -f "$MINGW/$SOAPYMOD/librtlsdrSupport.dll" ] && cp "$MINGW/$SOAPYMOD/librtlsdrSupport.dll" "$STAGE/$SOAPYMOD/"
+# Mirics MSi2500 (SDRplay RSP1 and clones) via SoapyMiri + libmirisdr (GPL);
+# libmirisdr.dll comes in through the DLL closure below
+[ -f "$MINGW/$SOAPYMOD/libsoapyMiriSupport.dll" ] && cp "$MINGW/$SOAPYMOD/libsoapyMiriSupport.dll" "$STAGE/$SOAPYMOD/"
 
 # helper programs GLib may spawn, plus SoapySDR / libiio / RTL-SDR diagnostics tools
 for x in gspawn-win64-helper.exe gspawn-win64-helper-console.exe SoapySDRUtil.exe iio_info.exe rtl_test.exe; do

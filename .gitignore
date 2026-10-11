@@ -23,3 +23,6 @@ release/LatexManual/piHPSDR-Manual.pdf
 /build-win/
 /pihpsdr-if.exe
 /pihpsdr.exe
+rade-libs/
+rade-src/
+rade-build/

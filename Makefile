@@ -479,12 +479,41 @@ endif
 
 ##############################################################################
 #
+# RADE V1 digital voice (FreeDV radio autoencoder), piHPSDR-IF only. Switched
+# on automatically once ./build-rade.sh has built rade-libs/ (rade_c + Opus
+# FARGAN/LPCNet, static, neural weights compiled in); RADE=OFF builds without
+# it. Also needs speexdsp (MSYS2 mingw-w64-x86_64-speexdsp, Debian
+# libspeexdsp-dev). Ported from the deskHPSDR Windows RADE port. The mic
+# denoiser uses the RNNoise of the IFPAN build (rnnoise/include).
+#
+##############################################################################
+
+ifeq ($(IFPAN),ON)
+ifneq ($(wildcard rade-libs/lib/librade_static.a),)
+RADE?=ON
+endif
+endif
+ifeq ($(RADE),ON)
+RADE_OPTIONS=-D RADE -I./rade-libs/include
+RADE_OBJS=src/rade_glue.o src/rade_engine.o src/rade_text.o src/rade_mic_agc.o \
+	src/rade_denoiser.o src/rade_resample.o src/rade_shim.o src/rade_menu.o
+RADE_LIBS=rade-libs/lib/librade_static.a rade-libs/lib/libopus.a -lspeexdsp
+# rade_engine.c / rade_shim.c include Opus-internal headers; these dirs come
+# before $(INCLUDES), as WDSP has an nnet.h of its own (Opus dnn/nnet.h must
+# win there), and IS_BUILDING_RADE_API avoids dllimport declarations on Windows.
+RADE_OPUS_FLAGS=-I./rade-libs/opus-include -I./rade-libs/opus-include/dnn \
+	-I./rade-libs/opus-include/celt -I./rade-libs/opus-include/include \
+	-DHAVE_CONFIG_H -DIS_BUILDING_RADE_API=1
+endif
+
+##############################################################################
+#
 # All the command-line options to compile the *.c files
 #
 ##############################################################################
 
 OPTIONS=$(MIDI_OPTIONS) $(USBOZY_OPTIONS) \
-	$(GPIO_OPTIONS) $(SOAPYSDR_OPTIONS) $(IFPAN_OPTIONS) \
+	$(GPIO_OPTIONS) $(SOAPYSDR_OPTIONS) $(IFPAN_OPTIONS) $(RADE_OPTIONS) \
 	$(ANDROMEDA_OPTIONS) \
 	$(STEMLAB_OPTIONS) \
 	$(SERVER_OPTIONS) \
@@ -747,14 +776,14 @@ src/waterfall.o
 #
 ##############################################################################
 
-$(PROGRAM):  $(OBJS) $(AUDIO_OBJS) $(USBOZY_OBJS) $(SOAPYSDR_OBJS) $(IFPAN_OBJS) \
+$(PROGRAM):  $(OBJS) $(AUDIO_OBJS) $(USBOZY_OBJS) $(SOAPYSDR_OBJS) $(IFPAN_OBJS) $(RADE_OBJS) \
 		$(MIDI_OBJS) $(STEMLAB_OBJS) $(TTS_OBJS) $(TCI_OBJS) $(WIN_OBJS)
 	$(COMPILE) -c -o src/version.o src/version.c
 	@+make -C libspecbleach
 	@+make -C wdsp
-	$(LINK) -o $(PROGRAM) $(OBJS) $(AUDIO_OBJS) $(USBOZY_OBJS) $(SOAPYSDR_OBJS) $(IFPAN_OBJS) \
+	$(LINK) -o $(PROGRAM) $(OBJS) $(AUDIO_OBJS) $(USBOZY_OBJS) $(SOAPYSDR_OBJS) $(IFPAN_OBJS) $(RADE_OBJS) \
 		$(MIDI_OBJS) $(STEMLAB_OBJS) $(TTS_OBJS) $(TCI_OBJS) $(WIN_OBJS) \
-		$(LIBS)
+		$(RADE_LIBS) $(LIBS)
 
 ##############################################################################
 #
@@ -803,6 +832,10 @@ cppcheck:
 # (These rules must not come before the program's own target, the default.)
 rnnoise/src/%.o: rnnoise/src/%.c rnnoise/src/rnnoise_data.h
 	$(CC) -O2 -I./rnnoise/include -I./rnnoise/src -c -o $@ $<
+
+# RADE: the two files that include Opus-internal headers (see RADE_OPUS_FLAGS)
+src/rade_engine.o src/rade_shim.o: %.o: %.c
+	$(CC) $(CFLAGS) $(OPTIONS) $(RADE_OPUS_FLAGS) $(INCLUDES) -c -o $@ $<
 
 rnnoise/src/rnnoise_data.c rnnoise/src/rnnoise_data.h:
 	cd rnnoise && h=$$(cat model_version) && \

@@ -61,6 +61,9 @@
 #ifdef IFPAN
 #include "ifpan.h"
 #endif
+#ifdef RADE
+#include "rade_glue.h"
+#endif
 #include "rx_panadapter.h"
 #include "server_menu.h"
 #include "sliders.h"
@@ -984,6 +987,9 @@ void radio_stop_program(void) {
   t_print("%s: Start shutdown sequence\n", __func__);
 #ifdef IFPAN
   ifpan_stop();   // Kenwood back to RX if piHPSDR-IF keyed it
+#endif
+#ifdef RADE
+  rade_glue_shutdown();   // TX chain values back (saved below), engine thread joined
 #endif
 #ifdef GPIO
   gpio_close();
@@ -2156,6 +2162,15 @@ void radio_set_mox(int state) {
     send_mox(cl_sock_tcp, state);
     return;
   }
+#ifdef RADE
+  //
+  // RADE: a MOX-off is held back until the End-of-Over frame (own callsign)
+  // has been sent (rade_glue issues the real MOX-off, at most 2 s later);
+  // before the client is told and before the Kenwood is unkeyed by CAT
+  //
+  if (!state && rade_glue_mox_off_intercept()) { return; }
+  if (state) { rade_glue_mox_on(); }
+#endif
   //
   // MOX change can be unsolicited.
   //
@@ -3246,6 +3261,9 @@ static void radio_restore_state(void) {
     GetPropI0("sat_mode",                                    sat_mode);
 #ifdef IFPAN
     ifpan_restore_state();
+#ifdef RADE
+    rade_glue_load_state();   // server only; receivers / VFOs / TX do not exist yet
+#endif
     split = 0;
     duplex = 0;
     sat_mode = SAT_NONE;
@@ -3475,6 +3493,9 @@ void radio_save_state(void) {
     SetPropI0("sat_mode",                                    sat_mode);
 #ifdef IFPAN
     ifpan_save_state();
+#ifdef RADE
+    rade_glue_save_state();
+#endif
 #endif
     SetPropI0("radio.display_warnings",                      display_warnings);
     SetPropI0("radio.display_pacurr",                        display_pacurr);

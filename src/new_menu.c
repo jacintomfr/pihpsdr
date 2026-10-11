@@ -72,6 +72,9 @@
 #include "xvtr_menu.h"
 #include "vfo_menu.h"
 #include "vox_menu.h"
+#ifdef RADE
+  #include "rade_menu.h"
+#endif
 
 GtkWidget *main_menu = NULL;
 GtkWidget *sub_menu = NULL;
@@ -398,6 +401,19 @@ static gboolean vox_cb (GtkWidget *widget, GdkEventButton *event, gpointer data)
   return TRUE;
 }
 
+#ifdef RADE
+void start_rade_menu(void) {
+  cleanup();
+  rade_menu(top_window);
+}
+
+// cppcheck-suppress constParameterCallback
+static gboolean rade_cb (GtkWidget *widget, GdkEventButton *event, gpointer data) {
+  start_rade_menu();
+  return TRUE;
+}
+
+#endif
 static void start_dsp_menu(void) {
   cleanup();
   fft_menu(top_window);
@@ -709,6 +725,12 @@ void new_menu(void) {
       g_signal_connect (btn, "button-press-event", G_CALLBACK(vox_cb), NULL);
       gtk_grid_attach(GTK_GRID(grid), btn, col, row, 1, 1);
       row++;
+#ifdef RADE
+      btn = gtk_button_new_with_label("RADE");
+      g_signal_connect (btn, "button-press-event", G_CALLBACK(rade_cb), NULL);
+      gtk_grid_attach(GTK_GRID(grid), btn, col, row, 1, 1);
+      row++;
+#endif
       if (protocol == ORIGINAL_PROTOCOL || protocol == NEW_PROTOCOL) {
         btn = gtk_button_new_with_label("PS");
         g_signal_connect (btn, "button-press-event", G_CALLBACK(ps_cb), NULL);

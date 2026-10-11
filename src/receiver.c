@@ -57,6 +57,9 @@
 #endif
 #include "vfo.h"
 #include "waterfall.h"
+#ifdef RADE
+  #include "rade_glue.h"
+#endif
 
 #define min(x,y) (x<y?x:y)
 #define max(x,y) (x<y?y:x)
@@ -1150,6 +1153,10 @@ static void rx_process_buffer(RECEIVER *rx) {
   }
   lvl = 0.9 * lvl + (0.1 * sum) / rx->output_samples;
   t_print("RX lvl: %5.1f\n", 10.0 * log10(lvl));
+#endif
+#ifdef RADE
+  // RADE: RX1 modem audio -> decoded speech, before capture / client / TCI / output
+  rade_glue_rx_block(rx->id, rx->audio_output_buffer, rx->output_samples);
 #endif
   for (int i = 0; i < rx->output_samples; i++) {
     double left_sample = rx->audio_output_buffer[i * 2];

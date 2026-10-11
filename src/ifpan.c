@@ -309,6 +309,7 @@ int ifpan_power_apply(gpointer data) {
 }
 
 static long long ui_last_freq = -1;   // receiver frequency last seen (main thread only)
+static gint64    ui_tuned_us = 0;     // when the receiver was last tuned here (main thread only)
 static int       ui_last_mode = -1;   // receiver mode last seen (main thread only)
 
 //
@@ -485,6 +486,16 @@ static gboolean cat_apply(gpointer data) {
   f = cat_pending;
   cat_scheduled = 0;
   g_mutex_unlock(&cat_mutex);
+  if (ifpan_cat_write) {
+    //
+    // While the receiver is being tuned here (mouse wheel), a Kenwood
+    // reading taken before the newest target reached it made the display
+    // flick back a step: ignore readings while a change is not yet sent
+    // (ui_watch has not seen it) and for 0.5 s after the last one
+    //
+    long long cur = vfo[VFO_A].ctun ? vfo[VFO_A].ctun_frequency : vfo[VFO_A].frequency;
+    if (cur != ui_last_freq || g_get_monotonic_time() - ui_tuned_us < 500000) { return G_SOURCE_REMOVE; }
+  }
   tuning_moved(f - vfo[VFO_A].frequency);
   vfo_id_set_center(VFO_A, f);
   // a re-centre caused by the Kenwood must not be sent back to it
@@ -523,6 +534,7 @@ static gboolean ui_watch(gpointer data) {
     if (ifpan_cat_write && ifpan_cat_connected) {
       g_mutex_lock(&cat_mutex);
       cat_set_target = f;
+      ui_tuned_us = g_get_monotonic_time();
       g_mutex_unlock(&cat_mutex);
     }
   }

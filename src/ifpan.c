@@ -93,6 +93,7 @@ int       ifpan_kenwood_smeter = -999;
 int       ifpan_tx_mute = 1;
 int       ifpan_follow_mode = 1;      // receiver mode follows the Kenwood mode
 int       ifpan_sdr_lna_off = 0;      // SDR front-end LNA kept off (strong IF input; Radio menu)
+volatile long ifpan_diag_heartbeats = 0;   // TX chain heartbeats from the SDR (diagnostics)
 int       ifpan_kenwood_tx = 0;
 int       ifpan_kenwood_pwr = -1;     // "SM;" while transmitting
 int       ifpan_kenwood_swr = -1;     // "RM1nnnn;"

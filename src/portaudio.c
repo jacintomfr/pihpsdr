@@ -46,6 +46,9 @@
 #include "radio.h"
 #include "receiver.h"
 #include "vfo.h"
+#ifdef IFPAN
+  #include "ifpan.h"
+#endif
 
 int n_input_devices;
 int n_output_devices;
@@ -190,6 +193,9 @@ void audio_get_cards(void) {
 //
 
 static int pa_in_cb(const void*, void*, unsigned long, const PaStreamCallbackTimeInfo*, PaStreamCallbackFlags, void*);
+#ifdef IFPAN
+static volatile long mic_diag_reads = 0;   // mic samples taken by the TX chain (diagnostics)
+#endif
 static int pa_out_cb(const void*, void*, unsigned long, const PaStreamCallbackTimeInfo*, PaStreamCallbackFlags, void*);
 
 int audio_open_input(TRANSMITTER *tx) {
@@ -372,6 +378,28 @@ static int pa_in_cb(const void *inputBuffer, void *outputBuffer, unsigned long f
     // the stream be stopped from elsewhere
     return paContinue;
   }
+#ifdef IFPAN
+  //
+  // Diagnostics (TX chain dead after an SDR stall during TX, 2026-10-11):
+  // every 5 s, how many mic blocks arrived and how many samples the TX
+  // chain asked for, plus the ring state
+  //
+  {
+    static gint64 last = 0;
+    static long cbs = 0;
+    cbs++;
+    gint64 now = g_get_monotonic_time();
+    if (now - last > 5000000) {
+      int avail = (ad->audio_buffer_inpt - ad->audio_buffer_outpt) & MIC_BUFFER_MASK;
+      t_print("mic diag: %ld callbacks, %ld samples read, %ld SDR heartbeats in 5 s, avail %d, starved %d, flag %d, tx %d\n",
+              cbs, mic_diag_reads, ifpan_diag_heartbeats, avail, ad->mic_starved, ad->audio_flag, radio_is_transmitting());
+      ifpan_diag_heartbeats = 0;
+      cbs = 0;
+      mic_diag_reads = 0;
+      last = now;
+    }
+  }
+#endif
   //
   // If we come here, the existence of the buffers is guaranteed for
   // the next 50 ms, more then enough to do the copy
@@ -443,6 +471,9 @@ double audio_get_next_mic_sample(TRANSMITTER *tx) {
   if (tx == NULL) { return 0.0; }
   audio_data *ad = (audio_data *) tx->audio_handle;
   if (ad == NULL) { return 0.0; }
+#ifdef IFPAN
+  mic_diag_reads++;
+#endif
   //
   // Now the existence of the buffers is guaranteed for 50 msec
   //

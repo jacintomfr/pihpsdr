@@ -50,6 +50,7 @@ extern int       ifpan_tx_mute;       // 1: mute the RX audio while the Kenwood 
 extern int       ifpan_follow_mode;   // 1: the receiver mode follows the Kenwood mode
 extern int       ifpan_sdr_lna_off;   // 1: the SDR front-end LNA is kept off (Radio menu)
 extern int       ifpan_kenwood_tx;    // 1: the Kenwood is transmitting (Kenwood TCP only)
+extern volatile long ifpan_diag_heartbeats;   // TX chain heartbeats from the SDR (diagnostics)
 extern int       ifpan_kenwood_pwr;   // raw TX meters, -1: not read yet
 extern int       ifpan_kenwood_swr;
 extern int       ifpan_kenwood_alc;

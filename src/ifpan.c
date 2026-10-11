@@ -976,6 +976,7 @@ static gpointer cat_thread(gpointer data) {
   int mode_count = 0;                 // polls until the next mode read (0: now)
   int smeter_count = 0;               // polls until the next S-meter read
   int atu_count = 0;                  // polls until the next antenna tuner read
+  int silent_polls = 0;               // consecutive polls without an answer
   int want_mode = -1;                 // mode still to be set on the Kenwood (band change)
   int want_tries = 0;
   gint64 want_at = 0;
@@ -1128,9 +1129,22 @@ static gpointer cat_thread(gpointer data) {
         ifpan_cat_connected = 0;
         g_idle_add(ext_vfo_update, NULL);
       }
+      //
+      // Kenwood TCP: after ~3 s without an answer, open a new connection.
+      // A serial bridge (socat) whose USB-RS232 adapter was unplugged and
+      // came back keeps the old, dead device open per connection; a new
+      // connection makes it open the adapter again.
+      //
+      if (ifpan_cat_backend == IFPAN_CAT_KENWOOD && ++silent_polls >= 6) {
+        t_print("%s: no answer for 3 s, reconnecting\n", __func__);
+        silent_polls = 0;
+        close(sock);
+        sock = -1;
+      }
       usleep(500000);
       continue;
     }
+    silent_polls = 0;
     if (f < 0) {
       if (!trouble) {
         t_print("%s: %s connection lost\n", __func__, cat_name());

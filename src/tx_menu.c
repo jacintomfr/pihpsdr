@@ -496,6 +496,9 @@ void tx_menu(GtkWidget *parent) {
     have_swr = 1;
     have_mic = 1;
   }
+#ifdef IFPAN
+  have_swr = 1;               // the Kenwood's own SWR meter, by CAT (ifpan.c)
+#endif
   btn = gtk_button_new_with_label("Close");
   gtk_widget_set_name(btn, "close_button");
   g_signal_connect (btn, "button-press-event", G_CALLBACK(close_cb), NULL);
@@ -993,6 +996,7 @@ void tx_menu(GtkWidget *parent) {
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (btn), transmitter->swr_protection);
     gtk_grid_attach(GTK_GRID(swr_grid), btn, col, row, 1, 1);
     g_signal_connect(btn, "toggled", G_CALLBACK(chkbtn_cb), GINT_TO_POINTER(TX_SWR_PROTECTION));
+#ifndef IFPAN
     row++;
     col = 0;
     label = gtk_label_new("Tune Sidetone Volume");
@@ -1010,6 +1014,7 @@ void tx_menu(GtkWidget *parent) {
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (btn), transmitter->swrtune);
     gtk_grid_attach(GTK_GRID(swr_grid), btn, col, row, 3, 1);
     g_signal_connect(btn, "toggled", G_CALLBACK(chkbtn_cb), GINT_TO_POINTER(TX_SWRTUNE));
+#endif
   }
   sub_menu = dialog;
   gtk_widget_show_all(dialog);

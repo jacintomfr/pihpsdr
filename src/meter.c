@@ -626,7 +626,7 @@ static void ifpan_txmeter(cairo_t *cr, int fps) {
   if (ifpan_kenwood_swr >= 0) {
     swr = (ifpan_kenwood_swr >= 24) ? 9.9 : 60.0 / (30.0 - ifpan_kenwood_swr) - 1.0;
   }
-  int swr_alarm = (swr > 3.0);
+  int swr_alarm = (swr >= (transmitter ? transmitter->swr_alarm : 3.0));
   double frac = pwr / 100.0;
   if (frac > 1.0) { frac = 1.0; }
   //

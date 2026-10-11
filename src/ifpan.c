@@ -695,6 +695,18 @@ static int kw_get_strength(int sock, int *db) {
 // Returns 0, or -1 if the connection failed.
 //
 static int kw_meter_user = 0;         // RM selection before TX (0: not in TX)
+static int kw_high_swr = 0;           // consecutive SWR readings above the alarm
+
+//
+// SWR protection (TX menu "SWR alarm at" / "SWR Protection"), as piHPSDR
+// does with the HPSDR's own SWR: the drive slider goes to zero, so VOX or
+// PTT do not put audio into a bad antenna again until the operator acts.
+//
+static gboolean swr_protect_cb(gpointer data) {
+  if (mox) { radio_set_mox(0); }
+  radio_set_drive(0.0);
+  return G_SOURCE_REMOVE;
+}
 
 static int kw_tx_meters(int sock) {
   char frame[64];
@@ -717,7 +729,29 @@ static int kw_tx_meters(int sock) {
     int sel = frame[2] - '0';
     int val = atoi(frame + 3);
     if (kw_meter_user == 0) { kw_meter_user = (sel >= 1 && sel <= 3) ? sel : 2; }
-    if (sel == 1) { ifpan_kenwood_swr = val; }
+    if (sel == 1) {
+      ifpan_kenwood_swr = val;
+      //
+      // Two readings in a row above the alarm (not an artifact), and not
+      // while the tuner tunes: warn, and with protection on drop the
+      // Kenwood to RX at once, then MOX off and drive to zero
+      //
+      double swr = (val >= 24) ? 9.9 : 60.0 / (30.0 - val) - 1.0;
+      if (transmitter != NULL && swr >= transmitter->swr_alarm && !ifpan_kenwood_atu_tuning) {
+        if (++kw_high_swr >= 2) {
+          high_swr_seen = 1;
+          kw_high_swr = 0;
+          if (transmitter->swr_protection && !transmitter->tune) {
+            t_print("%s: SWR %.1f >= %.1f, TX stopped\n", __func__, swr, transmitter->swr_alarm);
+            if (send(sock, "RX;", 3, MSG_NOSIGNAL) != 3) { return -1; }
+            ptt_keyed = 0;
+            g_idle_add(swr_protect_cb, NULL);
+          }
+        }
+      } else {
+        kw_high_swr = 0;
+      }
+    }
     if (sel == 3) { ifpan_kenwood_alc = val; }
     snprintf(cmd, sizeof(cmd), "RM%d;", sel == 1 ? 3 : 1);
     if (send(sock, cmd, strlen(cmd), MSG_NOSIGNAL) != (ssize_t) strlen(cmd)) { return -1; }

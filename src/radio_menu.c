@@ -1032,7 +1032,7 @@ void radio_menu(GtkWidget *parent) {
         {
           GList *cells = gtk_cell_layout_get_cells(GTK_CELL_LAYOUT(tx_out_combo));
           for (GList *c = cells; c != NULL; c = c->next) {
-            g_object_set(c->data, "ellipsize", PANGO_ELLIPSIZE_END, "width-chars", 22, NULL);
+            g_object_set(c->data, "ellipsize", PANGO_ELLIPSIZE_END, "width-chars", 22, "max-width-chars", 22, NULL);
           }
           g_list_free(cells);
         }

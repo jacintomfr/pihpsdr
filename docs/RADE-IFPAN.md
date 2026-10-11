@@ -9,10 +9,12 @@ test notes in the deskHPSDR document apply unchanged.
 
 ## 1. Status
 
-* Phase 1 (this commit): RADE on the server, local operation (RX and TX),
-  Windows and Linux builds. Not yet tested on air: RX can be tried at once
-  (TS-570D in USB, a RADE signal, e.g. 14.236 MHz); TX needs the ACC2 cable.
-* Phase 2 (next): client/server — RADE menu and status on the client.
+* Phase 1: RADE on the server, local operation (RX and TX), Windows and
+  Linux builds. RX confirmed on air 2026-10-11 (14.236 MHz, SYNC at about
+  21 dB SNR, EOO callsign CU2FO decoded, "audio very good"). TX needs the
+  ACC2 cable (not yet tested).
+* Phase 2: client/server — the RADE menu on a client acts on the server's
+  engine and shows its state (section 7).
 * Phase 3: FreeDV Reporter (the deskHPSDR `rade_reporter.c` client).
 * Phase 4: Raspberry Pi build (aarch64, NEON) and CPU measurement on a Pi 4.
 
@@ -81,8 +83,7 @@ Hooks (all inside `#ifdef RADE`):
 * **Quick Tune** tunes the Kenwood by CAT (`ifpan_band_changed`, frequency +
   USB / LSB); the display follows the radio.
 * **Settings** are saved when the RADE menu closes.
-* **Client:** in phase 1 the RADE menu on a client only says that RADE runs
-  on the server.
+* **Client:** the same RADE menu, acting on the server (section 7).
 * **No FreeDV Reporter** yet (phase 3).
 
 ## 5. Operating notes (TS-570D)
@@ -118,3 +119,34 @@ no symbol clashes between WDSP, the RNNoise of the IFPAN build, libopus and
 librade (nm); WDSP has its own `nnet.h`, so the Opus include dirs come
 before `$(INCLUDES)` for `rade_engine.o` / `rade_shim.o`. The binary grows
 by about 30 MB (weights).
+
+## 7. Client / server
+
+The engine only runs on the server; the client's RADE menu is a remote
+control of it (protocol version 0x013100F3, both ends must be the same
+piHPSDR-IF build):
+
+* **INFO_RADE** (server -> client, UDP, with the periodic data every 150 ms,
+  `RADE_DATA` in `client_server.h`): flags (RX enabled, TX armed, denoiser,
+  leveler, compressor, EQ, mute analog, squelch, wide filter, engine
+  running), SYNC / SNR / offset / level / EOO count / dropped, the four mic
+  EQ gains, the own callsign and the last 8 received callsigns with SNR.
+  Packed by `rade_glue_fill_remote()`, applied by `rade_glue_client_update()`.
+* **CMD_RADE** (client -> server, TCP, `RADE_COMMAND`): b1 = `RADE_REMOTE_*`,
+  b2 = on / off, EQ band or Quick Tune index, s1 = EQ gain (dB * 10), text =
+  callsign. Carried out by `rade_glue_remote_command()` as if done in the
+  server's own menu. The server always consumes the bytes (also a build
+  without RADE), so the TCP stream stays in step.
+* In `rade_glue.c` the setters on a client send the command and update the
+  local copy at once; incoming settings are ignored for 0.6 s after a local
+  change (`REMOTE_HOLD_US`) so a packet sent before the server saw the change
+  does not flip a check box back. The getters read that copy, so the menu
+  code is the same on both sides; on a client the menu also follows changes
+  made in the server's own menu.
+* Quick Tune and Fit Filter moved from the menu into the glue
+  (`rade_glue_quick_tune`, `rade_glue_fit_filter`) so that they always run
+  on the server (mode, Kenwood by CAT, Var1 filter).
+* The client's microphone reaches the server as ordinary remote TX audio
+  and the decoded speech comes back as ordinary RX audio: nothing RADE
+  specific on the audio path. Settings are saved by the server (its props),
+  when the server's RADE menu closes and at exit.

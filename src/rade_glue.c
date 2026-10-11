@@ -17,16 +17,43 @@
 #include <stdatomic.h>
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 #include "radio.h"
 #include "receiver.h"
 #include "transmitter.h"
 #include "vfo.h"
 #include "mode.h"
+#include "filter.h"
+#include "ext.h"
 #include "property.h"
 #include "message.h"
+#include "client_server.h"
 #include "rade_engine.h"
 #include "rade_glue.h"
+#ifdef IFPAN
+  #include "ifpan.h"
+#endif
+
+/*
+ * Client / server: the engine runs on the server only. On a client the
+ * menu's setters send CMD_RADE to the server and update the local copy at
+ * once; the getters read that copy, which the server refreshes with
+ * INFO_RADE every 150 ms (rade_glue_client_update). Incoming settings are
+ * ignored for a short while after a local change, so a packet sent before
+ * the server got the change does not flip a check box back.
+ */
+#define REMOTE_HOLD_US 600000
+static gint64 remote_hold = 0;
+static rade_engine_stats_t remote_stats;
+static int remote_running = 0;
+
+static int remote_send(int what, int b2, int value, const char *text) {
+  if (!radio_is_remote) { return 0; }
+  send_rade(cl_sock_tcp, what, b2, value, text);
+  remote_hold = g_get_monotonic_time() + REMOTE_HOLD_US;
+  return 1;
+}
 
 #define RX_JITTER_CAP   48000   /* like rade_jitter in the Rust app */
 #define RX_JITTER_PRIME 960     /* 20 ms before (re)starting playback */
@@ -170,11 +197,20 @@ static void set_rx_enabled_int(int on, int force_mode) {
   /* active_receiver is still NULL while the properties are restored at startup */
   t_print("%s: rx_enabled=%d tx_armed=%d\n", __func__, atomic_load(&rx_enabled), atomic_load(&tx_armed));
 }
-void rade_glue_set_rx_enabled(int on) { set_rx_enabled_int(on, 1); }
+void rade_glue_set_rx_enabled(int on) {
+  if (radio_is_remote) {
+    atomic_store(&rx_enabled, on ? 1 : 0);
+    if (!on) { atomic_store(&tx_armed, 0); }
+    remote_send(RADE_REMOTE_RX, on ? 1 : 0, 0, NULL);
+    return;
+  }
+  set_rx_enabled_int(on, 1);
+}
 int  rade_glue_get_rx_enabled(void) { return atomic_load(&rx_enabled); }
 void rade_glue_set_tx_armed(int on) {
   atomic_store(&tx_armed, on ? 1 : 0);
   if (on) { atomic_store(&rx_enabled, 1); }
+  if (remote_send(RADE_REMOTE_TX, on ? 1 : 0, 0, NULL)) { return; }
   engine_update();
   if (on) { ensure_digital_mode(); }
   tx_chain_force(atomic_load(&tx_armed));
@@ -182,13 +218,14 @@ void rade_glue_set_tx_armed(int on) {
 }
 void rade_glue_set_squelch(int on) {
   atomic_store(&squelch_gate, on ? 1 : 0);
+  if (remote_send(RADE_REMOTE_SQUELCH, on ? 1 : 0, 0, NULL)) { return; }
   g_mutex_lock(&engine_mutex);
   if (rade_engine_is_running()) { rade_engine_set_squelch(on ? 1 : 0, -4.0f); }
   g_mutex_unlock(&engine_mutex);
 }
 int rade_glue_get_squelch(void) { return atomic_load(&squelch_gate); }
 int  rade_glue_get_tx_armed(void) { return atomic_load(&tx_armed); }
-int  rade_glue_engine_running(void) { return rade_engine_is_running(); }
+int  rade_glue_engine_running(void) { return radio_is_remote ? remote_running : rade_engine_is_running(); }
 
 void rade_glue_set_callsign(const char *call) {
   /* EOO alphabet is upper case; the codec maps what it cannot send */
@@ -197,6 +234,7 @@ void rade_glue_set_callsign(const char *call) {
     if (*p != ' ') { rade_callsign[n++] = g_ascii_toupper(*p); }
   }
   rade_callsign[n] = 0;
+  if (remote_send(RADE_REMOTE_CALLSIGN, 0, 0, rade_callsign)) { return; }
   g_mutex_lock(&engine_mutex);
   if (rade_engine_is_running()) { rade_engine_set_callsign(rade_callsign); }
   g_mutex_unlock(&engine_mutex);
@@ -210,31 +248,36 @@ void rade_glue_shutdown(void) {
   g_mutex_unlock(&engine_mutex);
 }
 
-#define MIC_SETTER(name, var, call) \
+#define MIC_SETTER(name, var, call, remote) \
   void rade_glue_set_##name(int on) { \
     atomic_store(&var, on ? 1 : 0); \
+    if (remote_send(remote, on ? 1 : 0, 0, NULL)) { return; } \
     g_mutex_lock(&engine_mutex); \
     if (rade_engine_is_running()) { call(on ? 1 : 0); } \
     g_mutex_unlock(&engine_mutex); \
   } \
   int rade_glue_get_##name(void) { return atomic_load(&var); }
-MIC_SETTER(denoiser, denoiser, rade_engine_set_mic_denoise)
-MIC_SETTER(leveler, leveler, rade_engine_set_mic_leveler)
-MIC_SETTER(compressor, compressor, rade_engine_set_mic_compressor)
-MIC_SETTER(eq, eq, rade_engine_set_mic_eq)
+MIC_SETTER(denoiser, denoiser, rade_engine_set_mic_denoise, RADE_REMOTE_DENOISER)
+MIC_SETTER(leveler, leveler, rade_engine_set_mic_leveler, RADE_REMOTE_LEVELER)
+MIC_SETTER(compressor, compressor, rade_engine_set_mic_compressor, RADE_REMOTE_COMPRESSOR)
+MIC_SETTER(eq, eq, rade_engine_set_mic_eq, RADE_REMOTE_EQ)
 
 void rade_glue_set_eq_gain(int band, float db) {
   if (band < 0 || band > 3) { return; }
   if (db > EQ_RANGE_DB) { db = EQ_RANGE_DB; }
   if (db < -EQ_RANGE_DB) { db = -EQ_RANGE_DB; }
   atomic_store(&eq_gain[band], (int) (db * 10.0f + (db < 0 ? -0.5f : 0.5f)));
+  if (remote_send(RADE_REMOTE_EQ_GAIN, band, atomic_load(&eq_gain[band]), NULL)) { return; }
   g_mutex_lock(&engine_mutex);
   if (rade_engine_is_running()) { apply_eq_params(); }
   g_mutex_unlock(&engine_mutex);
 }
 float rade_glue_get_eq_gain(int band) { return (band < 0 || band > 3) ? 0.0f : atomic_load(&eq_gain[band]) / 10.0f; }
 
-void rade_glue_set_mute_analog(int on) { atomic_store(&mute_analog, on ? 1 : 0); }
+void rade_glue_set_mute_analog(int on) {
+  atomic_store(&mute_analog, on ? 1 : 0);
+  remote_send(RADE_REMOTE_MUTE, on ? 1 : 0, 0, NULL);
+}
 int  rade_glue_get_mute_analog(void) { return atomic_load(&mute_analog); }
 void rade_glue_set_filter_wide(int on) { atomic_store(&filter_wide, on ? 1 : 0); }
 int  rade_glue_get_filter_wide(void) { return atomic_load(&filter_wide); }
@@ -423,6 +466,7 @@ static int   call_n = 0;
 static void call_pump(void) {
   char c[9];
   float snr;
+  if (radio_is_remote) { return; }    // the client's history comes from the server
   g_mutex_lock(&call_mutex);
   while (rade_engine_next_callsign(c, &snr)) {
     memmove(call_hist[1], call_hist[0], sizeof(call_hist[0]) * (RADE_GLUE_HISTORY - 1));
@@ -434,7 +478,190 @@ static void call_pump(void) {
   g_mutex_unlock(&call_mutex);
 }
 
-void rade_glue_get_stats(rade_engine_stats_t *st) { rade_engine_get_stats(st); }
+void rade_glue_get_stats(rade_engine_stats_t *st) {
+  if (radio_is_remote) { *st = remote_stats; return; }
+  rade_engine_get_stats(st);
+}
+
+/* ---------------- Quick Tune / Fit Filter (run on the server) ---------------- */
+
+static const struct { const char *label; long long hz; } quick_tune[] = {
+  {"80m", 3630000LL}, {"40m", 7180000LL}, {"20m", 14236000LL},
+  {"15m", 21180000LL}, {"10m", 28330000LL}
+};
+#define N_QUICK_TUNE ((int)(sizeof(quick_tune) / sizeof(quick_tune[0])))
+static int fit_applied = 0;   /* Var1 filter was set by Fit Filter: follow mode changes */
+
+int rade_glue_quick_tune_count(void) { return N_QUICK_TUNE; }
+const char *rade_glue_quick_tune_label(int i, long long *hz) {
+  if (i < 0 || i >= N_QUICK_TUNE) { return ""; }
+  if (hz) { *hz = quick_tune[i].hz; }
+  return quick_tune[i].label;
+}
+
+/*
+ * Set the Var1 filter of the active receiver's VFO to the RADE passband.
+ * Var1 edges are in the CAT ZZFL/ZZFH convention: (-high, -low) for the
+ * lower sideband mode DIGL.  The TX bandpass is forced to 700-2300 Hz by
+ * the glue while TX is armed, so it is not touched here.
+ */
+static void apply_fit_filter(void) {
+  if (active_receiver == NULL) { return; }
+  int id = active_receiver->id;
+  int mode = vfo[id].mode;
+  if (!mode_is_digital(mode)) { return; }
+  int low = atomic_load(&filter_wide) ? 300 : 700;
+  int high = atomic_load(&filter_wide) ? 2700 : 2300;
+  FILTER *f = &filters[mode][filterVar1];
+  if (mode == modeDIGL) {
+    f->low = -high;
+    f->high = -low;
+  } else {
+    f->low = low;
+    f->high = high;
+  }
+  vfo_id_filter_changed(id, filterVar1);
+  fit_applied = 1;
+  g_idle_add(ext_vfo_update, NULL);
+}
+
+// rotate wide <-> narrow (the menu checks the mode first)
+void rade_glue_fit_filter(void) {
+  atomic_store(&filter_wide, !atomic_load(&filter_wide));
+  if (remote_send(RADE_REMOTE_FIT_FILTER, 0, 0, NULL)) { return; }
+  apply_fit_filter();
+}
+
+void rade_glue_quick_tune(int i) {
+  if (i < 0 || i >= N_QUICK_TUNE) { return; }
+  if (remote_send(RADE_REMOTE_QUICK_TUNE, i, 0, NULL)) { return; }
+  if (active_receiver == NULL) { return; }
+  long long hz = quick_tune[i].hz;
+  int id = active_receiver->id;
+  // lower sideband below 10 MHz (digi_mode_for_band of the Rust app)
+  int mode = (hz < 10000000LL) ? modeDIGL : modeDIGU;
+  if (vfo[id].mode != mode) {
+    vfo_id_mode_changed(id, mode);
+  }
+#ifdef IFPAN
+  // the Kenwood is tuned (frequency and USB / LSB) and the display follows it
+  ifpan_band_changed(hz, mode);
+#else
+  vfo_id_set_frequency(id, hz);
+#endif
+  if (fit_applied) { apply_fit_filter(); }   // keep the fitted width, sign follows the mode
+  g_idle_add(ext_vfo_update, NULL);
+}
+
+/* ---------------- client / server ---------------- */
+
+// server: CMD_RADE from the client's RADE menu (GTK thread)
+void rade_glue_remote_command(int what, int b2, int value, const char *text) {
+  switch (what) {
+  case RADE_REMOTE_RX:         rade_glue_set_rx_enabled(b2); break;
+  case RADE_REMOTE_TX:         rade_glue_set_tx_armed(b2); break;
+  case RADE_REMOTE_DENOISER:   rade_glue_set_denoiser(b2); break;
+  case RADE_REMOTE_LEVELER:    rade_glue_set_leveler(b2); break;
+  case RADE_REMOTE_COMPRESSOR: rade_glue_set_compressor(b2); break;
+  case RADE_REMOTE_EQ:         rade_glue_set_eq(b2); break;
+  case RADE_REMOTE_MUTE:       rade_glue_set_mute_analog(b2); break;
+  case RADE_REMOTE_SQUELCH:    rade_glue_set_squelch(b2); break;
+  case RADE_REMOTE_EQ_GAIN:    rade_glue_set_eq_gain(b2, value / 10.0f); break;
+  case RADE_REMOTE_FIT_FILTER: rade_glue_fit_filter(); break;
+  case RADE_REMOTE_QUICK_TUNE: rade_glue_quick_tune(b2); break;
+  case RADE_REMOTE_CALLSIGN: {
+    char call[17];
+    memcpy(call, text, 16);           // not necessarily terminated on the wire
+    call[16] = 0;
+    rade_glue_set_callsign(call);
+  }
+  break;
+  default:
+    t_print("%s: unknown RADE command %d\n", __func__, what);
+    break;
+  }
+}
+
+static uint16_t to_s16(float v) {
+  long i = lroundf(v);
+  if (i > 32767) { i = 32767; }
+  if (i < -32768) { i = -32768; }
+  return to_16((uint16_t)(int16_t) i);
+}
+
+// server: state and settings for the client (with the periodic data, GTK thread)
+void rade_glue_fill_remote(RADE_DATA *d) {
+  memset(d, 0, sizeof(*d));
+  int running = rade_engine_is_running();
+  int flags = (atomic_load(&rx_enabled) ? RADE_FLAG_RX : 0)
+              | (atomic_load(&tx_armed) ? RADE_FLAG_TX : 0)
+              | (atomic_load(&denoiser) ? RADE_FLAG_DENOISER : 0)
+              | (atomic_load(&leveler) ? RADE_FLAG_LEVELER : 0)
+              | (atomic_load(&compressor) ? RADE_FLAG_COMPR : 0)
+              | (atomic_load(&eq) ? RADE_FLAG_EQ : 0)
+              | (atomic_load(&mute_analog) ? RADE_FLAG_MUTE : 0)
+              | (atomic_load(&squelch_gate) ? RADE_FLAG_SQUELCH : 0)
+              | (atomic_load(&filter_wide) ? RADE_FLAG_WIDE : 0)
+              | (running ? RADE_FLAG_RUNNING : 0);
+  d->flags = to_16(flags);
+  if (running) {
+    rade_engine_stats_t st;
+    rade_engine_get_stats(&st);
+    d->eoo_count = to_32((int) st.eoo_count);
+    d->dropped = to_32((int) st.dropped);
+    d->snr = to_s16(10.0f * st.snr_db);
+    d->foff = to_s16(10.0f * st.foff_hz);
+    d->sync = st.sync ? 1 : 0;
+    float lv = st.level < 0.0f ? 0.0f : (st.level > 1.0f ? 1.0f : st.level);
+    d->level = (uint8_t) lroundf(255.0f * lv);
+  }
+  for (int i = 0; i < 4; i++) { d->eq_gain[i] = to_16((uint16_t)(int16_t) atomic_load(&eq_gain[i])); }
+  g_strlcpy(d->callsign, rade_callsign, sizeof(d->callsign));
+  call_pump();
+  g_mutex_lock(&call_mutex);
+  int n = call_n < RADE_REMOTE_CALLS ? call_n : RADE_REMOTE_CALLS;
+  d->call_n = n;
+  for (int i = 0; i < n; i++) {
+    memcpy(d->calls[i], call_hist[i], 9);
+    d->call_snr[i] = to_s16(10.0f * call_snr[i]);
+  }
+  g_mutex_unlock(&call_mutex);
+}
+
+// client: the server's state (INFO_RADE, GTK thread)
+void rade_glue_client_update(const RADE_DATA *d) {
+  int flags = from_16(d->flags);
+  remote_running = (flags & RADE_FLAG_RUNNING) != 0;
+  remote_stats.sync = d->sync;
+  remote_stats.snr_db = (int16_t) from_16(d->snr) / 10.0f;
+  remote_stats.foff_hz = (int16_t) from_16(d->foff) / 10.0f;
+  remote_stats.level = d->level / 255.0f;
+  remote_stats.eoo_count = (uint32_t) from_32(d->eoo_count);
+  remote_stats.dropped = (uint32_t) from_32(d->dropped);
+  g_mutex_lock(&call_mutex);
+  call_n = d->call_n < RADE_GLUE_HISTORY ? d->call_n : RADE_GLUE_HISTORY;
+  for (int i = 0; i < call_n; i++) {
+    memcpy(call_hist[i], d->calls[i], 9);
+    call_hist[i][8] = 0;
+    call_snr[i] = (int16_t) from_16(d->call_snr[i]) / 10.0f;
+  }
+  g_mutex_unlock(&call_mutex);
+  if (g_get_monotonic_time() < remote_hold) { return; }   // a local change is on its way
+  atomic_store(&rx_enabled, (flags & RADE_FLAG_RX) != 0);
+  atomic_store(&tx_armed, (flags & RADE_FLAG_TX) != 0);
+  atomic_store(&denoiser, (flags & RADE_FLAG_DENOISER) != 0);
+  atomic_store(&leveler, (flags & RADE_FLAG_LEVELER) != 0);
+  atomic_store(&compressor, (flags & RADE_FLAG_COMPR) != 0);
+  atomic_store(&eq, (flags & RADE_FLAG_EQ) != 0);
+  atomic_store(&mute_analog, (flags & RADE_FLAG_MUTE) != 0);
+  atomic_store(&squelch_gate, (flags & RADE_FLAG_SQUELCH) != 0);
+  atomic_store(&filter_wide, (flags & RADE_FLAG_WIDE) != 0);
+  for (int i = 0; i < 4; i++) { atomic_store(&eq_gain[i], (int16_t) from_16(d->eq_gain[i])); }
+  char call[17];
+  memcpy(call, d->callsign, 16);
+  call[16] = 0;
+  g_strlcpy(rade_callsign, call, sizeof(rade_callsign));
+}
 
 int rade_glue_callsign_count(void) { call_pump(); return call_n; }
 

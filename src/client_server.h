@@ -152,6 +152,8 @@ enum _header_type_enum {
 #ifdef IFPAN
   CMD_IFPAN,                 // piHPSDR-IF: client -> server, b1 = IFPAN_REMOTE_*, b2 = value
   INFO_IFPAN,                // piHPSDR-IF: server -> client, Kenwood state (IFPAN_DATA)
+  CMD_RADE,                  // piHPSDR-IF: client -> server, RADE menu action (RADE_COMMAND)
+  INFO_RADE,                 // piHPSDR-IF: server -> client, RADE state (RADE_DATA)
 #endif
   CLIENT_SERVER_COMMANDS,
 };
@@ -161,7 +163,7 @@ enum _header_type_enum {
 // piHPSDR-IF has its own protocol version: an IF panadapter server and a
 // plain piHPSDR client (or the other way round) refuse each other.
 //
-#define CLIENT_SERVER_VERSION 0x013100F2 // 32-bit version number
+#define CLIENT_SERVER_VERSION 0x013100F3 // 32-bit version number
 #else
 #define CLIENT_SERVER_VERSION 0x01310001 // 32-bit version number
 #endif
@@ -853,6 +855,67 @@ enum {
   IFPAN_REMOTE_ATU,          // toggle
   IFPAN_REMOTE_ATU_TUNE,     // start / stop a tuning cycle
 };
+
+//
+// RADE (piHPSDR-IF): the RADE engine runs on the server (next to the radio).
+// INFO_RADE (server -> client, UDP with the periodic data) carries its
+// state and settings for the client's RADE menu; CMD_RADE (client ->
+// server, TCP) carries the menu's actions. Signed values travel as int16
+// in uint16 fields.
+//
+#define RADE_REMOTE_CALLS 8
+typedef struct __attribute__((__packed__)) _rade_data {
+  HEADER header;
+  //
+  uint32_t eoo_count;
+  uint32_t dropped;
+  //
+  uint16_t flags;            // RADE_FLAG_*
+  uint16_t snr;              // dB * 10
+  uint16_t foff;             // Hz * 10
+  uint16_t eq_gain[4];       // dB * 10
+  uint16_t call_snr[RADE_REMOTE_CALLS];   // dB * 10
+  //
+  uint8_t sync;
+  uint8_t level;             // 0 .. 255
+  uint8_t call_n;
+  uint8_t spare;
+  char callsign[16];         // own callsign (EOO)
+  char calls[RADE_REMOTE_CALLS][9];       // received callsigns, newest first
+} RADE_DATA;
+
+enum {
+  RADE_FLAG_RX       = 0x0001,
+  RADE_FLAG_TX       = 0x0002,
+  RADE_FLAG_DENOISER = 0x0004,
+  RADE_FLAG_LEVELER  = 0x0008,
+  RADE_FLAG_COMPR    = 0x0010,
+  RADE_FLAG_EQ       = 0x0020,
+  RADE_FLAG_MUTE     = 0x0040,
+  RADE_FLAG_SQUELCH  = 0x0080,
+  RADE_FLAG_WIDE     = 0x0100,
+  RADE_FLAG_RUNNING  = 0x0200,
+};
+
+typedef struct __attribute__((__packed__)) _rade_command {
+  HEADER header;             // b1 = RADE_REMOTE_*, b2 = value / band, s1 = EQ gain (dB * 10)
+  char text[16];             // RADE_REMOTE_CALLSIGN
+} RADE_COMMAND;
+
+enum {
+  RADE_REMOTE_RX = 1,        // b2: on / off
+  RADE_REMOTE_TX,
+  RADE_REMOTE_DENOISER,
+  RADE_REMOTE_LEVELER,
+  RADE_REMOTE_COMPRESSOR,
+  RADE_REMOTE_EQ,
+  RADE_REMOTE_MUTE,
+  RADE_REMOTE_SQUELCH,
+  RADE_REMOTE_EQ_GAIN,       // b2: band, s1: gain
+  RADE_REMOTE_CALLSIGN,      // text
+  RADE_REMOTE_FIT_FILTER,    // toggle wide / narrow
+  RADE_REMOTE_QUICK_TUNE,    // b2: index
+};
 #endif
 
 typedef struct __attribute__((__packed__)) _patrim_data {
@@ -1128,6 +1191,7 @@ extern void send_pong(int s, int time);
 extern void send_lock(int s, int lock);
 #ifdef IFPAN
 extern void send_ifpan(int s, int what, int value);
+extern void send_rade(int s, int what, int b2, int value, const char *text);
 #endif
 extern void send_memory_data(int sock, int index);
 extern void send_meter(int s, int smetermode, int txmetermode, int alcmode);

@@ -67,6 +67,9 @@ extern int clock_nanosleep(clockid_t __clock_id, int __flags,
   #include "ifpan.h"
   #include "mic_nr.h"
 #endif
+#ifdef RADE
+  #include "rade_glue.h"
+#endif
 #include "waterfall.h"
 
 int cl_sock_tcp = -1;
@@ -623,6 +626,15 @@ static int client_info_ifpan(gpointer ptr) {
   g_free(ptr);
   return G_SOURCE_REMOVE;
 }
+
+#ifdef RADE
+// piHPSDR-IF: the server's RADE state, for the client's RADE menu
+static int client_info_rade(gpointer ptr) {
+  rade_glue_client_update((const RADE_DATA *)ptr);
+  g_free(ptr);
+  return G_SOURCE_REMOVE;
+}
+#endif
 #endif
 
 static int client_info_display(gpointer ptr) {
@@ -811,6 +823,12 @@ gpointer client_udp_thread(gpointer arg) {
       g_idle_add(client_info_ifpan, buffer);
       buffer = g_new(char, 4096);
       break;
+#ifdef RADE
+    case INFO_RADE:
+      g_idle_add(client_info_rade, buffer);
+      buffer = g_new(char, 4096);
+      break;
+#endif
 #endif
     case INFO_PS:
       if (transmitter != NULL) {

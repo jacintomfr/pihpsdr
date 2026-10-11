@@ -77,6 +77,9 @@
 #endif
 #include "store.h"
 #include "vfo.h"
+#ifdef RADE
+  #include "rade_glue.h"
+#endif
 #ifdef IFPAN
   #include "ifpan.h"
 #endif
@@ -199,6 +202,19 @@ static int send_periodic_data(gpointer arg) {
              (struct sockaddr *)&remoteclient.address, sizeof(remoteclient.address))  < 0) {
     perror("IFPANDAT:UDP:SEND");
   }
+#ifdef RADE
+  //
+  // RADE engine state and settings for the client's RADE menu
+  //
+  RADE_DATA rade_data;
+  rade_glue_fill_remote(&rade_data);
+  SYNC(rade_data.header.sync);
+  rade_data.header.data_type = to_16(INFO_RADE);
+  if (sendto(remoteclient.sock_udp, &rade_data, sizeof(RADE_DATA), 0,
+             (struct sockaddr *)&remoteclient.address, sizeof(remoteclient.address))  < 0) {
+    perror("RADEDAT:UDP:SEND");
+  }
+#endif
 #endif
   //
   // if sending the data failed due to an interrupted connection,
@@ -564,6 +580,19 @@ static void server_loop(void) {
     int data_type = from_16(header.data_type);
     //t_print("%s: received header: type=%d\n", __func__, data_type);
     switch (data_type) {
+#ifdef IFPAN
+    case CMD_RADE: {
+      // the client's RADE menu (consumed also by a build without RADE)
+      RADE_COMMAND *command = g_new(RADE_COMMAND, 1);
+      command->header = header;
+      if (recv_tcp(remoteclient.sock_tcp, (char *)command + sizeof(HEADER), sizeof(RADE_COMMAND) - sizeof(HEADER)) > 0) {
+        g_idle_add(server_command, command);
+      } else {
+        g_free(command);
+      }
+    }
+    break;
+#endif
     case INFO_BAND: {
       BAND_DATA *command = g_new(BAND_DATA, 1);
       command->header = header;
@@ -1275,6 +1304,12 @@ static int server_command(gpointer data) {
   case CMD_IFPAN:
     // piHPSDR-IF: a Kenwood action or IF panadapter option from the client
     ifpan_remote_command(header->b1, header->b2);
+    break;
+  case CMD_RADE:
+#ifdef RADE
+    rade_glue_remote_command(header->b1, header->b2, (int)(int16_t) from_16(header->s1),
+                             ((RADE_COMMAND *)data)->text);
+#endif
     break;
 #endif
   case INFO_BAND: {

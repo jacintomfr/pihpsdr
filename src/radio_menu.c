@@ -157,6 +157,15 @@ static void follow_mode_cb(GtkWidget *widget, gpointer data) {
   ifpan_set_follow_mode(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)));
 }
 
+// these go through ifpan.c so that a client passes them to the server
+static void cat_write_cb(GtkWidget *widget, gpointer data) {
+  ifpan_set_cat_write(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)));
+}
+
+static void tx_mute_cb(GtkWidget *widget, gpointer data) {
+  ifpan_set_tx_mute(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)));
+}
+
 //
 // CAT link: rigctld or Kenwood over TCP (address "host:port"); a change
 // makes the CAT thread reconnect at once
@@ -926,7 +935,7 @@ void radio_menu(GtkWidget *parent) {
     gtk_widget_set_halign(Btn, GTK_ALIGN_END);
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (Btn), ifpan_cat_write);
     gtk_grid_attach(GTK_GRID(grid), Btn, 5, row, 2, 1);
-    g_signal_connect(Btn, "toggled", G_CALLBACK(toggle_cb), &ifpan_cat_write);
+    g_signal_connect(Btn, "toggled", G_CALLBACK(cat_write_cb), NULL);
     row++;
     // receiver mode and Kenwood mode kept the same, both ways (USB, LSB, CW, ...)
     Btn = gtk_check_button_new_with_label("Sync mode with TS");
@@ -940,7 +949,7 @@ void radio_menu(GtkWidget *parent) {
     gtk_widget_set_halign(Btn, GTK_ALIGN_END);
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (Btn), ifpan_tx_mute);
     gtk_grid_attach(GTK_GRID(grid), Btn, 5, row, 2, 1);
-    g_signal_connect(Btn, "toggled", G_CALLBACK(toggle_cb), &ifpan_tx_mute);
+    g_signal_connect(Btn, "toggled", G_CALLBACK(tx_mute_cb), NULL);
     row++;
     //
     // CAT link to the Kenwood: rigctld, or Kenwood CAT over TCP straight to
@@ -964,6 +973,11 @@ void radio_menu(GtkWidget *parent) {
     g_signal_connect(cat_addr_entry, "focus-out-event", G_CALLBACK(cat_addr_focus_cb), NULL);
     g_signal_connect(cat_addr_entry, "destroy", G_CALLBACK(cat_addr_destroy_cb), NULL);
     row++;
+    if (radio_is_remote) {
+      // client: the CAT link to the Kenwood belongs to the server
+      gtk_widget_set_sensitive(cat_combo, FALSE);
+      gtk_widget_set_sensitive(cat_addr_entry, FALSE);
+    }
 #endif
     for (int id = 0; id < RECEIVERS; id++) {
       if (radio->soapy.rx[id].has_automatic_gain) {

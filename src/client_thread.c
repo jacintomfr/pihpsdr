@@ -63,6 +63,9 @@ extern int clock_nanosleep(clockid_t __clock_id, int __flags,
 #include "transmitter.h"
 #include "tx_panadapter.h"
 #include "vfo.h"
+#ifdef IFPAN
+  #include "ifpan.h"
+#endif
 #include "waterfall.h"
 
 int cl_sock_tcp = -1;
@@ -570,6 +573,38 @@ void start_vfo_timer(void) {
 //
 ////////////////////////////////////////////////////////////////////////////
 
+#ifdef IFPAN
+//
+// piHPSDR-IF: the server's Kenwood state and IF panadapter options, so that
+// the client shows (and its menus start from) the same as the server
+//
+static int client_info_ifpan(gpointer ptr) {
+  const IFPAN_DATA *data = (IFPAN_DATA *)ptr;
+  // the VFO bar shows these: redraw it when one of them changes
+  int changed = ifpan_cat_connected != data->cat_connected
+                || ifpan_kenwood_mode != (int)data->kenwood_mode - 1
+                || ifpan_kenwood_tx != data->tx
+                || ifpan_kenwood_preamp != (int)data->preamp - 1
+                || ifpan_kenwood_att != (int)data->att - 1;
+  ifpan_kenwood_smeter = (int)from_16(data->smeter) - 1000;
+  ifpan_cat_connected = data->cat_connected;
+  ifpan_kenwood_mode = (int)data->kenwood_mode - 1;
+  ifpan_kenwood_tx = data->tx;
+  ifpan_kenwood_pwr = (int)data->pwr - 1;
+  ifpan_kenwood_swr = (int)data->swr - 1;
+  ifpan_kenwood_alc = (int)data->alc - 1;
+  ifpan_kenwood_preamp = (int)data->preamp - 1;
+  ifpan_kenwood_att = (int)data->att - 1;
+  ifpan_follow_vfo = data->follow_vfo;
+  ifpan_cat_write = data->cat_write;
+  ifpan_tx_mute = data->tx_mute;
+  ifpan_follow_mode = data->follow_mode;
+  if (changed) { g_idle_add(ext_vfo_update, NULL); }
+  g_free(ptr);
+  return G_SOURCE_REMOVE;
+}
+#endif
+
 static int client_info_display(gpointer ptr) {
   const DISPLAY_DATA *data  = (DISPLAY_DATA *)ptr;
   adc[0].overload = data->adc0_overload;
@@ -751,6 +786,12 @@ gpointer client_udp_thread(gpointer arg) {
       g_idle_add(client_info_display, buffer);
       buffer = g_new(char, 4096);
       break;
+#ifdef IFPAN
+    case INFO_IFPAN:
+      g_idle_add(client_info_ifpan, buffer);
+      buffer = g_new(char, 4096);
+      break;
+#endif
     case INFO_PS:
       if (transmitter != NULL) {
         const PS_DATA *psdata = (PS_DATA *)buffer;

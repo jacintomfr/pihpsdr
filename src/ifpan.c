@@ -56,6 +56,7 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 
+#include "client_server.h"
 #include "ext.h"
 #include "ifpan.h"
 #include "main.h"
@@ -132,6 +133,7 @@ int              ifpan_kenwood_preamp = -1;   // TS preamp read by CAT: 0 / 1, -
 
 // toolbar PRE (main thread): toggle the Kenwood preamp
 void ifpan_preamp_toggle(void) {
+  if (radio_is_remote) { send_ifpan(cl_sock_tcp, IFPAN_REMOTE_PREAMP, 0); return; }
   if (!ifpan_cat_connected) { return; }
   g_mutex_lock(&cat_mutex);
   preamp_request = (ifpan_kenwood_preamp == 1) ? 0 : 1;
@@ -143,6 +145,7 @@ int              ifpan_kenwood_att = -1;      // TS attenuator read by CAT: 0 / 
 
 // toolbar ATT (main thread): toggle the Kenwood attenuator
 void ifpan_att_toggle(void) {
+  if (radio_is_remote) { send_ifpan(cl_sock_tcp, IFPAN_REMOTE_ATT, 0); return; }
   if (!ifpan_cat_connected) { return; }
   g_mutex_lock(&cat_mutex);
   att_request = (ifpan_kenwood_att == 1) ? 0 : 1;
@@ -257,6 +260,7 @@ static int kenwood_mode_index(int mode) {
 // Radio menu: switching "Follow TS mode" on applies the Kenwood mode at once
 void ifpan_set_follow_mode(int on) {
   ifpan_follow_mode = on;
+  if (radio_is_remote) { send_ifpan(cl_sock_tcp, IFPAN_REMOTE_FOLLOW_MODE, on); return; }
   if (on && ifpan_kenwood_mode >= 0) { mode_apply(GINT_TO_POINTER(ifpan_kenwood_mode)); }
 }
 
@@ -281,6 +285,7 @@ static gboolean cat_apply(gpointer data) {
 //
 void ifpan_set_follow(int on) {
   ifpan_follow_vfo = on;
+  if (radio_is_remote) { send_ifpan(cl_sock_tcp, IFPAN_REMOTE_FOLLOW_VFO, on); return; }
   if (on && receivers > 0 && receiver[0] != NULL && vfo[VFO_A].ctun) {
     vfo[VFO_A].ctun_frequency = vfo[VFO_A].frequency;
     rx_frequency_changed(receiver[0]);
@@ -372,6 +377,12 @@ void ifpan_cat_reconnect(void) {
 // PTT request from the toolbar (main thread): 1 TX, 0 RX, -1 toggle (MOX)
 //
 void ifpan_ptt(int on) {
+  if (radio_is_remote) {
+    // the server keys the Kenwood (and decides a MOX toggle from its own state)
+    if (on < 0) { send_ifpan(cl_sock_tcp, IFPAN_REMOTE_MOX, 0); }
+    else        { send_ifpan(cl_sock_tcp, IFPAN_REMOTE_PTT, on); }
+    return;
+  }
   if (on < 0) { on = !(ifpan_kenwood_tx || ptt_keyed); }
   if (on && !ifpan_cat_connected) {
     t_print("%s: TX refused, no CAT link to the Kenwood\n", __func__);
@@ -388,11 +399,48 @@ void ifpan_ptt(int on) {
 // Sent like a click with two-way CAT; the display then re-centres on it.
 //
 void ifpan_ts_here(void) {
+  if (radio_is_remote) { send_ifpan(cl_sock_tcp, IFPAN_REMOTE_TS_HERE, 0); return; }
   if (!ifpan_cat_connected || receivers < 1 || receiver[0] == NULL) { return; }
   long long f = vfo[VFO_A].ctun ? vfo[VFO_A].ctun_frequency : vfo[VFO_A].frequency;
   g_mutex_lock(&cat_mutex);
   cat_set_target = f;
   g_mutex_unlock(&cat_mutex);
+}
+
+//
+// Radio menu options without side effects: on a client they are passed
+// to the server (which owns the Kenwood); the server sends the current
+// values back with its periodic data.
+//
+void ifpan_set_cat_write(int on) {
+  ifpan_cat_write = on;
+  if (radio_is_remote) { send_ifpan(cl_sock_tcp, IFPAN_REMOTE_CAT_WRITE, on); }
+}
+
+void ifpan_set_tx_mute(int on) {
+  ifpan_tx_mute = on;
+  if (radio_is_remote) { send_ifpan(cl_sock_tcp, IFPAN_REMOTE_TX_MUTE, on); }
+}
+
+//
+// Server side of client/server: a Kenwood action or IF panadapter option
+// sent by the client (CMD_IFPAN), carried out here as if done locally
+//
+void ifpan_remote_command(int what, int value) {
+  switch (what) {
+  case IFPAN_REMOTE_PTT:         ifpan_ptt(value ? 1 : 0); break;
+  case IFPAN_REMOTE_MOX:         ifpan_ptt(-1); break;
+  case IFPAN_REMOTE_TS_HERE:     ifpan_ts_here(); break;
+  case IFPAN_REMOTE_PREAMP:      ifpan_preamp_toggle(); break;
+  case IFPAN_REMOTE_ATT:         ifpan_att_toggle(); break;
+  case IFPAN_REMOTE_FOLLOW_VFO:  ifpan_set_follow(value); break;
+  case IFPAN_REMOTE_CAT_WRITE:   ifpan_set_cat_write(value); break;
+  case IFPAN_REMOTE_TX_MUTE:     ifpan_set_tx_mute(value); break;
+  case IFPAN_REMOTE_FOLLOW_MODE: ifpan_set_follow_mode(value); break;
+  default:
+    t_print("%s: unknown IF panadapter command %d\n", __func__, what);
+    break;
+  }
 }
 
 //
@@ -1211,5 +1259,17 @@ void ifpan_start(void) {
   radio->frequency_max = IFPAN_RADIO_FMAX;
   cat_thread_id = g_thread_new("ifpan_cat", cat_thread, NULL);
   g_timeout_add(50, ui_watch, NULL);
+  win_restore();
+}
+
+//
+// Client of a piHPSDR-IF server: no CAT link of its own (the server owns
+// the Kenwood and sends its state, see INFO_IFPAN); only the window
+// position is remembered, as on the server.
+//
+void ifpan_client_start(void) {
+  static int started = 0;
+  if (started) { return; }
+  started = 1;
   win_restore();
 }

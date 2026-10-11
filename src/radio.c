@@ -3467,6 +3467,9 @@ int radio_client_start(gpointer data) {
   send_screen(cl_sock_tcp, rx_stack_horizontal, display_width[display_size]);
   radio_create_visual();
   radio_reconfigure_screen();
+#ifdef IFPAN
+  ifpan_client_start();   // window position (the server owns the Kenwood CAT link)
+#endif
 #ifdef GPIO
   gpio_set_orion_options();
 #endif

@@ -149,10 +149,22 @@ enum _header_type_enum {
   INFO_TXAUDIO,
   INFO_TXAUDIO_OPUS,
   INFO_VFO,
+#ifdef IFPAN
+  CMD_IFPAN,                 // piHPSDR-IF: client -> server, b1 = IFPAN_REMOTE_*, b2 = value
+  INFO_IFPAN,                // piHPSDR-IF: server -> client, Kenwood state (IFPAN_DATA)
+#endif
   CLIENT_SERVER_COMMANDS,
 };
 
+#ifdef IFPAN
+//
+// piHPSDR-IF has its own protocol version: an IF panadapter server and a
+// plain piHPSDR client (or the other way round) refuse each other.
+//
+#define CLIENT_SERVER_VERSION 0x013100F1 // 32-bit version number
+#else
 #define CLIENT_SERVER_VERSION 0x01310001 // 32-bit version number
+#endif
 #define SPECTRUM_DATA_SIZE 4096          // Maximum width of a panadapter
 #define AUDIO_DATA_SIZE 512              // 512 (mono) samples
 
@@ -793,6 +805,45 @@ typedef struct __attribute__((__packed__)) _ps_data {
   uint16_t attenuation;
 } PS_DATA;
 
+#ifdef IFPAN
+//
+// piHPSDR-IF: Kenwood state and IF panadapter options, sent by the server
+// with the periodic data (UDP, 150 ms) so that the client shows the same.
+// Signed values are sent with an offset (-1 / -999 = unknown).
+//
+typedef struct __attribute__((__packed__)) _ifpan_data {
+  HEADER header;
+  //
+  uint16_t smeter;           // ifpan_kenwood_smeter + 1000
+  //
+  uint8_t cat_connected;
+  uint8_t kenwood_mode;      // ifpan_kenwood_mode + 1
+  uint8_t tx;
+  uint8_t pwr;               // raw TX meters + 1
+  uint8_t swr;
+  uint8_t alc;
+  uint8_t preamp;            // + 1
+  uint8_t att;               // + 1
+  uint8_t follow_vfo;
+  uint8_t cat_write;
+  uint8_t tx_mute;
+  uint8_t follow_mode;
+} IFPAN_DATA;
+
+// CMD_IFPAN: b1 = what, b2 = value
+enum {
+  IFPAN_REMOTE_PTT = 1,      // b2: 1 TX, 0 RX
+  IFPAN_REMOTE_MOX,          // toggle
+  IFPAN_REMOTE_TS_HERE,
+  IFPAN_REMOTE_PREAMP,       // toggle
+  IFPAN_REMOTE_ATT,          // toggle
+  IFPAN_REMOTE_FOLLOW_VFO,   // b2: option value
+  IFPAN_REMOTE_CAT_WRITE,
+  IFPAN_REMOTE_TX_MUTE,
+  IFPAN_REMOTE_FOLLOW_MODE,
+};
+#endif
+
 typedef struct __attribute__((__packed__)) _patrim_data {
   HEADER header;
   //
@@ -1064,6 +1115,9 @@ extern void send_phrot(int s);
 extern void send_ping(int s);
 extern void send_pong(int s, int time);
 extern void send_lock(int s, int lock);
+#ifdef IFPAN
+extern void send_ifpan(int s, int what, int value);
+#endif
 extern void send_memory_data(int sock, int index);
 extern void send_meter(int s, int smetermode, int txmetermode, int alcmode);
 extern void send_micgain(int s, double gain);

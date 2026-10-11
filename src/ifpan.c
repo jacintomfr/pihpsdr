@@ -688,6 +688,9 @@ static gpointer cat_thread(gpointer data) {
   int trouble = 0;                    // a CAT problem has been reported (log once)
   int mode_count = 0;                 // polls until the next mode read (0: now)
   int smeter_count = 0;               // polls until the next S-meter read
+  int want_mode = -1;                 // mode still to be set on the Kenwood (band change)
+  int want_tries = 0;
+  gint64 want_at = 0;
   t_print("%s: CAT via %s (%s:%d), IF=%lld Hz\n", __func__, cat_name(),
           ifpan_cat_backend == IFPAN_CAT_KENWOOD ? ifpan_kenwood_host : ifpan_rigctld_host,
           ifpan_cat_backend == IFPAN_CAT_KENWOOD ? ifpan_kenwood_port : ifpan_rigctld_port, ifpan_if_freq);
@@ -758,15 +761,27 @@ static gpointer cat_thread(gpointer data) {
       hold_until = g_get_monotonic_time() + CAT_SET_HOLD_US;
     }
     //
-    // piHPSDR-IF band change -> Kenwood mode (index into ifpan_mode_names[])
+    // piHPSDR-IF band change -> Kenwood mode (index into ifpan_mode_names[]).
+    // A mode command sent right after the band-changing frequency command
+    // got lost (the TS-570 is busy switching bands and recalls its own band
+    // memory), so it is sent 300 ms later, read back, and repeated if it did
+    // not take (up to 5 times).
     //
-    int setmode;
     g_mutex_lock(&cat_mutex);
-    setmode = cat_set_mode;
-    cat_set_mode = -1;
+    if (cat_set_mode >= 0) {
+      want_mode = cat_set_mode;
+      want_tries = 0;
+      want_at = g_get_monotonic_time() + 300000;
+      cat_set_mode = -1;
+    }
     g_mutex_unlock(&cat_mutex);
-    if (setmode >= 0) {
-      if (be_set_mode(sock, setmode) < 0) {
+    if (want_mode >= 0 && g_get_monotonic_time() >= want_at) {
+      int m = be_set_mode(sock, want_mode);
+      if (m == 0) {
+        usleep(50000);
+        m = be_get_mode(sock);        // read back: index, -1 link lost, -2/-3 no / other answer
+      }
+      if (m == -1) {
         t_print("%s: %s connection lost\n", __func__, cat_name());
         ifpan_cat_connected = 0;
         g_idle_add(ext_vfo_update, NULL);
@@ -774,7 +789,13 @@ static gpointer cat_thread(gpointer data) {
         sock = -1;
         continue;
       }
-      mode_count = 0;                 // read it back soon (TS readout)
+      if (m == want_mode || ++want_tries >= 5) {
+        if (m != want_mode) { t_print("%s: Kenwood did not take mode %s\n", __func__, ifpan_mode_names[want_mode]); }
+        want_mode = -1;
+        mode_count = 0;               // read it back now (TS readout)
+      } else {
+        want_at = g_get_monotonic_time() + 300000;
+      }
     }
     //
     // piHPSDR-IF PTT (toolbar PTT / MOX) -> Kenwood

@@ -268,6 +268,7 @@ ACTION_TABLE ActionTable[] = {
   {ZOOM_PLUS,           "Zoom +",               "ZOOM+",        AT_BTN},
 #ifdef IFPAN
   {IFPAN_TS_HERE,       "TS to RX freq",        "TS here",      AT_BTN},
+  {IFPAN_TS_ATT,        "TS Atten\nOn/Off",     "ATT",          AT_BTN},
 #endif
   {ACTIONS,             "None",                 "NONE",         AT_NONE}
 };
@@ -1089,6 +1090,9 @@ int process_action(gpointer data) {
 #ifdef IFPAN
   case IFPAN_TS_HERE:
     if (a->mode == PRESSED) { ifpan_ts_here(); }
+    break;
+  case IFPAN_TS_ATT:
+    if (a->mode == PRESSED) { ifpan_att_toggle(); }
     break;
 #endif
   case MOX:

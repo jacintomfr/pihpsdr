@@ -71,6 +71,8 @@ extern void      ifpan_ts_here(void); // toolbar "TS here": Kenwood to the RX fr
 extern void      ifpan_band_changed(long long f, int mode);   // band menu: Kenwood to the new band + mode
 extern int       ifpan_kenwood_preamp;                         // TS preamp: 0 / 1, -1 unknown
 extern void      ifpan_preamp_toggle(void);                    // toolbar PRE
+extern int       ifpan_kenwood_att;                            // TS attenuator: 0 / 1, -1 unknown
+extern void      ifpan_att_toggle(void);                       // toolbar ATT
 
 //
 // TS-570 frequency coverage: the band menu and frequency checks use this

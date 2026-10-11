@@ -930,6 +930,7 @@ typedef struct {
 } IFPAN_DIAL;
 
 static int ifpan_pre_x = 0, ifpan_pre_y = 0;   // "PRE" (Kenwood preamp) position
+static int ifpan_att_x = 0, ifpan_att_y = 0;   // "ATT" (Kenwood attenuator) position
 
 static void ifpan_layout(cairo_t *cr, const VFO_BAR_LAYOUT *src, double width,
                          VFO_BAR_LAYOUT *dst, IFPAN_DIAL *dial) {
@@ -959,6 +960,7 @@ static void ifpan_layout(cairo_t *cr, const VFO_BAR_LAYOUT *src, double width,
     { &dst->eq_x,   &dst->eq_y,   "RxEQ" },
     { &dst->rit_x,  &dst->rit_y,  "RIT-9999" },              // as drawn for -9999 Hz
     { &ifpan_pre_x, &ifpan_pre_y, "PRE" },                   // Kenwood preamp
+    { &ifpan_att_x, &ifpan_att_y, "ATT" },                   // Kenwood attenuator
   };
   SLOT row3[] = {
     { &dst->lock_x, &dst->lock_y, "Locked" },
@@ -969,7 +971,7 @@ static void ifpan_layout(cairo_t *cr, const VFO_BAR_LAYOUT *src, double width,
   };
   struct { SLOT *s; int n; int y; } rows[3] = {
     { row1, 2, src->mode_y },
-    { row2, 7, (src->mode_y + src->lock_y) / 2 },
+    { row2, 8, (src->mode_y + src->lock_y) / 2 },
     { row3, 5, src->lock_y },
   };
   cairo_text_extents_t e;
@@ -1678,6 +1680,16 @@ void vfo_update(void) {
       cairo_set_source_rgba(cr, COLOUR_SHADE);
     }
     cairo_show_text(cr, "PRE");
+  }
+  // Kenwood attenuator (read by CAT; toolbar ATT switches it)
+  if (ifpan_att_x != 0) {
+    cairo_move_to(cr, ifpan_att_x, ifpan_att_y);
+    if (ifpan_cat_connected && ifpan_kenwood_att == 1) {
+      cairo_set_source_rgba(cr, COLOUR_ATTN);
+    } else {
+      cairo_set_source_rgba(cr, COLOUR_SHADE);
+    }
+    cairo_show_text(cr, "ATT");
   }
 #else
   if (vfl->cat_x != 0) {

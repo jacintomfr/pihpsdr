@@ -1294,6 +1294,7 @@ static gpointer cat_thread(gpointer data) {
   int sock = -1;
   long long hold_freq = 0;            // frequency just sent to the Kenwood
   gint64 hold_until = 0;              // until then, ignore other readings
+  int hold_resends = 0;               // times the target was sent again (dropped by the Kenwood)
   int trouble = 0;                    // a CAT problem has been reported (log once)
   int mode_count = 0;                 // polls until the next mode read (0: now)
   int smeter_count = 0;               // polls until the next S-meter read
@@ -1373,6 +1374,7 @@ static gpointer cat_thread(gpointer data) {
         continue;
       }
       hold_freq = target;
+      hold_resends = 0;
       hold_until = g_get_monotonic_time() + CAT_SET_HOLD_US;
     }
     //
@@ -1776,11 +1778,29 @@ static gpointer cat_thread(gpointer data) {
     if (hold_until != 0) {
       if (llabs(f - hold_freq) < 10) {
         hold_until = 0;
+        hold_resends = 0;
       } else if (g_get_monotonic_time() < hold_until) {
+        usleep(ifpan_poll_ms * 1000);
+        continue;
+      } else if (hold_resends < 3) {
+        //
+        // The Kenwood still is elsewhere: when piHPSDR-IF tunes fast (mouse
+        // wheel), the TS-570 drops commands that arrive while it is busy,
+        // and following its stale frequency made the display jump back and
+        // forth. Send the target again (up to 3 times) before following it.
+        //
+        hold_resends++;
+        if (be_set_freq(sock, hold_freq) < 0) {
+          close(sock);
+          sock = -1;
+          continue;
+        }
+        hold_until = g_get_monotonic_time() + CAT_SET_HOLD_US;
         usleep(ifpan_poll_ms * 1000);
         continue;
       } else {
         hold_until = 0;
+        hold_resends = 0;
       }
     }
     //

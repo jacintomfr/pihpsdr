@@ -2073,7 +2073,14 @@ int radio_client_set_mox(gpointer data) {
     if (state != radio_is_transmitting()) {
       rxtx(state);
     }
-    vox_cancel();  // remove time-out
+    //
+    // Remove a VOX time-out - except when the server only confirms the TX
+    // that this client's VOX has just requested: cancelling then cleared
+    // the hang count, so VOX never sent the RX request and MOX stayed on.
+    //
+    if (!(state && vox_triggered)) {
+      vox_cancel();
+    }
     mox = state;
     transmitter->tune = 0;
     g_idle_add(ext_vfo_update, NULL);

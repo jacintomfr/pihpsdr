@@ -335,6 +335,23 @@ void ifpan_ts_here(void) {
 }
 
 //
+// Band / band-stack chosen in piHPSDR-IF (main thread): the Kenwood is sent
+// to the new frequency, also with "Clicks tune the TS" off (choosing a
+// band is an explicit request). With "Follow TS mode", the receiver goes
+// back to the Kenwood mode (the band stack's own mode would not match the
+// radio, whose mode the frequency command does not change).
+//
+void ifpan_band_changed(long long f) {
+  if (!ifpan_cat_connected) { return; }
+  g_mutex_lock(&cat_mutex);
+  cat_set_target = f;
+  g_mutex_unlock(&cat_mutex);
+  if (ifpan_follow_mode && ifpan_kenwood_mode >= 0) {
+    g_idle_add(mode_apply, GINT_TO_POINTER(ifpan_kenwood_mode));
+  }
+}
+
+//
 // On exit: if piHPSDR-IF keyed the Kenwood, put it back to receive
 // (wait up to 1 s for the CAT thread to send it)
 //
@@ -942,6 +959,14 @@ static void win_restore(void) {
 
 void ifpan_start(void) {
   if (cat_thread_id != NULL) { return; }
+  //
+  // The SDR only ever receives the IF; the frequencies shown and tuned are
+  // the Kenwood's, so the band menu and the frequency checks use the
+  // TS-570 coverage instead of the SDR's (an RTL-SDR reports 24 MHz and up,
+  // which hid all HF bands).
+  //
+  radio->frequency_min = IFPAN_RADIO_FMIN;
+  radio->frequency_max = IFPAN_RADIO_FMAX;
   cat_thread_id = g_thread_new("ifpan_cat", cat_thread, NULL);
   g_timeout_add(50, ui_watch, NULL);
   win_restore();

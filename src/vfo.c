@@ -348,6 +348,10 @@ void vfo_id_band_changed(int id, int b) {
   // during vfo_vfos_changed ==> rx_vfo_changed ==> rx_frequency_changed
   //
   vfo_vfos_changed();
+#ifdef IFPAN
+  // the Kenwood goes to the new band (its VFO is the display centre)
+  if (id == VFO_A) { ifpan_band_changed(vfo[id].ctun ? vfo[id].ctun_frequency : vfo[id].frequency); }
+#endif
 }
 
 void vfo_bandstack_changed(int b) {
@@ -391,6 +395,9 @@ void vfo_id_bandstack_changed(int id, int b) {
     profiles_load_rxtx_profile(receiver[id]);
   }
   vfo_vfos_changed();
+#ifdef IFPAN
+  if (id == VFO_A) { ifpan_band_changed(vfo[id].ctun ? vfo[id].ctun_frequency : vfo[id].frequency); }
+#endif
 }
 
 void vfo_mode_changed(int m) {

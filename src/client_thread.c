@@ -615,6 +615,10 @@ static int client_info_ifpan(gpointer ptr) {
   ifpan_follow_mode = data->follow_mode;
   ifpan_kenwood_atu = (int)data->atu - 1;
   ifpan_kenwood_atu_tuning = data->atu_tuning;
+  ifpan_kenwood_pc = (int)data->ts_power - 1;
+  if (ifpan_kenwood_pc >= 0 && transmitter != NULL && ifpan_kenwood_pc != (int)(transmitter->drive + 0.5)) {
+    ifpan_power_apply(GINT_TO_POINTER(ifpan_kenwood_pc));
+  }
   if (changed) { g_idle_add(ext_vfo_update, NULL); }
   g_free(ptr);
   return G_SOURCE_REMOVE;

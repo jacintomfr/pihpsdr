@@ -194,6 +194,7 @@ static int send_periodic_data(gpointer arg) {
   ifpan_data.follow_mode = ifpan_follow_mode;
   ifpan_data.atu = ifpan_kenwood_atu + 1;
   ifpan_data.atu_tuning = ifpan_kenwood_atu_tuning;
+  ifpan_data.ts_power = ifpan_kenwood_pc + 1;
   if (sendto(remoteclient.sock_udp, &ifpan_data, sizeof(IFPAN_DATA), 0,
              (struct sockaddr *)&remoteclient.address, sizeof(remoteclient.address))  < 0) {
     perror("IFPANDAT:UDP:SEND");

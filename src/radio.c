@@ -2634,11 +2634,13 @@ void radio_calc_drive_level(int tune) {
   }
 #ifdef IFPAN
   //
-  // IF panadapter: the TX output is audio for the Kenwood; Drive (0..100)
-  // scales it directly, as for the Penelope: the level at the ACC2 input
+  // IF panadapter: the TX output is audio for the Kenwood at a fixed level
+  // (set with the sound card's volume for the ACC2 input). Drive is the
+  // Kenwood's PWR setting by CAT (ifpan_set_power); only zero drive (e.g.
+  // SWR protection) also silences the audio.
   //
-  transmitter->drive_scale = 0.01 * (tune ? transmitter->tune_drive : transmitter->drive);
-  transmitter->drive_iscal = (transmitter->drive_scale > 0.0) ? 0.9999 / transmitter->drive_scale : 1.0;
+  transmitter->drive_scale = (transmitter->drive < 0.5) ? 0.0 : 1.0;
+  transmitter->drive_iscal = 1.0;
   transmitter->do_scale = 1;
 #endif
   schedule_high_priority();
@@ -2933,6 +2935,10 @@ void radio_set_drive(double value) {
   }
   transmitter->drive = value;
   g_idle_add(sliders_drive, GINT_TO_POINTER(100 * suppress_popup_sliders));
+#ifdef IFPAN
+  ifpan_set_power(value);           // the slider is the Kenwood's PWR setting
+  if (!radio_is_remote) { radio_calc_drive_level(0); }
+#endif
   if (radio_is_remote) {
     send_drive(cl_sock_tcp, value);
     return;

@@ -55,6 +55,14 @@ static int remote_send(int what, int b2, int value, const char *text) {
   return 1;
 }
 
+/* server: mode / filter / TX filter changed here -> the client's VFO bar,
+ * filter and TX settings (piHPSDR only sends them for the client's own changes) */
+static void push_client(void) {
+#ifdef IFPAN
+  ifpan_push_vfo_to_client();
+#endif
+}
+
 #define RX_JITTER_CAP   48000   /* like rade_jitter in the Rust app */
 #define RX_JITTER_PRIME 960     /* 20 ms before (re)starting playback */
 #define TX_BLOCK        128     /* mic samples per engine call (2.7 ms) */
@@ -194,6 +202,7 @@ static void set_rx_enabled_int(int on, int force_mode) {
   if (on && force_mode) { ensure_digital_mode(); }
   tx_chain_force(atomic_load(&tx_armed));
   if (!on && force_mode) { restore_previous_mode(); }   /* after the TX values: the mode brings its own */
+  if (force_mode) { push_client(); }   /* server-made mode / TX filter changes: tell the client */
   /* active_receiver is still NULL while the properties are restored at startup */
   t_print("%s: rx_enabled=%d tx_armed=%d\n", __func__, atomic_load(&rx_enabled), atomic_load(&tx_armed));
 }
@@ -214,6 +223,7 @@ void rade_glue_set_tx_armed(int on) {
   engine_update();
   if (on) { ensure_digital_mode(); }
   tx_chain_force(atomic_load(&tx_armed));
+  push_client();
   t_print("%s: tx_armed=%d tx mode=%d\n", __func__, atomic_load(&tx_armed), vfo_get_tx_mode());
 }
 void rade_glue_set_squelch(int on) {
@@ -522,6 +532,7 @@ static void apply_fit_filter(void) {
   }
   vfo_id_filter_changed(id, filterVar1);
   fit_applied = 1;
+  push_client();
   g_idle_add(ext_vfo_update, NULL);
 }
 
@@ -550,6 +561,7 @@ void rade_glue_quick_tune(int i) {
   vfo_id_set_frequency(id, hz);
 #endif
   if (fit_applied) { apply_fit_filter(); }   // keep the fitted width, sign follows the mode
+  push_client();
   g_idle_add(ext_vfo_update, NULL);
 }
 

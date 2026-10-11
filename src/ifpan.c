@@ -59,6 +59,7 @@
 #include "audio.h"
 #include "client_server.h"
 #include "ext.h"
+#include "filter.h"
 #include "ifpan.h"
 #include "main.h"
 #include "message.h"
@@ -376,8 +377,26 @@ static gboolean mode_apply(gpointer data) {
     t_print("%s: Kenwood %s -> receiver %s\n", __func__, ifpan_mode_names[m], mode_string[to_mode[m]]);
     vfo_id_mode_changed(VFO_A, to_mode[m]);
     ui_last_mode = to_mode[m];        // came from the Kenwood: not to be sent back
+    ifpan_push_vfo_to_client();
   }
   return G_SOURCE_REMOVE;
+}
+
+//
+// Server: piHPSDR only tells a client about mode / filter changes the
+// client asked for itself. After changes made here (the Kenwood's mode,
+// RADE switching to DIGU / DIGL, Fit Filter, ...), the same data is sent
+// as after a client's mode change: VFOs, RX1, TX and the Var filters.
+//
+void ifpan_push_vfo_to_client(void) {
+  if (radio_is_remote || !remoteclient.running) { return; }
+  int m = vfo[VFO_A].mode;
+  send_filter_var(remoteclient.sock_tcp, m, filterVar1);
+  send_filter_var(remoteclient.sock_tcp, m, filterVar2);
+  send_vfo_data(remoteclient.sock_tcp, VFO_A);
+  send_vfo_data(remoteclient.sock_tcp, VFO_B);
+  send_rx_data(remoteclient.sock_tcp, 0);
+  if (transmitter != NULL) { send_tx_data(remoteclient.sock_tcp); }
 }
 
 //

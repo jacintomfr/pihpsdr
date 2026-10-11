@@ -161,6 +161,10 @@ static void get_info(char *DriverHost) {
   sample_rate = 768000;
   if (strcmp(driver, "rtlsdr") == 0) {
     sample_rate = 1536000;
+  } else if (strcmp(driver, "soapyMiri") == 0) {
+    // Mirics MSi2500 / MSi001 (SDRplay RSP1 and its clones) via libmirisdr:
+    // 1.3 MS/s is its lowest rate; 1536k is 14-bit there
+    sample_rate = 1536000;
   } else if (strcmp(driver, "radioberry") == 0) {
     sample_rate = 48000;
   }

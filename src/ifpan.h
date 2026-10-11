@@ -74,6 +74,10 @@ extern int       ifpan_kenwood_preamp;                         // TS preamp: 0 /
 extern void      ifpan_preamp_toggle(void);                    // toolbar PRE
 extern int       ifpan_kenwood_att;                            // TS attenuator: 0 / 1, -1 unknown
 extern void      ifpan_att_toggle(void);                       // toolbar ATT
+extern int       ifpan_kenwood_atu;                            // TS antenna tuner in line: 0 / 1, -1 unknown
+extern int       ifpan_kenwood_atu_tuning;                     // 1 while it is tuning
+extern void      ifpan_atu_toggle(void);                       // toolbar "ATU"
+extern void      ifpan_atu_tune(void);                         // toolbar "ATU tune"
 extern void      ifpan_set_cat_write(int on);                  // Radio menu "Clicks tune the TS"
 extern void      ifpan_set_tx_mute(int on);                    // Radio menu "Mute when TS in TX"
 extern void      ifpan_remote_command(int what, int value);    // server: CMD_IFPAN from a client

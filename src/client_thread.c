@@ -597,7 +597,9 @@ static int client_info_ifpan(gpointer ptr) {
                 || ifpan_kenwood_mode != (int)data->kenwood_mode - 1
                 || ifpan_kenwood_tx != data->tx
                 || ifpan_kenwood_preamp != (int)data->preamp - 1
-                || ifpan_kenwood_att != (int)data->att - 1;
+                || ifpan_kenwood_att != (int)data->att - 1
+                || ifpan_kenwood_atu != (int)data->atu - 1
+                || ifpan_kenwood_atu_tuning != data->atu_tuning;
   ifpan_kenwood_smeter = (int)from_16(data->smeter) - 1000;
   ifpan_cat_connected = data->cat_connected;
   ifpan_kenwood_mode = (int)data->kenwood_mode - 1;
@@ -611,6 +613,8 @@ static int client_info_ifpan(gpointer ptr) {
   ifpan_cat_write = data->cat_write;
   ifpan_tx_mute = data->tx_mute;
   ifpan_follow_mode = data->follow_mode;
+  ifpan_kenwood_atu = (int)data->atu - 1;
+  ifpan_kenwood_atu_tuning = data->atu_tuning;
   if (changed) { g_idle_add(ext_vfo_update, NULL); }
   g_free(ptr);
   return G_SOURCE_REMOVE;

@@ -927,6 +927,8 @@ typedef struct {
   double right;        // right edge of the dial
   double base;         // baseline of the dial
   double gap;          // gap between kHz and Hz parts
+  double status_x;     // status line above the dial (Kenwood tuner, ...)
+  double status_y;
 } IFPAN_DIAL;
 
 static int ifpan_pre_x = 0, ifpan_pre_y = 0;   // "PRE" (Kenwood preamp) position
@@ -1022,15 +1024,24 @@ static void ifpan_layout(cairo_t *cr, const VFO_BAR_LAYOUT *src, double width,
   cairo_text_extents(cr, "88.888", &e3);
   cairo_set_font_size(cr, src->size2);
   cairo_text_extents(cr, "888", &e2);
+  //
+  // The top line on the left (at the height of the right block's first
+  // row) is kept free for a status line (Kenwood antenna tuner, ...): the
+  // dial fills the height below it.
+  //
+  double top = src->mode_y + 0.35 * src->size1;
+  double room = src->height - top;
   double k_h = avail / (e3.x_advance + dial->gap + e2.x_advance);
-  double k_v = (src->height - 0.25 * src->height) / e3.height;
+  double k_v = 0.85 * room / e3.height;
   double k = (k_h < k_v) ? k_h : k_v;
   if (k < 1.0) { k = 1.0; }
   dial->s3 = k * src->size3;
   dial->s2 = k * src->size2;
   dial->gap *= k;
   dial->right = src->vfo_a_l + k * (e3.x_advance + e2.x_advance) + dial->gap;
-  dial->base = 0.5 * (src->height + k * e3.height);
+  dial->base = top + 0.5 * (room + k * e3.height);
+  dial->status_x = src->vfo_a_l;
+  dial->status_y = src->mode_y;
 }
 #endif
 
@@ -1232,6 +1243,26 @@ void vfo_update(void) {
   (void) bf;
   (void) oob;
   (void) txvfo;
+  //
+  // status line above the dial: Kenwood antenna tuner
+  // (red while tuning, highlighted when in line, grey when through)
+  //
+  if (ifpan_cat_connected && ifpan_kenwood_atu >= 0) {
+    const char *atu;
+    if (ifpan_kenwood_atu_tuning) {
+      cairo_set_source_rgba(cr, COLOUR_ALARM);
+      atu = "ATU TUNING";
+    } else if (ifpan_kenwood_atu) {
+      cairo_set_source_rgba(cr, COLOUR_ATTN);
+      atu = "ATU ON";
+    } else {
+      cairo_set_source_rgba(cr, COLOUR_SHADE);
+      atu = "ATU THRU";
+    }
+    cairo_set_font_size(cr, vfl->size1);
+    cairo_move_to(cr, dial.status_x, dial.status_y);
+    cairo_show_text(cr, atu);
+  }
   if (vfo[0].entered_frequency[0]) {
     cairo_set_source_rgba(cr, COLOUR_ATTN);
     cairo_set_font_size(cr, dial.s3);

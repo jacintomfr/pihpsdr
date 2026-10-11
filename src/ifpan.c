@@ -152,6 +152,40 @@ void ifpan_att_toggle(void) {
   att_request = (ifpan_kenwood_att == 1) ? 0 : 1;
   g_mutex_unlock(&cat_mutex);
 }
+
+//
+// TS-570D automatic antenna tuner (Kenwood TCP only). "AC;" answers
+// "AC" + RX-AT + TX-AT + tuning, e.g. "AC010" = tuner in line, not tuning
+// (checked on the radio). It is switched with "AC 10;" / "AC 00;" (Hamlib's
+// TS-570 format, checked: the tuner relay switches) and a tuning cycle is
+// started with "AC 11;" (the radio transmits a carrier while tuning).
+//
+#define ATU_OFF        0
+#define ATU_ON         1
+#define ATU_TUNE       2
+#define ATU_TUNE_STOP  3
+static int       atu_request = -1;    // ATU_* to send, -1: none
+int              ifpan_kenwood_atu = -1;      // tuner in line: 0 / 1, -1 unknown
+int              ifpan_kenwood_atu_tuning = 0; // 1 while the tuner is tuning
+
+// toolbar "ATU" (main thread): tuner in line / through
+void ifpan_atu_toggle(void) {
+  if (radio_is_remote) { send_ifpan(cl_sock_tcp, IFPAN_REMOTE_ATU, 0); return; }
+  if (!ifpan_cat_connected) { return; }
+  g_mutex_lock(&cat_mutex);
+  atu_request = (ifpan_kenwood_atu == 1) ? ATU_OFF : ATU_ON;
+  g_mutex_unlock(&cat_mutex);
+}
+
+// toolbar "ATU tune" (main thread): start a tuning cycle, or stop it
+void ifpan_atu_tune(void) {
+  if (radio_is_remote) { send_ifpan(cl_sock_tcp, IFPAN_REMOTE_ATU_TUNE, 0); return; }
+  if (!ifpan_cat_connected) { return; }
+  g_mutex_lock(&cat_mutex);
+  atu_request = ifpan_kenwood_atu_tuning ? ATU_TUNE_STOP : ATU_TUNE;
+  g_mutex_unlock(&cat_mutex);
+}
+
 static long long ui_last_freq = -1;   // receiver frequency last seen (main thread only)
 static int       ui_last_mode = -1;   // receiver mode last seen (main thread only)
 
@@ -507,6 +541,8 @@ void ifpan_remote_command(int what, int value) {
   case IFPAN_REMOTE_CAT_WRITE:   ifpan_set_cat_write(value); break;
   case IFPAN_REMOTE_TX_MUTE:     ifpan_set_tx_mute(value); break;
   case IFPAN_REMOTE_FOLLOW_MODE: ifpan_set_follow_mode(value); break;
+  case IFPAN_REMOTE_ATU:         ifpan_atu_toggle(); break;
+  case IFPAN_REMOTE_ATU_TUNE:    ifpan_atu_tune(); break;
   default:
     t_print("%s: unknown IF panadapter command %d\n", __func__, what);
     break;
@@ -825,6 +861,27 @@ static int be_get_preamp(int sock) {
 }
 
 //
+// TS-570D antenna tuner (see ifpan_atu_toggle): Kenwood TCP only. get
+// returns in line (bit 0) + tuning (bit 1), -1 if the connection failed,
+// -2 if there was no usable answer (always with rigctld).
+//
+static int be_get_atu(int sock) {
+  char frame[64];
+  if (ifpan_cat_backend != IFPAN_CAT_KENWOOD) { return -2; }
+  int rc = kw_query(sock, "AC;", "AC", frame, sizeof(frame));
+  if (rc < 0) { return rc; }
+  if (strlen(frame) < 5) { return -2; }
+  return (frame[3] == '1' ? 1 : 0) | (frame[4] == '1' ? 2 : 0);
+}
+
+static int be_set_atu(int sock, int req) {
+  if (ifpan_cat_backend != IFPAN_CAT_KENWOOD) { return 0; }
+  const char *cmd = (req == ATU_OFF) ? "AC 00;" : (req == ATU_TUNE) ? "AC 11;" : "AC 10;";
+  t_print("%s: %s\n", __func__, cmd);
+  return (send(sock, cmd, strlen(cmd), MSG_NOSIGNAL) == (ssize_t) strlen(cmd)) ? 0 : -1;
+}
+
+//
 // TS-570 attenuator (18 dB): Kenwood "RA;" -> "RA00;" / "RA01;", set
 // "RA00;" / "RA01;"; rigctld "l ATT" -> 0 / 18, set "L ATT 0|18". Same
 // return values as the preamp functions.
@@ -918,6 +975,7 @@ static gpointer cat_thread(gpointer data) {
   int trouble = 0;                    // a CAT problem has been reported (log once)
   int mode_count = 0;                 // polls until the next mode read (0: now)
   int smeter_count = 0;               // polls until the next S-meter read
+  int atu_count = 0;                  // polls until the next antenna tuner read
   int want_mode = -1;                 // mode still to be set on the Kenwood (band change)
   int want_tries = 0;
   gint64 want_at = 0;
@@ -940,6 +998,8 @@ static gpointer cat_thread(gpointer data) {
       ifpan_kenwood_smeter = -999;
       ifpan_kenwood_preamp = -1;
       ifpan_kenwood_att = -1;
+      ifpan_kenwood_atu = -1;
+      ifpan_kenwood_atu_tuning = 0;
       g_idle_add(ext_vfo_update, NULL);
       t_print("%s: CAT now via %s (%s:%d)\n", __func__, cat_name(),
               ifpan_cat_backend == IFPAN_CAT_KENWOOD ? ifpan_kenwood_host : ifpan_rigctld_host,
@@ -1161,6 +1221,43 @@ static gpointer cat_thread(gpointer data) {
         continue;
       }
       mode_count = 0;
+    }
+    //
+    // antenna tuner: toolbar request, then its state - with the mode
+    // (about once a second), and on every poll while it is tuning
+    //
+    int atu;
+    g_mutex_lock(&cat_mutex);
+    atu = atu_request;
+    atu_request = -1;
+    g_mutex_unlock(&cat_mutex);
+    if (atu >= 0) {
+      if (be_set_atu(sock, atu) < 0) {
+        close(sock);
+        sock = -1;
+        continue;
+      }
+      atu_count = 0;
+      usleep(50000);                  // let the radio switch before reading back
+    }
+    if (atu_count-- <= 0 || ifpan_kenwood_atu_tuning) {
+      atu_count = CAT_MODE_EVERY;
+      int a = be_get_atu(sock);
+      if (a == -1) {
+        close(sock);
+        sock = -1;
+        continue;
+      }
+      int on = (a >= 0) ? (a & 1) : -1;
+      int tuning = (a >= 0) ? ((a >> 1) & 1) : 0;
+      if (on != ifpan_kenwood_atu || tuning != ifpan_kenwood_atu_tuning) {
+        if (tuning != ifpan_kenwood_atu_tuning) {
+          t_print("%s: Kenwood antenna tuner %s\n", __func__, tuning ? "tuning" : "done");
+        }
+        ifpan_kenwood_atu = on;
+        ifpan_kenwood_atu_tuning = tuning;
+        g_idle_add(ext_vfo_update, NULL);
+      }
     }
     //
     // Kenwood S-meter, shown next to the piHPSDR-IF meter (the meter is

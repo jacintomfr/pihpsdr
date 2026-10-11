@@ -659,6 +659,9 @@ static void process_rx_buffer(RECEIVER *rx, const float *rxbuff, const int eleme
               // sets the heart beat
               //
               tx_add_mic_sample(transmitter, 0.0);
+#ifdef IFPAN
+              ifpan_diag_heartbeats++;
+#endif
               mic_samples = 0;
             }
           }
@@ -687,6 +690,9 @@ static void process_rx_buffer(RECEIVER *rx, const float *rxbuff, const int eleme
         mic_samples++;
         if (mic_samples >= mic_sample_divisor) { // reduce to 48000
           tx_add_mic_sample(transmitter, 0.0);
+#ifdef IFPAN
+          ifpan_diag_heartbeats++;
+#endif
           mic_samples = 0;
         }
       }

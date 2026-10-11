@@ -78,6 +78,11 @@ static gboolean close_cb(void) {
 
 static gboolean enable_cb (GtkWidget *widget, GdkEventButton *event, gpointer data) {
   local_vox_state = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget));
+#ifdef IFPAN
+  // VOX stays live while this menu is open (see vox_menu)
+  vox_enabled = local_vox_state;
+  tx_set_vox(transmitter);
+#endif
   return TRUE;
 }
 
@@ -98,7 +103,15 @@ void vox_menu(GtkWidget *parent) {
   // without going TX
   //
   local_vox_state = vox_enabled;
+#ifdef IFPAN
+  //
+  // IF panadapter: VOX stays live while this menu is open, so that the
+  // threshold and hang time can be set while hearing / seeing the Kenwood
+  // actually key (the user's request); "VOX Enable" acts at once.
+  //
+#else
   vox_enabled = 0;
+#endif
   dialog = gtk_dialog_new();
   gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(parent));
   GtkWidget *headerbar = gtk_header_bar_new();

@@ -19,6 +19,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <signal.h>
 #include <math.h>
@@ -69,6 +70,21 @@ static SoapySDRStream *rx_stream;
 static int max_rx_samples;
 static SoapySDRStream *tx_stream;
 static int max_tx_samples;
+
+//
+// RX stream arguments. Mirics MSi2500 (SoapyMiri: SDRplay RSP1 and its
+// clones) is asked for isochronous USB transfers: its default (bulk) gave
+// no samples with an MSi2500 clone; isochronous with the libusbK driver
+// streams and reopens without replugging (checked on Windows, 2026-10-11).
+// The caller clears the returned arguments.
+//
+static SoapySDRKwargs rx_stream_args(void) {
+  SoapySDRKwargs args = {0};
+  if (radio != NULL && strcmp(radio->soapy.driver_key, "MIRI") == 0) {
+    SoapySDRKwargs_set(&args, "transfer", "ISOC");
+  }
+  return args;
+}
 
 static GThread *soapy_receive_thread_id = NULL;
 static gpointer soapy_receive_single_thread(gpointer data);  // for 1RX
@@ -232,13 +248,17 @@ void soapy_protocol_create_single_receiver(RECEIVER *rx) {
   }
   size_t channel = rx->id;
 #if defined(SOAPY_SDR_API_VERSION) && (SOAPY_SDR_API_VERSION < 0x00080000)
-  rc = SoapySDRDevice_setupStream(soapy_device, &rx_stream, SOAPY_SDR_RX, SOAPY_SDR_CF32, &channel, 1, NULL);
+  SoapySDRKwargs sargs = rx_stream_args();
+  rc = SoapySDRDevice_setupStream(soapy_device, &rx_stream, SOAPY_SDR_RX, SOAPY_SDR_CF32, &channel, 1, &sargs);
+  SoapySDRKwargs_clear(&sargs);
   if (rc != 0) {
     t_print("%s: SetupStream failed: %s\n", __func__, SoapySDR_errToStr(rc));
     g_idle_add(fatal_error, "FATAL: Soapy Setup RX Stream Failed");
   }
 #else
-  rx_stream = SoapySDRDevice_setupStream(soapy_device, SOAPY_SDR_RX, SOAPY_SDR_CF32, &channel, 1, NULL);
+  SoapySDRKwargs sargs = rx_stream_args();
+  rx_stream = SoapySDRDevice_setupStream(soapy_device, SOAPY_SDR_RX, SOAPY_SDR_CF32, &channel, 1, &sargs);
+  SoapySDRKwargs_clear(&sargs);
   if (rx_stream == NULL) {
     t_print("%s: SetupStream yields NULL\n", __func__);
     g_idle_add(fatal_error, "FATAL: Soapy Setup RX Stream Failed");
@@ -299,7 +319,9 @@ void soapy_protocol_create_dual_receiver(RECEIVER *rx1, RECEIVER *rx2) {
             SoapySDR_errToStr(rc));
   }
   const size_t channels[2] = {0, 1};
-  rx_stream = SoapySDRDevice_setupStream(soapy_device, SOAPY_SDR_RX, SOAPY_SDR_CF32, channels, 2, NULL);
+  SoapySDRKwargs sargs = rx_stream_args();
+  rx_stream = SoapySDRDevice_setupStream(soapy_device, SOAPY_SDR_RX, SOAPY_SDR_CF32, channels, 2, &sargs);
+  SoapySDRKwargs_clear(&sargs);
   if (rx_stream == NULL) {
     t_print("%s: SetupStream RX failed\n", __func__);
     g_idle_add(fatal_error, "Soapy Setup RX Stream Failed");
@@ -723,7 +745,9 @@ static int ifpan_reopen(const RECEIVER *rx) {
   if (SoapySDRDevice_setBandwidth(dev, SOAPY_SDR_RX, channel, (double)soapy_radio_sample_rate) != 0) {
     SoapySDRDevice_setBandwidth(dev, SOAPY_SDR_RX, channel, 2000000.0);
   }
-  SoapySDRStream *stream = SoapySDRDevice_setupStream(dev, SOAPY_SDR_RX, SOAPY_SDR_CF32, &channel, 1, NULL);
+  SoapySDRKwargs sargs = rx_stream_args();
+  SoapySDRStream *stream = SoapySDRDevice_setupStream(dev, SOAPY_SDR_RX, SOAPY_SDR_CF32, &channel, 1, &sargs);
+  SoapySDRKwargs_clear(&sargs);
   if (stream == NULL) {
     SoapySDRDevice_unmake(dev);
     return -1;

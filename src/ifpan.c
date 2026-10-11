@@ -152,7 +152,6 @@ void ifpan_save_state(void) {
   SetPropI0("ifpan.kenwood_port",  ifpan_kenwood_port);
   SetPropI0("ifpan.tx_mute",       ifpan_tx_mute);
   SetPropI0("ifpan.follow_mode",   ifpan_follow_mode);
-  SetPropI0("ifpan.track",         ifpan_track);
 }
 
 void ifpan_restore_state(void) {
@@ -169,7 +168,6 @@ void ifpan_restore_state(void) {
   GetPropI0("ifpan.kenwood_port",  ifpan_kenwood_port);
   GetPropI0("ifpan.tx_mute",       ifpan_tx_mute);
   GetPropI0("ifpan.follow_mode",   ifpan_follow_mode);
-  GetPropI0("ifpan.track",         ifpan_track);
   if (ifpan_cat_backend != IFPAN_CAT_KENWOOD) { ifpan_cat_backend = IFPAN_CAT_RIGCTLD; }
   if (ifpan_poll_ms < 20) { ifpan_poll_ms = 20; }
   // keep the IF well inside the Pluto span (+/- 384 kHz at 768 kHz)
@@ -220,202 +218,16 @@ void ifpan_set_follow_mode(int on) {
   if (on && ifpan_kenwood_mode >= 0) { mode_apply(GINT_TO_POINTER(ifpan_kenwood_mode)); }
 }
 
-// move the display centre (and the display average with it), main thread
-static void move_center(long long f) {
-  tuning_moved(f - vfo[VFO_A].frequency);
-  vfo_id_set_center(VFO_A, f);
-  // a re-centre caused by the Kenwood must not be sent back to it
-  ui_last_freq = vfo[VFO_A].ctun ? vfo[VFO_A].ctun_frequency : vfo[VFO_A].frequency;
-}
-
-// ---------------------------------------------------------------------
-// Tuning tracked from the spectrum (experimental, ifpan.track, Radio menu
-// "Track tuning (exp.)")
-// ---------------------------------------------------------------------
-//
-// The CAT reading of the Kenwood VFO arrives some 40..80 ms after the
-// signals have already moved in the IF, so the display centre catches up
-// in small steps while the dial turns. With tracking on, each new
-// spectrum frame is compared with the previous one and the shift of the
-// signals (in pixels) is measured directly; the display centre moves with
-// it, frame by frame, with no CAT delay. CAT stays the reference: it is
-// applied as soon as no movement is seen for a while (exact value when the
-// dial stops), for large jumps (band change, "TS here", clicks), and if the
-// estimate drifts too far.
-//
-// The comparison uses a second, never averaged, analyzer output (pixout
-// 1, see rx_set_analyzer). Static IF features (pass-band shape, noise
-// floor) are removed with a high-pass (minus a moving average), only peaks
-// are kept, and the Pluto/RTL DC spike area is masked, so that the moving
-// signals dominate. A band with no signals gives no confident measurement,
-// and then CAT alone is used, as without tracking.
-//
-int ifpan_track = 0;
-#define TRK_MAXLAG   16                // largest shift per frame, pixels
-#define TRK_HALFWIN  12                // high-pass: minus a moving average of 25 pixels
-#define TRK_MIN_CORR 0.45              // minimum normalized correlation to trust a shift
-#define TRK_MIN_PX   0.35              // smaller shifts are ignored (noise)
-#define TRK_STILL_US 250000            // no movement for this long: CAT is exact again
-static float  *trk_raw = NULL;
-static double *trk_prev = NULL, *trk_cur = NULL;
-static int     trk_n = 0, trk_have_prev = 0;
-static double  trk_f = 0.0;            // estimated Kenwood frequency (Hz)
-static gint64  trk_moving_until = 0;
-
-static void trk_reset(void) {
-  trk_have_prev = 0;
-  trk_moving_until = 0;
-}
-
-// high-pass a dB frame into out[]: positive peaks above a moving average
-static void trk_prepare(const RECEIVER *rx, const float *in, double *out, int n) {
-  double sum = 0.0;
-  int w = 2 * TRK_HALFWIN + 1;
-  for (int i = 0; i < w && i < n; i++) { sum += in[i]; }
-  for (int i = 0; i < n; i++) {
-    int lo = i - TRK_HALFWIN, hi = i + TRK_HALFWIN;
-    if (lo > 0 && hi < n) { sum += in[hi] - in[lo - 1]; }
-    double avg = (lo >= 0 && hi < n) ? sum / w : in[i];
-    double v = in[i] - avg;
-    out[i] = (v > 0.0) ? v : 0.0;
-  }
-  // DC spike of the SDR, ifpan_lo_offset away from the centre (either side)
-  if (rx->cB > 0.0) {
-    for (int s = -1; s <= 1; s += 2) {
-      int p = n / 2 + (int)(s * ifpan_lo_offset / rx->cB);
-      for (int i = p - 3; i <= p + 3; i++) {
-        if (i >= 0 && i < n) { out[i] = 0.0; }
-      }
-    }
-  }
-  //
-  // Light smoothing (1-2-1) and the mean removed. Without the mean removal,
-  // the all-positive noise of an empty band correlated by itself (about
-  // 0.5) and gave random "confident" shifts; with it, an empty band gives
-  // no match and CAT is used. Checked with simulated raw spectra: no false
-  // matches on noise, about 1 % false movements with only four signals
-  // (none with eight or more), shift error 0.1 .. 0.4 pixel.
-  //
-  double prev = out[0], sum2 = 0.0;
-  for (int i = 1; i < n - 1; i++) {
-    double cur = out[i];
-    out[i] = 0.25 * prev + 0.5 * cur + 0.25 * out[i + 1];
-    prev = cur;
-  }
-  for (int i = 0; i < n; i++) { sum2 += out[i]; }
-  sum2 /= n;
-  for (int i = 0; i < n; i++) { out[i] -= sum2; }
-}
-
-//
-// Shift d (pixels, with fraction) such that cur[p] ~ prev[p + d]: the signals
-// moved d pixels towards lower pixels, i.e. the Kenwood VFO went up by
-// d * Hz-per-pixel. Returns 0 and *d, or -1 if there is no confident match.
-//
-static int trk_shift(const double *prev, const double *cur, int n, double *d) {
-  double c[2 * TRK_MAXLAG + 1];
-  double best = -1.0;
-  int kbest = 0;
-  for (int k = -TRK_MAXLAG; k <= TRK_MAXLAG; k++) {
-    double sxy = 0.0, sxx = 0.0, syy = 0.0;
-    int p0 = (k < 0) ? -k : 0, p1 = (k > 0) ? n - k : n;
-    for (int p = p0; p < p1; p++) {
-      double x = cur[p], y = prev[p + k];
-      sxy += x * y;
-      sxx += x * x;
-      syy += y * y;
-    }
-    double r = (sxx > 0.0 && syy > 0.0) ? sxy / sqrt(sxx * syy) : 0.0;
-    c[k + TRK_MAXLAG] = r;
-    if (r > best) {
-      best = r;
-      kbest = k;
-    }
-  }
-  if (best < TRK_MIN_CORR || kbest == -TRK_MAXLAG || kbest == TRK_MAXLAG) { return -1; }
-  // parabola through the peak and its neighbours: sub-pixel shift
-  double cm = c[kbest + TRK_MAXLAG - 1], c0 = c[kbest + TRK_MAXLAG], cp = c[kbest + TRK_MAXLAG + 1];
-  double den = cm - 2.0 * c0 + cp;
-  double frac = (den < 0.0) ? 0.5 * (cm - cp) / den : 0.0;
-  if (frac > 0.5) { frac = 0.5; }
-  if (frac < -0.5) { frac = -0.5; }
-  *d = kbest + frac;
-  return 0;
-}
-
-//
-// Called by the receiver display timer for every frame (main thread,
-// before the display mutex is taken).
-//
-void ifpan_track_frame(RECEIVER *rx) {
-  int rc;
-  if (!ifpan_track || !ifpan_cat_connected || rx->id != 0 || rx->pixels < 4 * TRK_MAXLAG) {
-    trk_reset();
-    return;
-  }
-  if (trk_n != rx->pixels) {
-    g_free(trk_raw);
-    g_free(trk_prev);
-    g_free(trk_cur);
-    trk_n = rx->pixels;
-    trk_raw = g_new(float, trk_n);
-    trk_prev = g_new(double, trk_n);
-    trk_cur = g_new(double, trk_n);
-    trk_reset();
-  }
-  GetPixels(rx->id, 1, trk_raw, &rc);
-  if (!rc) { return; }
-  trk_prepare(rx, trk_raw, trk_cur, trk_n);
-  double *t = trk_prev;
-  trk_prev = trk_cur;
-  trk_cur = t;
-  if (!trk_have_prev) {
-    trk_have_prev = 1;
-    trk_f = (double)vfo[VFO_A].frequency;
-    return;
-  }
-  //
-  // (after the swap, trk_cur holds the previous frame and trk_prev the new
-  // one). While a movement is going on, smaller shifts count as well, so
-  // that slow tuning is not lost in fractions.
-  //
-  double d;
-  gint64 now = g_get_monotonic_time();
-  double min_px = (now < trk_moving_until) ? 0.1 : TRK_MIN_PX;
-  if (trk_shift(trk_cur, trk_prev, trk_n, &d) < 0 || fabs(d) < min_px) { return; }
-  trk_f += d * rx->cB;
-  trk_moving_until = now + TRK_STILL_US;
-  long long f = llround(trk_f);
-  if (f != vfo[VFO_A].frequency) { move_center(f); }
-}
-
-//
-// A CAT reading while tracking: use it unless the display is following a
-// movement seen in the spectrum (then the reading is stale anyway), except
-// for jumps (more than 1/8 of the span) and a drift of more than 40 pixels.
-//
-static int trk_take_cat(long long f) {
-  if (!ifpan_track || !trk_have_prev || receivers < 1 || receiver[0] == NULL) { return 1; }
-  const RECEIVER *rx = receiver[0];
-  double diff = fabs((double)f - trk_f);
-  if (diff > rx->sample_rate / 8.0) {
-    trk_reset();                       // frames across a jump do not match
-    return 1;
-  }
-  if (g_get_monotonic_time() >= trk_moving_until) { return 1; }
-  return diff > 40.0 * rx->cB;
-}
-
 static gboolean cat_apply(gpointer data) {
   long long f;
   g_mutex_lock(&cat_mutex);
   f = cat_pending;
   cat_scheduled = 0;
   g_mutex_unlock(&cat_mutex);
-  if (trk_take_cat(f)) {
-    move_center(f);
-    trk_f = (double)f;
-  }
+  tuning_moved(f - vfo[VFO_A].frequency);
+  vfo_id_set_center(VFO_A, f);
+  // a re-centre caused by the Kenwood must not be sent back to it
+  ui_last_freq = vfo[VFO_A].ctun ? vfo[VFO_A].ctun_frequency : vfo[VFO_A].frequency;
   return G_SOURCE_REMOVE;
 }
 

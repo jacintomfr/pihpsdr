@@ -579,9 +579,6 @@ static int rx_update_display(gpointer data) {
       rx->rxlvl = level;
       rxmeter_update(rx->fps, rx->rxlvl, vox_get_peak(), rx->curragc, rx->currout);
     }
-#ifdef IFPAN
-    ifpan_track_frame(rx);   // may move the display centre (outside the display mutex)
-#endif
     g_mutex_lock(&rx->display_mutex);
     rx_get_pixels(rx);
     if (rx->pixels_available || rx->analyzer_initializing) {
@@ -1588,12 +1585,7 @@ void rx_set_analyzer(RECEIVER *rx) {
   //
   int flp[] = {0};
   const double keep_time = 0.1;
-#ifdef IFPAN
-  // pixout 1: never averaged, for tracking the Kenwood tuning (ifpan.c)
-  const int n_pixout = 2;
-#else
   const int n_pixout = 1;
-#endif
   const int spur_elimination_ffts = 1;
   const int data_type = 1;
   const double kaiser_pi = 14.0;

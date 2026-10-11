@@ -1508,6 +1508,18 @@ void send_lock(int s, int lock) {
   send_tcp(s, (char *)&header, sizeof(HEADER));
 }
 
+#ifdef IFPAN
+// piHPSDR-IF client -> server: a Kenwood action or an IF panadapter option
+void send_ifpan(int s, int what, int value) {
+  HEADER header;
+  SYNC(header.sync);
+  header.data_type = to_16(CMD_IFPAN);
+  header.b1 = what;
+  header.b2 = value;
+  send_tcp(s, (char *)&header, sizeof(HEADER));
+}
+#endif
+
 void send_ctun(int s, int v, int ctun) {
   HEADER header;
   SYNC(header.sync);

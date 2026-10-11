@@ -65,6 +65,7 @@ extern void      ifpan_cat_reconnect(void);   // apply new CAT settings now
 
 extern long long ifpan_hw_frequency(void);
 extern void      ifpan_start(void);
+extern void      ifpan_client_start(void);   // client of a server: window position only
 extern void      ifpan_stop(void);    // on exit: Kenwood back to RX if we keyed it
 extern void      ifpan_ptt(int on);   // toolbar PTT / MOX: 1 TX, 0 RX, -1 toggle
 extern void      ifpan_ts_here(void); // toolbar "TS here": Kenwood to the RX frequency
@@ -73,6 +74,9 @@ extern int       ifpan_kenwood_preamp;                         // TS preamp: 0 /
 extern void      ifpan_preamp_toggle(void);                    // toolbar PRE
 extern int       ifpan_kenwood_att;                            // TS attenuator: 0 / 1, -1 unknown
 extern void      ifpan_att_toggle(void);                       // toolbar ATT
+extern void      ifpan_set_cat_write(int on);                  // Radio menu "Clicks tune the TS"
+extern void      ifpan_set_tx_mute(int on);                    // Radio menu "Mute when TS in TX"
+extern void      ifpan_remote_command(int what, int value);    // server: CMD_IFPAN from a client
 
 //
 // TS-570 frequency coverage: the band menu and frequency checks use this

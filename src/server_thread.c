@@ -77,6 +77,9 @@
 #endif
 #include "store.h"
 #include "vfo.h"
+#ifdef IFPAN
+  #include "ifpan.h"
+#endif
 
 char hpsdr_pwd[HPSDR_PWD_LEN];
 int  hpsdr_server = 0;
@@ -169,6 +172,31 @@ static int send_periodic_data(gpointer arg) {
              (struct sockaddr *)&remoteclient.address, sizeof(remoteclient.address))  < 0) {
     perror("DISPDAT:UDP:SEND");
   }
+#ifdef IFPAN
+  //
+  // piHPSDR-IF: Kenwood state and IF panadapter options for the client
+  //
+  IFPAN_DATA ifpan_data;
+  SYNC(ifpan_data.header.sync);
+  ifpan_data.header.data_type = to_16(INFO_IFPAN);
+  ifpan_data.smeter = to_16(ifpan_kenwood_smeter + 1000);
+  ifpan_data.cat_connected = ifpan_cat_connected;
+  ifpan_data.kenwood_mode = ifpan_kenwood_mode + 1;
+  ifpan_data.tx = ifpan_kenwood_tx;
+  ifpan_data.pwr = ifpan_kenwood_pwr + 1;
+  ifpan_data.swr = ifpan_kenwood_swr + 1;
+  ifpan_data.alc = ifpan_kenwood_alc + 1;
+  ifpan_data.preamp = ifpan_kenwood_preamp + 1;
+  ifpan_data.att = ifpan_kenwood_att + 1;
+  ifpan_data.follow_vfo = ifpan_follow_vfo;
+  ifpan_data.cat_write = ifpan_cat_write;
+  ifpan_data.tx_mute = ifpan_tx_mute;
+  ifpan_data.follow_mode = ifpan_follow_mode;
+  if (sendto(remoteclient.sock_udp, &ifpan_data, sizeof(IFPAN_DATA), 0,
+             (struct sockaddr *)&remoteclient.address, sizeof(remoteclient.address))  < 0) {
+    perror("IFPANDAT:UDP:SEND");
+  }
+#endif
   //
   // if sending the data failed due to an interrupted connection,
   // server_loop() will terminate and this source ID be removed
@@ -792,6 +820,9 @@ static void server_loop(void) {
     case CMD_VFO_SWAP:
     case CMD_XIT:
     case CMD_XVTR:
+#ifdef IFPAN
+    case CMD_IFPAN:
+#endif
     case CMD_ZOOM: {
       HEADER *command = g_new(HEADER, 1);
       *command = header;
@@ -1230,6 +1261,12 @@ static int server_command(gpointer data) {
   HEADER *header = (HEADER *)data;
   int type = from_16(header->data_type);
   switch (type) {
+#ifdef IFPAN
+  case CMD_IFPAN:
+    // piHPSDR-IF: a Kenwood action or IF panadapter option from the client
+    ifpan_remote_command(header->b1, header->b2);
+    break;
+#endif
   case INFO_BAND: {
     //
     // Band data is sent from the XVTR, ANT, and PA menu on the client side

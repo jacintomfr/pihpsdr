@@ -2178,7 +2178,7 @@ void radio_set_mox(int state) {
     return;
   }
   ifpan_ptt(state);
-  if (!state) { ifpan_tune(0); }      // MOX off also ends a TUNE (tx_set_signal below)
+  if (!state) { ifpan_tune(0, 0); }   // MOX off also ends a TUNE / TwoTone (tx_set_signal below)
 #endif
   //
   // - setting MOX (no matter in which direction) ends a pending VOX
@@ -2409,6 +2409,17 @@ void radio_set_twotone(TRANSMITTER *tx, int state) {
     send_twotone(cl_sock_tcp, state);
     return;
   }
+#ifdef IFPAN
+  //
+  // IF panadapter: the two tones go to ACC2 and the Kenwood is keyed like
+  // MOX, at the TX Drive power (in CW / FSK it is switched to USB / LSB)
+  //
+  if (state && !ifpan_cat_connected) {
+    t_print("%s: TwoTone refused, no CAT link to the Kenwood\n", __func__);
+    return;
+  }
+  if (state != tx->twotone) { ifpan_tune(state, 1); }
+#endif
   tx_set_signal(tx, 0, 0, state);
   g_idle_add(ext_vfo_update, NULL);
 }
@@ -2448,7 +2459,7 @@ void radio_set_tune(int state) {
     t_print("%s: TUNE refused, no CAT link to the Kenwood\n", __func__);
     return;
   }
-  ifpan_tune(state);
+  ifpan_tune(state, 0);
 #endif
   if (state) {
     //

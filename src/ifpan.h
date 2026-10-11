@@ -81,7 +81,7 @@ extern void      ifpan_atu_tune(void);                         // toolbar "ATU t
 extern int       ifpan_kenwood_pc;                             // TS PWR setting (W), -1 unknown
 extern void      ifpan_set_power(double drive);                // TX Drive slider -> TS PWR
 extern int       ifpan_power_apply(gpointer data);             // TS PWR -> TX Drive slider
-extern void      ifpan_tune(int on);                           // TUNE on / off (server)
+extern void      ifpan_tune(int on, int twotone);              // TUNE / TwoTone on / off (server)
 extern void      ifpan_tune_power_changed(void);               // tune power setting changed
 extern void      ifpan_set_cat_write(int on);                  // Radio menu "Clicks tune the TS"
 extern void      ifpan_set_tx_mute(int on);                    // Radio menu "Mute when TS in TX"

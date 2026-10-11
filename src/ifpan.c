@@ -217,28 +217,43 @@ static int       tune_stopping = 0;   // CAT thread only: restore once in RX
 static int       tune_saved_mode = -1;
 static int       tune_saved_pc = -1;
 
+static int       tune_is_twotone = 0; // the signal is TwoTone: TX Drive power (cat_mutex)
+static int       tune_drive_watts = 100; // TX Drive in W, set again at the end (cat_mutex)
+
+static int clamp_watts(double w) {
+  int i = (int)(w + 0.5);
+  return (i < 5) ? 5 : (i > 100) ? 100 : i;
+}
+
 // tune power in W from the TX menu settings (main thread)
 static int tune_power(void) {
   if (transmitter == NULL) { return 10; }
-  int w = transmitter->tune_use_drive ? (int)(transmitter->drive + 0.5) : transmitter->tune_drive;
-  return (w < 5) ? 5 : (w > 100) ? 100 : w;
+  if (tune_is_twotone || transmitter->tune_use_drive) { return clamp_watts(transmitter->drive); }
+  return clamp_watts(transmitter->tune_drive);
 }
 
-// TUNE on / off on the server (radio_set_tune, radio_set_mox), main thread
-void ifpan_tune(int on) {
+//
+// TUNE / TwoTone on / off on the server (radio_set_tune, radio_set_twotone,
+// radio_set_mox), main thread. TwoTone is handled like TUNE (same ACC2 mode
+// switch in CW / FSK) but at the TX Drive power.
+//
+void ifpan_tune(int on, int twotone) {
   if (radio_is_remote) { return; }
   g_mutex_lock(&cat_mutex);
   if (on || tune_request == 1 || tune_active) { tune_request = on; }
+  if (on) { tune_is_twotone = twotone; }
   tune_watts = tune_power();
+  tune_drive_watts = clamp_watts(transmitter != NULL ? transmitter->drive : 100.0);
   g_mutex_unlock(&cat_mutex);
 }
 
 // "Tune Drive level" / "Tune use drive" / Drive changed: while tuning, the
 // new tune power is sent at once
 void ifpan_tune_power_changed(void) {
-  if (radio_is_remote || transmitter == NULL || !transmitter->tune) { return; }
+  if (radio_is_remote || transmitter == NULL || !(transmitter->tune || transmitter->twotone)) { return; }
   g_mutex_lock(&cat_mutex);
   tune_watts = tune_power();
+  tune_drive_watts = clamp_watts(transmitter->drive);
   tune_pc_dirty = 1;
   g_mutex_unlock(&cat_mutex);
 }
@@ -247,8 +262,8 @@ void ifpan_tune_power_changed(void) {
 void ifpan_set_power(double drive) {
   pc_touched = g_get_monotonic_time();
   if (radio_is_remote || !ifpan_cat_connected) { return; }
-  if (transmitter != NULL && transmitter->tune) {
-    ifpan_tune_power_changed();       // the radio's own setting is restored after the tune
+  if (transmitter != NULL && (transmitter->tune || transmitter->twotone)) {
+    ifpan_tune_power_changed();       // the TX Drive power is set again after the tune
     return;
   }
   int w = (int)(drive + 0.5);
@@ -263,7 +278,7 @@ int ifpan_power_apply(gpointer data) {
   if (transmitter == NULL || w < 0) { return G_SOURCE_REMOVE; }
   if (g_get_monotonic_time() - pc_touched < PC_HOLD_US) { return G_SOURCE_REMOVE; }
   if (transmitter->drive < 0.5) { return G_SOURCE_REMOVE; }  // zero drive (SWR protection) stays
-  if (transmitter->tune) { return G_SOURCE_REMOVE; }         // that is the tune power
+  if (transmitter->tune || transmitter->twotone) { return G_SOURCE_REMOVE; }  // tune power
   if ((int)(transmitter->drive + 0.5) != w) {
     transmitter->drive = w;
     if (!radio_is_remote) { radio_calc_drive_level(0); }
@@ -1281,7 +1296,7 @@ static gpointer cat_thread(gpointer data) {
         continue;
       }
       tdirty = 1;
-      t_print("%s: TUNE at %d W%s%s\n", __func__, tw, swap >= 0 ? ", Kenwood to " : "",
+      t_print("%s: %s at %d W%s%s\n", __func__, tune_is_twotone ? "TwoTone" : "TUNE", tw, swap >= 0 ? ", Kenwood to " : "",
               swap >= 0 ? ifpan_mode_names[swap] : "");
     }
     if (tr == 0 && tune_active) { tune_stopping = 1; }
@@ -1318,23 +1333,35 @@ static gpointer cat_thread(gpointer data) {
       t_print("%s: PTT %s sent to the Kenwood\n", __func__, ptt ? "TX" : "RX");
     }
     //
-    // TUNE end, once the Kenwood is back in RX: its PWR setting, then its mode
+    // TUNE end, once the Kenwood is back in RX: if its mode was switched,
+    // that mode's own PWR setting and the mode back; then the TX Drive
+    // power (also when the slider was moved during the tune)
     //
     if (tune_stopping && !ptt_keyed) {
-      if (tune_saved_pc >= 0 && be_set_pc(sock, tune_saved_pc) < 0) {
-        close(sock);
-        sock = -1;
-        continue;
-      }
+      int dw;
+      g_mutex_lock(&cat_mutex);
+      dw = tune_drive_watts;
+      g_mutex_unlock(&cat_mutex);
       if (tune_saved_mode >= 0) {
+        if (tune_saved_pc >= 0 && be_set_pc(sock, tune_saved_pc) < 0) {
+          close(sock);
+          sock = -1;
+          continue;
+        }
         usleep(50000);
         if (be_set_mode(sock, tune_saved_mode) < 0) {
           close(sock);
           sock = -1;
           continue;
         }
+        usleep(50000);
       }
-      t_print("%s: TUNE done, Kenwood PWR %d W%s%s\n", __func__, tune_saved_pc,
+      if (be_set_pc(sock, dw) < 0) {
+        close(sock);
+        sock = -1;
+        continue;
+      }
+      t_print("%s: TUNE done, Kenwood PWR %d W%s%s\n", __func__, dw,
               tune_saved_mode >= 0 ? ", mode " : "", tune_saved_mode >= 0 ? ifpan_mode_names[tune_saved_mode] : "");
       tune_active = 0;
       tune_stopping = 0;

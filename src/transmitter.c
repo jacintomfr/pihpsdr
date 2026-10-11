@@ -57,6 +57,9 @@
 #include "tx_panadapter.h"
 #include "vfo.h"
 #include "waterfall.h"
+#ifdef IFPAN
+  #include "ifpan.h"
+#endif
 
 #ifdef IFPAN
 //
@@ -1827,6 +1830,9 @@ void tx_add_mic_sample(TRANSMITTER *tx, double mic_sample) {
   if (remoteclient.running) {
     mic_sample = remote_get_mic_sample();
   }
+#ifdef IFPAN
+  ifpan_tx_dump(0, mic_sample);   // diagnostics only (see ifpan.c)
+#endif
   // If there is captured data to transmit, replace incoming
   // mic samples by captured data.
   //

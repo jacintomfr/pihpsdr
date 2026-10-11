@@ -340,6 +340,19 @@ on 2026-10-11 (no long-run report yet).
   the status line above the dial; works from a client (protocol
   0x013100F6).
 
+* Radio menu made compact (3.1.155-3.1.159): the IF panadapter options were
+  one per row in the right-hand column (stretched by the long sound card /
+  CAT combos) and the SDR gains came only below them. Now the Kenwood /
+  IF panadapter options sit two per row under the general settings, the
+  SDR gains under the right-hand column's SDR settings, and the sound card
+  combo is ellipsized (width-chars / max-width-chars 22). Window 2634x1642
+  -> 2322x1272 px (200 % scaling) before the ellipsis, then narrower still
+  (user's capture); no overlaps or cut-offs.
+* Mouse-wheel tuning jumped back and forth (3.1.161): the TS-570 drops FA
+  commands that arrive while it is busy, and after the 400 ms hold the
+  display followed its stale frequency. Now the target is sent again (up
+  to 3 times) before the display follows the Kenwood.
+
 ## 5. Open items (2026-10-11)
 
 1. **ACC2 cable** (user is looking for the plug). Then test on a dummy load:

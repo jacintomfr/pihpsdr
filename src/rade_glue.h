@@ -63,5 +63,19 @@ void rade_glue_get_stats(rade_engine_stats_t *st);
 int  rade_glue_callsign_count(void);
 int  rade_glue_get_callsign(int idx, char call[9], float *snr_db);
 
+/* Quick Tune (index into its band list) and Fit Filter (wide <-> narrow);
+ * on a client they are carried out by the server */
+int  rade_glue_quick_tune_count(void);
+const char *rade_glue_quick_tune_label(int i, long long *hz);
+void rade_glue_quick_tune(int i);
+void rade_glue_fit_filter(void);
+
+/* client / server (client_server.h): server packs its state for the client,
+ * the client applies it; the server carries out the client's menu actions */
+struct _rade_data;
+void rade_glue_fill_remote(struct _rade_data *d);
+void rade_glue_client_update(const struct _rade_data *d);
+void rade_glue_remote_command(int what, int b2, int value, const char *text);
+
 #endif /* RADE */
 #endif

@@ -1523,6 +1523,19 @@ void send_ifpan(int s, int what, int value) {
   header.b2 = value;
   send_tcp(s, (char *)&header, sizeof(HEADER));
 }
+
+// piHPSDR-IF client -> server: a RADE menu action (RADE_REMOTE_*)
+void send_rade(int s, int what, int b2, int value, const char *text) {
+  RADE_COMMAND command;
+  memset(&command, 0, sizeof(command));
+  SYNC(command.header.sync);
+  command.header.data_type = to_16(CMD_RADE);
+  command.header.b1 = what;
+  command.header.b2 = b2;
+  command.header.s1 = to_16((uint16_t)(int16_t) value);
+  if (text != NULL) { g_strlcpy(command.text, text, sizeof(command.text)); }
+  send_tcp(s, (char *)&command, sizeof(command));
+}
 #endif
 
 void send_ctun(int s, int v, int ctun) {

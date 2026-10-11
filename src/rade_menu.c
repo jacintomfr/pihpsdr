@@ -2,7 +2,9 @@
 * RADE V1 menu for piHPSDR-IF (UI like the hpsdr-rs RADE panel), ported from
 * the deskHPSDR Windows RADE port. Differences: own callsign edited here
 * (piHPSDR has no "own callsign"), no FreeDV Reporter yet, Quick Tune moves
-* the Kenwood (band change by CAT), settings saved when the menu closes.
+* the Kenwood (band change by CAT), settings saved when the menu closes. On
+* a client the menu acts on the server's RADE engine and shows its state
+* (rade_glue, INFO_RADE / CMD_RADE).
 *
 * SPDX-License-Identifier: GPL-3.0-or-later
 */
@@ -12,6 +14,7 @@
 #include <gtk/gtk.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 #include "new_menu.h"
 #include "filter.h"
@@ -29,14 +32,10 @@
 static GtkWidget *dialog = NULL;
 static guint timer_id = 0;
 static int updating = 0;
-static int fit_applied = 0;   /* Var1 filter was set by Fit Filter: follow mode changes */
 
 static GtkWidget *rx_check, *tx_check, *status_label, *level_bar, *calls_label, *fit_label;
-
-static const struct { const char *label; long long hz; } quick_tune[] = {
-  {"80m", 3630000LL}, {"40m", 7180000LL}, {"20m", 14236000LL},
-  {"15m", 21180000LL}, {"10m", 28330000LL}
-};
+static GtkWidget *opt_check[6];   // denoiser leveler compressor EQ mute squelch
+static GtkWidget *eq_scale[4];
 
 static void cleanup(void) {
   if (timer_id) { g_source_remove(timer_id); timer_id = 0; }
@@ -85,6 +84,7 @@ static void tx_cb(GtkWidget *widget, gpointer data) {
 #define OPT_CB(fn, setter) \
   static void fn(GtkWidget *widget, gpointer data) { \
     (void)data; \
+    if (updating) { return; } \
     setter(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget))); \
   }
 OPT_CB(denoiser_cb, rade_glue_set_denoiser)
@@ -100,6 +100,7 @@ static void callsign_cb(GtkWidget *widget, gpointer data) {
 }
 
 static void eq_gain_cb(GtkRange *range, gpointer data) {
+  if (updating) { return; }
   rade_glue_set_eq_gain(GPOINTER_TO_INT(data), (float) gtk_range_get_value(range));
 }
 
@@ -108,31 +109,7 @@ static void update_fit_label(void) {
                      ? "RX filter: 300-2700 Hz (wide)" : "RX filter: 700-2300 Hz (narrow)");
 }
 
-/*
- * Set the Var1 filter of the active receiver's VFO to the RADE passband.
- * Var1 edges are in the CAT ZZFL/ZZFH convention: (-high, -low) for the
- * lower sideband mode DIGL.  The TX bandpass is forced to 700-2300 Hz by
- * rade_glue while TX is armed, so it is not touched here.
- */
-static void apply_fit_filter(void) {
-  int id = active_receiver->id;
-  int mode = vfo[id].mode;
-  if (mode != modeDIGU && mode != modeDIGL) { return; }
-  int low = rade_glue_get_filter_wide() ? 300 : 700;
-  int high = rade_glue_get_filter_wide() ? 2700 : 2300;
-  FILTER *f = &filters[mode][filterVar1];
-  if (mode == modeDIGL) {
-    f->low = -high;
-    f->high = -low;
-  } else {
-    f->low = low;
-    f->high = high;
-  }
-  vfo_id_filter_changed(id, filterVar1);
-  fit_applied = 1;
-  g_idle_add(ext_vfo_update, NULL);
-}
-
+// the Var1 filter is set by rade_glue (on the server, also from a client)
 static void fit_cb(GtkWidget *widget, gpointer data) {
   (void)widget;
   (void)data;
@@ -141,35 +118,39 @@ static void fit_cb(GtkWidget *widget, gpointer data) {
     gtk_label_set_text(GTK_LABEL(fit_label), "Fit Filter needs DIGU/DIGL mode");
     return;
   }
-  // rotate wide <-> narrow
-  rade_glue_set_filter_wide(!rade_glue_get_filter_wide());
-  apply_fit_filter();
+  rade_glue_fit_filter();
   update_fit_label();
 }
 
 static void quick_tune_cb(GtkWidget *widget, gpointer data) {
   (void)widget;
-  long long hz = quick_tune[GPOINTER_TO_INT(data)].hz;
-  int id = active_receiver->id;
-  // lower sideband below 10 MHz (digi_mode_for_band of the Rust app)
-  int mode = (hz < 10000000LL) ? modeDIGL : modeDIGU;
-  if (vfo[id].mode != mode) {
-    vfo_id_mode_changed(id, mode);
+  rade_glue_quick_tune(GPOINTER_TO_INT(data));
+}
+
+//
+// On a client the settings may also change on the server (its own menu):
+// the check boxes and sliders follow the state the server sends.
+//
+static void sync_options(void) {
+  static int (*const get[6])(void) = { rade_glue_get_denoiser, rade_glue_get_leveler, rade_glue_get_compressor,
+                                       rade_glue_get_eq, rade_glue_get_mute_analog, rade_glue_get_squelch
+                                     };
+  for (int i = 0; i < 6; i++) { set_check(opt_check[i], get[i]()); }
+  for (int i = 0; i < 4; i++) {
+    if (fabs(gtk_range_get_value(GTK_RANGE(eq_scale[i])) - rade_glue_get_eq_gain(i)) > 0.01) {
+      updating = 1;
+      gtk_range_set_value(GTK_RANGE(eq_scale[i]), rade_glue_get_eq_gain(i));
+      updating = 0;
+    }
   }
-#ifdef IFPAN
-  // the Kenwood is tuned (frequency and USB / LSB) and the display follows it
-  ifpan_band_changed(hz, mode);
-#else
-  vfo_id_set_frequency(id, hz);
-#endif
-  if (fit_applied) { apply_fit_filter(); }   // keep the fitted width, sign follows the mode
-  g_idle_add(ext_vfo_update, NULL);
+  update_fit_label();
 }
 
 static gboolean status_timer(gpointer data) {
   (void)data;
   if (dialog == NULL) { timer_id = 0; return G_SOURCE_REMOVE; }
   sync_checks();
+  if (radio_is_remote) { sync_options(); }
   char buf[160];
   int vm = vfo[active_receiver->id].mode;
   if (rade_glue_get_rx_enabled() && vm != modeDIGU && vm != modeDIGL) {
@@ -249,18 +230,7 @@ void rade_menu(GtkWidget *parent) {
   dialog = new_dialog(parent, &grid);
   GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
   int row = 0;
-  if (radio_is_remote) {
-    //
-    // RADE runs on the server (next to the radio); its controls on the
-    // client come with the client/server part (next step).
-    //
-    add_label(grid, "RADE runs on the server: use the RADE menu there.\n"
-              "Client control of RADE is not available yet.", GTK_ALIGN_START, 1, row, 2);
-    gtk_container_add(GTK_CONTAINER(content), grid);
-    sub_menu = dialog;
-    gtk_widget_show_all(dialog);
-    return;
-  }
+  // (on a client, everything here acts on the server's RADE engine)
   rx_check = add_check(grid, "Enable RADE RX", rade_glue_get_rx_enabled(), G_CALLBACK(rx_cb), 1, row);
   tx_check = add_check(grid, "TX armed", rade_glue_get_tx_armed(), G_CALLBACK(tx_cb), 2, row);
   if (transmitter == NULL) { gtk_widget_set_sensitive(tx_check, FALSE); }
@@ -286,13 +256,13 @@ void rade_menu(GtkWidget *parent) {
   g_signal_connect(call_entry, "changed", G_CALLBACK(callsign_cb), NULL);
   gtk_grid_attach(GTK_GRID(grid), call_entry, 1, row, 1, 1);
   row++;
-  add_check(grid, "Denoiser", rade_glue_get_denoiser(), G_CALLBACK(denoiser_cb), 0, row);
-  add_check(grid, "Leveler", rade_glue_get_leveler(), G_CALLBACK(leveler_cb), 1, row);
-  add_check(grid, "Compressor", rade_glue_get_compressor(), G_CALLBACK(compressor_cb), 2, row);
+  opt_check[0] = add_check(grid, "Denoiser", rade_glue_get_denoiser(), G_CALLBACK(denoiser_cb), 0, row);
+  opt_check[1] = add_check(grid, "Leveler", rade_glue_get_leveler(), G_CALLBACK(leveler_cb), 1, row);
+  opt_check[2] = add_check(grid, "Compressor", rade_glue_get_compressor(), G_CALLBACK(compressor_cb), 2, row);
   row++;
-  add_check(grid, "EQ", rade_glue_get_eq(), G_CALLBACK(eq_cb), 0, row);
-  add_check(grid, "Mute analog audio", rade_glue_get_mute_analog(), G_CALLBACK(mute_cb), 1, row);
-  add_check(grid, "Squelch gate", rade_glue_get_squelch(), G_CALLBACK(squelch_cb), 2, row);
+  opt_check[3] = add_check(grid, "EQ", rade_glue_get_eq(), G_CALLBACK(eq_cb), 0, row);
+  opt_check[4] = add_check(grid, "Mute analog audio", rade_glue_get_mute_analog(), G_CALLBACK(mute_cb), 1, row);
+  opt_check[5] = add_check(grid, "Squelch gate", rade_glue_get_squelch(), G_CALLBACK(squelch_cb), 2, row);
   row++;
   // EQ gains (apply only while the EQ check box is on): bass 100 Hz, mid 1500 Hz, treble 3000 Hz, output volume
   static const char *eq_names[4] = { "EQ Bass 100 Hz", "EQ Mid 1500 Hz", "EQ Treble 3000 Hz", "EQ Volume" };
@@ -306,6 +276,7 @@ void rade_menu(GtkWidget *parent) {
     gtk_widget_set_hexpand(s, TRUE);
     g_signal_connect(s, "value-changed", G_CALLBACK(eq_gain_cb), GINT_TO_POINTER(i));
     gtk_grid_attach(GTK_GRID(grid), s, 1, row, 2, 1);
+    eq_scale[i] = s;
     row++;
   }
   GtkWidget *fit_b = gtk_button_new_with_label("Fit Filter");
@@ -316,10 +287,11 @@ void rade_menu(GtkWidget *parent) {
   row++;
   add_label(grid, "Quick Tune:", GTK_ALIGN_END, 0, row, 1);
   GtkWidget *qt_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-  for (int i = 0; i < 5; i++) {
-    GtkWidget *b = gtk_button_new_with_label(quick_tune[i].label);
+  for (int i = 0; i < rade_glue_quick_tune_count(); i++) {
+    long long hz = 0;
+    GtkWidget *b = gtk_button_new_with_label(rade_glue_quick_tune_label(i, &hz));
     char tip[48];
-    snprintf(tip, sizeof(tip), "%.3f MHz", quick_tune[i].hz / 1e6);
+    snprintf(tip, sizeof(tip), "%.3f MHz", hz / 1e6);
     gtk_widget_set_tooltip_text(b, tip);
     g_signal_connect(b, "clicked", G_CALLBACK(quick_tune_cb), GINT_TO_POINTER(i));
     gtk_box_pack_start(GTK_BOX(qt_box), b, TRUE, TRUE, 0);

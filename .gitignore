@@ -20,3 +20,6 @@ LINUX/SoapySDR
 LINUX/SoapyPlutoSDR
 LINUX/SoapyRTLSDR
 release/LatexManual/piHPSDR-Manual.pdf
+rade-libs/
+rade-src/
+rade-build/

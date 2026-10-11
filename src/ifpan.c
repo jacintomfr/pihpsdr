@@ -364,12 +364,15 @@ static void tuning_moved(long long df) {
 // FSK the lower side (FSK-R upper). Only changes of the Kenwood mode are
 // applied, so a mode chosen in piHPSDR-IF stays until the Kenwood changes.
 //
+static int kenwood_mode_index(int mode);
+
 static gboolean mode_apply(gpointer data) {
   // same order as ifpan_mode_names[]: USB LSB CW CW-R AM FM FSK FSKR
   static const int to_mode[8] = { modeUSB, modeLSB, modeCWU, modeCWL, modeAM, modeFMN, modeDIGL, modeDIGU };
   int m = GPOINTER_TO_INT(data);
   if (!ifpan_follow_mode || m < 0 || m > 7 || receivers < 1 || receiver[0] == NULL) { return G_SOURCE_REMOVE; }
-  if (vfo[VFO_A].mode != to_mode[m]) {
+  // a receiver mode the Kenwood shows as this one stays (DIGU in USB, DIGL in LSB)
+  if (vfo[VFO_A].mode != to_mode[m] && kenwood_mode_index(vfo[VFO_A].mode) != m) {
     t_print("%s: Kenwood %s -> receiver %s\n", __func__, ifpan_mode_names[m], mode_string[to_mode[m]]);
     vfo_id_mode_changed(VFO_A, to_mode[m]);
     ui_last_mode = to_mode[m];        // came from the Kenwood: not to be sent back
@@ -379,7 +382,10 @@ static gboolean mode_apply(gpointer data) {
 
 //
 // piHPSDR mode -> index into ifpan_mode_names[] (the Kenwood's modes),
-// -1 for modes the Kenwood does not have (DSB, SAM, SPEC, DRM)
+// -1 for modes the Kenwood does not have (DSB, SAM, SPEC, DRM). DIGU / DIGL
+// are sound-card data modes (RADE, FT8, ...): their audio goes in through
+// ACC2, so the Kenwood is in USB / LSB (its FSK modes are keyed by the FSK
+// line and do not use ACC2 audio).
 //
 static int kenwood_mode_index(int mode) {
   switch (mode) {
@@ -389,8 +395,8 @@ static int kenwood_mode_index(int mode) {
   case modeCWL:  return 3;
   case modeAM:   return 4;
   case modeFMN:  return 5;
-  case modeDIGL: return 6;
-  case modeDIGU: return 7;
+  case modeDIGL: return 1;
+  case modeDIGU: return 0;
   default:       return -1;
   }
 }

@@ -56,6 +56,9 @@
 #include "transmitter.h"
 #include "tx_panadapter.h"
 #include "vfo.h"
+#ifdef RADE
+  #include "rade_glue.h"
+#endif
 #include "waterfall.h"
 #ifdef IFPAN
   #include "ifpan.h"
@@ -1860,6 +1863,13 @@ void tx_add_mic_sample(TRANSMITTER *tx, double mic_sample) {
   }
   ifpan_tx_dump(0, mic_sample);   // diagnostics only (see ifpan.c)
 #endif
+#ifdef RADE
+  //
+  // RADE TX armed: the (cleaned) microphone - local, or the remote client's -
+  // is replaced by the RADE modem audio, before capture / VOX / the TX chain
+  //
+  if (rade_glue_tx_active()) { mic_sample = rade_glue_tx_sample(mic_sample); }
+#endif
   // If there is captured data to transmit, replace incoming
   // mic samples by captured data.
   //
@@ -1939,6 +1949,10 @@ void tx_add_mic_sample(TRANSMITTER *tx, double mic_sample) {
   int can_tx_audio = xmit && !duplex;
   int did_tx_audio = 0;
   double tx_audio_sample = 0.0;
+#ifdef RADE
+  // the local TX monitor must not play the RADE modem tones
+  if (rade_glue_tx_active()) { can_tx_audio = 0; }
+#endif
   if (can_tx_audio && transmitter->audiomonitor ) {
     //
     // Apply volume as specified in the TX menu

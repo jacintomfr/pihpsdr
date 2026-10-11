@@ -292,6 +292,23 @@ on 2026-10-11 (no long-run report yet).
   the mic PTT line, ferrite on the mic cable. Also seen during the tests:
   the FTDI USB-RS232 CAT adapter re-enumerated (19:50); restarting
   ts570-cat.service brought CAT back.
+  **Corrected the same evening** (test program, PTT by CAT, AM carrier into
+  the dummy load, IF cable connected): at **5 W no stall** (9 of 9 fine:
+  streaming, stream stopped over the TX, gain 0), at **25 W a stall every
+  time** (9 of 9), even with the stream stopped or the gain at 0. libusb
+  then reports `failed to use alternate setting ... -1` and `submit
+  transfer ... -5` (I/O error, device not found): the MSi2500 is knocked
+  off / reset on the USB bus, not just its streaming engine. The trigger is
+  the transmitted signal itself: the TS-570 builds its TX signal in the
+  same IF chain, so while transmitting the IF buffer feeds the clone a far
+  stronger signal than in RX; through the clone's input protection this
+  resets its USB chip (the RTL-SDR tolerated it). The microphone was only
+  a way of making RF (room noise in USB); SSB without modulation and 5 W
+  AM are fine. Nothing in software can prevent it (only the fast reopen,
+  ~2 s after RX). Remedies: cut the IF to the SDR while transmitting (RF
+  relay or input to ground, switched by the TS's TX / REMOTE line), a TX
+  mute input on the IF buffer if it has one, or a diode limiter at the
+  clone input; heavy attenuation (30-40 dB) would spoil reception.
 
 ## 5. Open items (2026-10-11)
 

@@ -309,6 +309,18 @@ on 2026-10-11 (no long-run report yet).
   relay or input to ground, switched by the TS's TX / REMOTE line), a TX
   mute input on the IF buffer if it has one, or a diode limiter at the
   clone input; heavy attenuation (30-40 dB) would spoil reception.
+  **Refined again:** at 5 W AM the AC level the clone receives during TX is
+  the same as in RX (about -67 dBFS, noise; DC removed), so the TX signal
+  does not reach the SDR (the buffer's TX mute works, or the IF tap does
+  not carry it). The 25 W stall is therefore most likely the TS's supply
+  current shifting its ground against the PC's: current through the IF
+  coax shield, through the clone, to the USB ground (ferrites do not stop
+  DC / low-frequency current; an RF relay must open the shield too).
+  Remedies: RF isolation transformer or a DC block in both centre and
+  shield on the IF line, a heavy ground strap TS <-> PC, check where the
+  buffer takes its supply / negative. Quick check: the server on a laptop
+  on battery. (The clone has its own input limiter; the buffer has a TX
+  mute.)
 
 ## 5. Open items (2026-10-11)
 

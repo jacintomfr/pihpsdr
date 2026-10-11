@@ -34,6 +34,7 @@
   #include "soapy_protocol.h"
 #endif
 #ifdef IFPAN
+  #include "audio.h"
   #include "ifpan.h"
 #endif
 #include "vfo.h"
@@ -164,6 +165,12 @@ static void cat_write_cb(GtkWidget *widget, gpointer data) {
 
 static void tx_mute_cb(GtkWidget *widget, gpointer data) {
   ifpan_set_tx_mute(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)));
+}
+
+// sound card output carrying the processed TX audio to the Kenwood (entry 0: none)
+static void tx_out_cb(GtkWidget *widget, gpointer data) {
+  int i = gtk_combo_box_get_active(GTK_COMBO_BOX(widget)) - 1;
+  ifpan_tx_out_select((i >= 0 && i < n_output_devices) ? output_devices[i].name : "");
 }
 
 //
@@ -951,6 +958,23 @@ void radio_menu(GtkWidget *parent) {
     gtk_grid_attach(GTK_GRID(grid), Btn, 5, row, 2, 1);
     g_signal_connect(Btn, "toggled", G_CALLBACK(tx_mute_cb), NULL);
     row++;
+    if (!radio_is_remote) {
+      //
+      // sound card output wired to the Kenwood's ACC2 audio input
+      // (the processed TX audio of the WDSP TX chain goes there)
+      //
+      GtkWidget *tx_out_combo = gtk_combo_box_text_new();
+      gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(tx_out_combo), NULL, "TX audio to TS: none");
+      int active = 0;
+      for (int i = 0; i < n_output_devices; i++) {
+        gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(tx_out_combo), NULL, output_devices[i].description);
+        if (strcmp(output_devices[i].name, ifpan_tx_out) == 0) { active = i + 1; }
+      }
+      gtk_combo_box_set_active(GTK_COMBO_BOX(tx_out_combo), active);
+      my_combo_attach(GTK_GRID(grid), tx_out_combo, 5, row, 2, 1);
+      g_signal_connect(tx_out_combo, "changed", G_CALLBACK(tx_out_cb), NULL);
+      row++;
+    }
     //
     // CAT link to the Kenwood: rigctld, or Kenwood CAT over TCP straight to
     // an RS-232/WiFi bridge at "host:port"
@@ -1068,7 +1092,12 @@ void radio_menu(GtkWidget *parent) {
         }
       }
     }
+#ifdef IFPAN
+    // IF panadapter: the SDR never transmits, so no TX gain controls
+    if (0) {
+#else
     if (transmitter != NULL && radio->soapy.tx.gains > 0) {
+#endif
       row = max_row + 1;
       if (receivers == 1) {
         col = 2;

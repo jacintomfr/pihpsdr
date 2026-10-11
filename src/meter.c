@@ -1198,6 +1198,18 @@ void txmeter_update(int fps, double pwr, double alc, double swr, double mic, dou
     cairo_show_text(cr, sf);
     cairo_stroke(cr);
   }
+#ifdef IFPAN
+  //
+  // IF panadapter: the Kenwood transmits; the main meter shows its power
+  // and SWR (read by CAT). The small box above keeps the WDSP Mic / ALC /
+  // Out levels of the TX audio chain (for setting the mic gain and drive).
+  //
+  (void) band;
+  ifpan_txmeter(cr, fps);
+  cairo_destroy(cr);
+  gtk_widget_queue_draw (meter);
+  return;
+#endif
   //
   // Some data common to power meters (only needed and valid for HPSDR)
   //

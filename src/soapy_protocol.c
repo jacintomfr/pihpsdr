@@ -849,7 +849,16 @@ static gpointer soapy_receive_dual_thread(gpointer data) {
 
 
 void soapy_protocol_iq_samples(const double isample, const double qsample) {
-  NO_TX();
+#ifdef IFPAN
+  //
+  // IF panadapter: nothing goes to the SDR. The WDSP TX chain runs at 48 kHz
+  // and its baseband output is the analytic signal of the processed audio,
+  // so its real part is that audio: it goes to the Kenwood (ifpan.c).
+  //
+  (void) qsample;
+  ifpan_tx_audio_sample(isample);
+  return;
+#endif
   ASSERT_SERVER();
   if (!soapy_device) { return; }
   int flags = 0;

@@ -1096,11 +1096,7 @@ int process_action(gpointer data) {
     break;
 #endif
   case MOX:
-#ifdef IFPAN
-    // IF panadapter: key / unkey the Kenwood by CAT (toggle)
-    if (a->mode == PRESSED) { ifpan_ptt(-1); }
-    break;
-#endif
+    // (IF panadapter: radio_set_mox also keys the Kenwood by CAT)
     if (a->mode == PRESSED) {
       // TODO: this involves a race condition if another "toggle mox" command
       //       arrives while the ptt_delay is waiting
@@ -1343,11 +1339,7 @@ int process_action(gpointer data) {
     }
     break;
   case PTT:
-#ifdef IFPAN
-    // IF panadapter: Kenwood in TX by CAT while the button is held
-    if (a->mode == PRESSED || a->mode == RELEASED) { ifpan_ptt(a->mode == PRESSED); }
-    break;
-#endif
+    // (IF panadapter: radio_set_mox also keys the Kenwood by CAT)
     if (a->mode == PRESSED || a->mode == RELEASED) {
       int new = (a->mode == PRESSED);
       if (new) {

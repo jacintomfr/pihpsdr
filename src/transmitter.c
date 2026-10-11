@@ -929,7 +929,12 @@ TRANSMITTER *tx_create_transmitter(int id, int pixels, int width, int height) {
     tx->iq_output_rate = 192000;
     break;
   case SOAPYSDR_PROTOCOL:
+#ifdef IFPAN
+    // IF panadapter: the TX output is audio for the Kenwood, at 48 kHz
+    tx->iq_output_rate = 48000;
+#else
     tx->iq_output_rate = soapy_radio_sample_rate;
+#endif
     break;
   }
   //
@@ -1664,6 +1669,11 @@ static void tx_full_buffer(TRANSMITTER *tx) {
           // conversion from the native WDSP (double,double) format to
           // the radio format is done within the soapy layer
           double isample = gain * tx->cw_sig_rf[j];
+#ifdef IFPAN
+          // IF panadapter: this is a keying envelope, not audio: silence
+          // for the Kenwood (CW is keyed on the Kenwood itself)
+          isample = 0.0;
+#endif
           soapy_protocol_iq_samples(isample, 0.0);
 #endif
         }

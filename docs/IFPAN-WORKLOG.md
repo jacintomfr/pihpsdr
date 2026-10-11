@@ -268,6 +268,17 @@ on 2026-10-11 (no long-run report yet).
   per-stage "RX1 Gains" in the Radio menu are neither saved nor usable
   from a client.)
 
+* PTT stall: the MSi2500 clone stops streaming (read timeouts) at the
+  Kenwood's PTT, even in USB without modulation; with the IF cable unplugged
+  100 W SSB gives no trouble, so it is an electrical transient on the IF
+  cable (relays / TX-RX supply switching, ground loop TS <-> PC; the RTL-SDR
+  did not mind). The automatic reopen brought it back after ~4 s. Now a
+  stall that starts while the Kenwood transmits (or within 3 s after) is
+  only noted, and the SDR is reopened at once when the Kenwood is back in
+  RX. Hardware remedies suggested to the user: ferrite on the IF coax, DC
+  block, an RF isolation transformer (galvanic isolation) on the IF line,
+  and checking how the IF buffer is powered (the seller's recommended
+  supply; the user will review the schematic).
 ## 5. Open items (2026-10-11)
 
 1. **ACC2 cable** (user is looking for the plug). Then test on a dummy load:

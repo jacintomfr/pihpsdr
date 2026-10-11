@@ -798,6 +798,10 @@ static void *soapy_receive_single_thread(void *arg) {
   void *buffs[1] = {rxbuff};
   int id = rx->id;
   int errcount = 0;
+#ifdef IFPAN_REOPEN
+  int stalled_in_tx = 0;                // read errors began while the Kenwood transmitted
+  gint64 last_tx_us = 0;                // when the Kenwood was last seen transmitting
+#endif
   rxthread_running = TRUE;
   t_print("%s started, id=%d\n", __func__, id);
   while (rxthread_running) {
@@ -819,9 +823,37 @@ static void *soapy_receive_single_thread(void *arg) {
     int elements = SoapySDRDevice_readStream(soapy_device, rx_stream, buffs, max_rx_samples, &flags, &timeNs,
       timeoutUs);
     if (elements <= 0) {
+#ifdef IFPAN_REOPEN
+      //
+      // The Mirics MSi2500 clone stops streaming at the Kenwood's PTT (a
+      // transient on the IF cable; the RTL-SDR did not mind). While the
+      // Kenwood transmits nothing is lost (RX muted): just note the stall,
+      // without the back-off, and reopen as soon as it is back in RX.
+      //
+      if (elements != SOAPY_SDR_OVERFLOW) {
+        if (ifpan_kenwood_tx) {
+          if (!stalled_in_tx) { t_print("%s: SDR stalled while the Kenwood transmits\n", __func__); }
+          stalled_in_tx = 1;
+          last_tx_us = g_get_monotonic_time();
+          if (elements != SOAPY_SDR_TIMEOUT) { usleep(50000); }
+          continue;
+        }
+        // (also at the release of the PTT, which CAT may see a little late)
+        if (stalled_in_tx || g_get_monotonic_time() - last_tx_us < 3000000) {
+          stalled_in_tx = 0;
+          t_print("%s: Kenwood back in RX, SDR still stalled: reopening at once\n", __func__);
+          errcount = IFPAN_REOPEN_ERRORS;   // reopened at the top of the loop
+          continue;
+        }
+      }
+#endif
       errcount = rx_read_failed(elements, errcount);
       continue;
     }
+#ifdef IFPAN_REOPEN
+    stalled_in_tx = 0;
+    if (ifpan_kenwood_tx) { last_tx_us = g_get_monotonic_time(); }
+#endif
     errcount = rx_read_ok(errcount);
     process_rx_buffer(rx, rxbuff, elements, 1);
   }

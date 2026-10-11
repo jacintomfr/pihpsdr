@@ -91,9 +91,12 @@ fi
 # libmirisdr-5 + SoapyMiri (the "soapyMiri" SoapySDR module): Mirics
 # MSi2500 / MSi001 receivers, i.e. the SDRplay RSP1 and its clones (USB
 # 1DF7:2500), without the closed SDRplay API. GPL, so they can be shipped.
-# The device needs the WinUSB driver (Zadig) on the user's PC. libmirisdr's
-# two command-line tools use POSIX signals and do not build with MinGW;
-# only the library is built and installed.
+# The device needs the **libusbK** driver (Zadig) on the user's PC and
+# isochronous transfers (piHPSDR asks for them): checked 2026-10-11 with an
+# MSi2500 clone, WinUSB gave no samples in bulk mode and crashed libusb in
+# isochronous mode, libusbK + isochronous streams 1.536 MS/s and reopens
+# without replugging. libmirisdr's two command-line tools use POSIX signals
+# and do not build with MinGW; only the library is built and installed.
 #
 MIRISDR_GIT=https://github.com/ericek111/libmirisdr-5.git
 SOAPYMIRI_GIT=https://github.com/ericek111/SoapyMiri.git
@@ -116,6 +119,10 @@ if [ -f "$SOAPYMOD/libsoapyMiriSupport.dll" ]; then
 else
   echo "==> SoapyMiri"
   [ -d "$DEPS/SoapyMiri" ] || git clone "$SOAPYMIRI_GIT" "$DEPS/SoapyMiri"
+  # keep the transfer mode as a copy (it pointed into setupStream's
+  # arguments, already gone when activateStream used it again)
+  git -C "$DEPS/SoapyMiri" apply --check "$(pwd)/WINDOWS/installer/soapymiri-transfer-mode.patch" 2>/dev/null \
+    && git -C "$DEPS/SoapyMiri" apply "$(pwd)/WINDOWS/installer/soapymiri-transfer-mode.patch"
   cmake -S "$DEPS/SoapyMiri" -B "$DEPS/SoapyMiri/build" -G "MSYS Makefiles" \
         -DCMAKE_INSTALL_PREFIX=$MINGW -DCMAKE_BUILD_TYPE=Release
   cmake --build "$DEPS/SoapyMiri/build" -j"$JOBS"

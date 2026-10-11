@@ -127,6 +127,16 @@ static long long cat_pending = 0;     // last frequency read, waiting for the ma
 static int       cat_scheduled = 0;   // an idle callback is already queued
 static long long cat_set_target = 0;  // frequency to send to the Kenwood (0: none)
 static int       cat_set_mode = -1;   // mode to send to the Kenwood (ifpan_mode_names[] index, -1: none)
+static int       preamp_request = -1; // toolbar PRE: 0 / 1 to send, -1: none
+int              ifpan_kenwood_preamp = -1;   // TS preamp read by CAT: 0 / 1, -1 unknown
+
+// toolbar PRE (main thread): toggle the Kenwood preamp
+void ifpan_preamp_toggle(void) {
+  if (!ifpan_cat_connected) { return; }
+  g_mutex_lock(&cat_mutex);
+  preamp_request = (ifpan_kenwood_preamp == 1) ? 0 : 1;
+  g_mutex_unlock(&cat_mutex);
+}
 static long long ui_last_freq = -1;   // receiver frequency last seen (main thread only)
 
 //
@@ -355,6 +365,8 @@ void ifpan_band_changed(long long f, int mode) {
   case modeDIGU: m = 7; break;
   default:       m = -1; break;
   }
+  t_print("%s: Kenwood to %lld Hz, mode %s (receiver mode %s)\n", __func__, f,
+          m >= 0 ? ifpan_mode_names[m] : "not sent", mode_string[mode]);
   g_mutex_lock(&cat_mutex);
   cat_set_target = f;
   if (m >= 0) { cat_set_mode = m; }
@@ -637,6 +649,36 @@ static int be_get_mode(int sock) {
 }
 
 //
+// TS-570 preamp (12 dB): Kenwood "PA;" -> "PA0;" / "PA1;", set "PA0;" / "PA1;";
+// rigctld "l PREAMP" -> 0 / 12, set "L PREAMP 0|12". get returns 0/1, -1 if
+// the connection failed, -2 if there was no usable answer.
+//
+static int be_get_preamp(int sock) {
+  char frame[64];
+  if (ifpan_cat_backend == IFPAN_CAT_KENWOOD) {
+    int rc = kw_query(sock, "PA;", "PA", frame, sizeof(frame));
+    if (rc < 0) { return rc; }
+    return (frame[2] == '1') ? 1 : (frame[2] == '0') ? 0 : -2;
+  }
+  const char *cmd = "l PREAMP\n";
+  if (send(sock, cmd, strlen(cmd), MSG_NOSIGNAL) != (ssize_t) strlen(cmd)) { return -1; }
+  if (cat_read_line(sock, frame, sizeof(frame)) < 0) { return -1; }
+  if (strncmp(frame, "RPRT", 4) == 0) { return -2; }
+  return atoi(frame) > 0;
+}
+
+static int be_set_preamp(int sock, int on) {
+  char cmd[32], line[64];
+  if (ifpan_cat_backend == IFPAN_CAT_KENWOOD) {
+    int len = snprintf(cmd, sizeof(cmd), "PA%d;", on ? 1 : 0);
+    return (send(sock, cmd, len, MSG_NOSIGNAL) == len) ? 0 : -1;
+  }
+  int len = snprintf(cmd, sizeof(cmd), "L PREAMP %d\n", on ? 12 : 0);
+  if (send(sock, cmd, len, MSG_NOSIGNAL) != len) { return -1; }
+  return (cat_read_line(sock, line, sizeof(line)) < 0) ? -1 : 0;
+}
+
+//
 // Set the Kenwood mode (index into ifpan_mode_names[]): Kenwood "MDn;" (no
 // answer), rigctld "M <mode> 0" (reply "RPRT n"). Returns -1 if the
 // connection failed.
@@ -708,6 +750,7 @@ static gpointer cat_thread(gpointer data) {
       ifpan_cat_connected = 0;
       ifpan_kenwood_mode = -1;
       ifpan_kenwood_smeter = -999;
+      ifpan_kenwood_preamp = -1;
       g_idle_add(ext_vfo_update, NULL);
       t_print("%s: CAT now via %s (%s:%d)\n", __func__, cat_name(),
               ifpan_cat_backend == IFPAN_CAT_KENWOOD ? ifpan_kenwood_host : ifpan_rigctld_host,
@@ -789,6 +832,8 @@ static gpointer cat_thread(gpointer data) {
         sock = -1;
         continue;
       }
+      t_print("%s: mode %s sent to the Kenwood, read back %s\n", __func__, ifpan_mode_names[want_mode],
+              m >= 0 ? ifpan_mode_names[m] : "nothing");
       if (m == want_mode || ++want_tries >= 5) {
         if (m != want_mode) { t_print("%s: Kenwood did not take mode %s\n", __func__, ifpan_mode_names[want_mode]); }
         want_mode = -1;
@@ -873,6 +918,34 @@ static gpointer cat_thread(gpointer data) {
         g_idle_add(ext_vfo_update, NULL);
         if (m >= 0) { g_idle_add(mode_apply, GINT_TO_POINTER(m)); }
       }
+      // preamp state (also when switched on the radio itself)
+      int p = be_get_preamp(sock);
+      if (p == -1) {
+        close(sock);
+        sock = -1;
+        continue;
+      }
+      if (p < 0) { p = -1; }
+      if (p != ifpan_kenwood_preamp) {
+        ifpan_kenwood_preamp = p;
+        g_idle_add(ext_vfo_update, NULL);
+      }
+    }
+    //
+    // toolbar PRE -> Kenwood preamp, read back at once
+    //
+    int pre;
+    g_mutex_lock(&cat_mutex);
+    pre = preamp_request;
+    preamp_request = -1;
+    g_mutex_unlock(&cat_mutex);
+    if (pre >= 0) {
+      if (be_set_preamp(sock, pre) < 0) {
+        close(sock);
+        sock = -1;
+        continue;
+      }
+      mode_count = 0;
     }
     //
     // Kenwood S-meter, shown next to the piHPSDR-IF meter (the meter is

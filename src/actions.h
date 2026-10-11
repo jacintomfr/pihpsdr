@@ -239,6 +239,7 @@ enum ACTION {
   IFPAN_TS_ATU,      // piHPSDR-IF: Kenwood antenna tuner in line / through
   IFPAN_TS_ATU_TUNE, // piHPSDR-IF: Kenwood antenna tuner: start / stop tuning
   MENU_RADE,         // piHPSDR-IF: RADE menu (does nothing in a build without RADE)
+  IFPAN_TS_MUTE,     // piHPSDR-IF: Kenwood speaker (AF gain) mute / back
 #endif
   ACTIONS
 };

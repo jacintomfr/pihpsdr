@@ -272,6 +272,7 @@ ACTION_TABLE ActionTable[] = {
   {IFPAN_TS_ATU,        "TS Tuner\nOn/Off",     "ATU",          AT_BTN},
   {IFPAN_TS_ATU_TUNE,   "TS Tuner\nTune",       "ATU tune",     AT_BTN},
   {MENU_RADE,           "RADE\nMenu",           "RADE-M",       AT_BTN},
+  {IFPAN_TS_MUTE,       "TS Speaker\nMute",     "TS MUTE",      AT_BTN},
 #endif
   {ACTIONS,             "None",                 "NONE",         AT_NONE}
 };
@@ -1107,6 +1108,9 @@ int process_action(gpointer data) {
 #ifdef RADE
     if (a->mode == PRESSED) { start_rade_menu(); }
 #endif
+    break;
+  case IFPAN_TS_MUTE:
+    if (a->mode == PRESSED) { ifpan_ts_mute_toggle(); }
     break;
 #endif
   case MOX:

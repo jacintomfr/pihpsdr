@@ -330,6 +330,14 @@ on 2026-10-11 (no long-run report yet).
   to the IF and the SDR is retuned on every Kenwood mode change; the user
   sets each mode once.
 
+* Toolbar action **TS MUTE** (`IFPAN_TS_MUTE`): the Kenwood's speaker (AF
+  gain, CAT `AGnnn;`, checked on the radio: AG080 / AG000 read back) to 0
+  and back to its saved level, to compare its audio with piHPSDR-IF's
+  without touching VOL. Turning VOL up while muted ends the mute (AF gain
+  polled while muted); the level is put back on exit; "TS MUTE" in red on
+  the status line above the dial; works from a client (protocol
+  0x013100F6).
+
 ## 5. Open items (2026-10-11)
 
 1. **ACC2 cable** (user is looking for the plug). Then test on a dummy load:

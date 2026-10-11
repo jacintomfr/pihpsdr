@@ -79,6 +79,8 @@ extern int       ifpan_kenwood_atu;                            // TS antenna tun
 extern int       ifpan_kenwood_atu_tuning;                     // 1 while it is tuning
 extern void      ifpan_atu_toggle(void);                       // toolbar "ATU"
 extern void      ifpan_atu_tune(void);                         // toolbar "ATU tune"
+extern int       ifpan_ts_muted;                               // 1: TS MUTE holds the Kenwood AF gain at 0
+extern void      ifpan_ts_mute_toggle(void);                   // toolbar "TS MUTE"
 extern int       ifpan_kenwood_pc;                             // TS PWR setting (W), -1 unknown
 extern void      ifpan_set_power(double drive);                // TX Drive slider -> TS PWR
 extern int       ifpan_power_apply(gpointer data);             // TS PWR -> TX Drive slider

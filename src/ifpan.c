@@ -145,6 +145,24 @@ void ifpan_preamp_toggle(void) {
   g_mutex_unlock(&cat_mutex);
 }
 
+//
+// Toolbar "TS MUTE": the Kenwood's speaker (AF gain) to 0 and back to the
+// level it had, to compare its audio with piHPSDR-IF's without touching
+// the VOL knob. Turning VOL while muted ends the mute; the level is put
+// back on exit.
+//
+static int       ts_mute_request = -1;   // 1 mute, 0 unmute, -1 none (cat_mutex)
+int              ifpan_ts_muted = 0;     // 1: the Kenwood's AF gain is held at 0
+static int       ts_af_saved = 0;        // AF gain before muting (CAT thread)
+
+void ifpan_ts_mute_toggle(void) {
+  if (radio_is_remote) { send_ifpan(cl_sock_tcp, IFPAN_REMOTE_TS_MUTE, 0); return; }
+  if (!ifpan_cat_connected) { return; }
+  g_mutex_lock(&cat_mutex);
+  ts_mute_request = ifpan_ts_muted ? 0 : 1;
+  g_mutex_unlock(&cat_mutex);
+}
+
 static int       att_request = -1;    // toolbar ATT: 0 / 1 to send, -1: none
 int              ifpan_kenwood_att = -1;      // TS attenuator read by CAT: 0 / 1, -1 unknown
 
@@ -735,6 +753,7 @@ void ifpan_remote_command(int what, int value) {
   case IFPAN_REMOTE_ATU_TUNE:    ifpan_atu_tune(); break;
   case IFPAN_REMOTE_LO_OFFSET:   ifpan_set_lo_offset_khz(value); break;
   case IFPAN_REMOTE_LNA_OFF:     ifpan_set_sdr_lna_off(value); break;
+  case IFPAN_REMOTE_TS_MUTE:     ifpan_ts_mute_toggle(); break;
   default:
     t_print("%s: unknown IF panadapter command %d\n", __func__, what);
     break;
@@ -759,13 +778,22 @@ void ifpan_band_changed(long long f, int mode) {
 }
 
 //
-// On exit: if piHPSDR-IF keyed the Kenwood, put it back to receive
+// On exit: if piHPSDR-IF keyed the Kenwood, put it back to receive, and
+// give its speaker back its level if TS MUTE was on
 // (wait up to 1 s for the CAT thread to send it)
 //
 void ifpan_stop(void) {
-  if (!ptt_keyed) { return; }
-  ifpan_ptt(0);
-  for (int i = 0; i < 100 && ptt_keyed; i++) { usleep(10000); }
+  if (ptt_keyed) {
+    ifpan_ptt(0);
+    for (int i = 0; i < 100 && ptt_keyed; i++) { usleep(10000); }
+  }
+  if (ifpan_ts_muted && ifpan_cat_connected) {
+    // the Kenwood's speaker back to the level it had before TS MUTE
+    g_mutex_lock(&cat_mutex);
+    ts_mute_request = 0;
+    g_mutex_unlock(&cat_mutex);
+    for (int i = 0; i < 100 && ifpan_ts_muted; i++) { usleep(10000); }
+  }
 }
 
 // ---------------------------------------------------------------------
@@ -1140,6 +1168,38 @@ static int be_set_att(int sock, int on) {
     return (send(sock, cmd, len, MSG_NOSIGNAL) == len) ? 0 : -1;
   }
   int len = snprintf(cmd, sizeof(cmd), "L ATT %d\n", on ? 18 : 0);
+  if (send(sock, cmd, len, MSG_NOSIGNAL) != len) { return -1; }
+  return (cat_read_line(sock, line, sizeof(line)) < 0) ? -1 : 0;
+}
+
+//
+// AF gain (the Kenwood's speaker volume, 0..255): Kenwood "AG;" -> "AGnnn",
+// "AGnnn;" sets it (checked on the TS-570D: AG080 / AG000 read back);
+// rigctld "l AF" / "L AF" (0..1).
+// Returns the gain, -1 if the connection failed, -2 if not available.
+//
+static int be_get_af(int sock) {
+  char frame[64];
+  if (ifpan_cat_backend == IFPAN_CAT_KENWOOD) {
+    int rc = kw_query(sock, "AG;", "AG", frame, sizeof(frame));
+    if (rc < 0) { return rc; }
+    if (strlen(frame) < 5) { return -2; }
+    return atoi(frame + 2);
+  }
+  const char *cmd = "l AF\n";
+  if (send(sock, cmd, strlen(cmd), MSG_NOSIGNAL) != (ssize_t) strlen(cmd)) { return -1; }
+  if (cat_read_line(sock, frame, sizeof(frame)) < 0) { return -1; }
+  if (strncmp(frame, "RPRT", 4) == 0) { return -2; }
+  return (int)(255.0 * atof(frame) + 0.5);
+}
+
+static int be_set_af(int sock, int af) {
+  char cmd[32], line[64];
+  if (ifpan_cat_backend == IFPAN_CAT_KENWOOD) {
+    int len = snprintf(cmd, sizeof(cmd), "AG%03d;", af);
+    return (send(sock, cmd, len, MSG_NOSIGNAL) == len) ? 0 : -1;
+  }
+  int len = snprintf(cmd, sizeof(cmd), "L AF %.3f\n", af / 255.0);
   if (send(sock, cmd, len, MSG_NOSIGNAL) != len) { return -1; }
   return (cat_read_line(sock, line, sizeof(line)) < 0) ? -1 : 0;
 }
@@ -1550,6 +1610,20 @@ static gpointer cat_thread(gpointer data) {
         ifpan_kenwood_att = p;
         g_idle_add(ext_vfo_update, NULL);
       }
+      // while TS MUTE holds the AF gain at 0, VOL turned up on the radio ends it
+      if (ifpan_ts_muted) {
+        int af = be_get_af(sock);
+        if (af == -1) {
+          close(sock);
+          sock = -1;
+          continue;
+        }
+        if (af > 0) {
+          ifpan_ts_muted = 0;
+          t_print("%s: TS VOL turned (%d): mute ended\n", __func__, af);
+          g_idle_add(ext_vfo_update, NULL);
+        }
+      }
       // PWR setting (per mode on the radio): the TX Drive slider follows
       p = be_get_pc(sock);
       if (p == -1) {
@@ -1592,6 +1666,35 @@ static gpointer cat_thread(gpointer data) {
         continue;
       }
       mode_count = 0;
+    }
+    // toolbar TS MUTE -> Kenwood AF gain to 0, or back to its saved level
+    int mreq;
+    g_mutex_lock(&cat_mutex);
+    mreq = ts_mute_request;
+    ts_mute_request = -1;
+    g_mutex_unlock(&cat_mutex);
+    if (mreq == 1 && !ifpan_ts_muted) {
+      int af = be_get_af(sock);
+      if (af == -1 || (af >= 0 && be_set_af(sock, 0) < 0)) {
+        close(sock);
+        sock = -1;
+        continue;
+      }
+      if (af >= 0) {
+        ts_af_saved = af;
+        ifpan_ts_muted = 1;
+        t_print("%s: TS muted (AF gain was %d)\n", __func__, af);
+        g_idle_add(ext_vfo_update, NULL);
+      }
+    } else if (mreq == 0 && ifpan_ts_muted) {
+      if (be_set_af(sock, ts_af_saved) < 0) {
+        close(sock);
+        sock = -1;
+        continue;
+      }
+      ifpan_ts_muted = 0;
+      t_print("%s: TS unmuted (AF gain %d)\n", __func__, ts_af_saved);
+      g_idle_add(ext_vfo_update, NULL);
     }
     // toolbar ATT -> Kenwood attenuator, read back at once
     int att;

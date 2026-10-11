@@ -602,7 +602,8 @@ static int client_info_ifpan(gpointer ptr) {
                 || ifpan_kenwood_preamp != (int)data->preamp - 1
                 || ifpan_kenwood_att != (int)data->att - 1
                 || ifpan_kenwood_atu != (int)data->atu - 1
-                || ifpan_kenwood_atu_tuning != data->atu_tuning;
+                || ifpan_kenwood_atu_tuning != data->atu_tuning
+                || ifpan_ts_muted != data->ts_muted;
   ifpan_kenwood_smeter = (int)from_16(data->smeter) - 1000;
   ifpan_cat_connected = data->cat_connected;
   ifpan_kenwood_mode = (int)data->kenwood_mode - 1;
@@ -620,6 +621,7 @@ static int client_info_ifpan(gpointer ptr) {
   ifpan_kenwood_atu_tuning = data->atu_tuning;
   ifpan_lo_offset = 1000LL * data->lo_khz;   // shown in the Radio menu
   ifpan_sdr_lna_off = data->sdr_lna_off;
+  ifpan_ts_muted = data->ts_muted;
   ifpan_kenwood_pc = (int)data->ts_power - 1;
   if (ifpan_kenwood_pc >= 0 && transmitter != NULL && ifpan_kenwood_pc != (int)(transmitter->drive + 0.5)) {
     ifpan_power_apply(GINT_TO_POINTER(ifpan_kenwood_pc));

@@ -834,6 +834,8 @@ typedef struct __attribute__((__packed__)) _ifpan_data {
   uint8_t cat_write;
   uint8_t tx_mute;
   uint8_t follow_mode;
+  uint8_t atu;               // antenna tuner in line + 1
+  uint8_t atu_tuning;
 } IFPAN_DATA;
 
 // CMD_IFPAN: b1 = what, b2 = value
@@ -847,6 +849,8 @@ enum {
   IFPAN_REMOTE_CAT_WRITE,
   IFPAN_REMOTE_TX_MUTE,
   IFPAN_REMOTE_FOLLOW_MODE,
+  IFPAN_REMOTE_ATU,          // toggle
+  IFPAN_REMOTE_ATU_TUNE,     // start / stop a tuning cycle
 };
 #endif
 

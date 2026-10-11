@@ -236,6 +236,8 @@ enum ACTION {
 #ifdef IFPAN
   IFPAN_TS_HERE,     // piHPSDR-IF: tune the Kenwood to the RX frequency
   IFPAN_TS_ATT,      // piHPSDR-IF: Kenwood attenuator on/off
+  IFPAN_TS_ATU,      // piHPSDR-IF: Kenwood antenna tuner in line / through
+  IFPAN_TS_ATU_TUNE, // piHPSDR-IF: Kenwood antenna tuner: start / stop tuning
 #endif
   ACTIONS
 };

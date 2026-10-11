@@ -269,6 +269,8 @@ ACTION_TABLE ActionTable[] = {
 #ifdef IFPAN
   {IFPAN_TS_HERE,       "TS to RX freq",        "TS here",      AT_BTN},
   {IFPAN_TS_ATT,        "TS Atten\nOn/Off",     "ATT",          AT_BTN},
+  {IFPAN_TS_ATU,        "TS Tuner\nOn/Off",     "ATU",          AT_BTN},
+  {IFPAN_TS_ATU_TUNE,   "TS Tuner\nTune",       "ATU tune",     AT_BTN},
 #endif
   {ACTIONS,             "None",                 "NONE",         AT_NONE}
 };
@@ -1093,6 +1095,12 @@ int process_action(gpointer data) {
     break;
   case IFPAN_TS_ATT:
     if (a->mode == PRESSED) { ifpan_att_toggle(); }
+    break;
+  case IFPAN_TS_ATU:
+    if (a->mode == PRESSED) { ifpan_atu_toggle(); }
+    break;
+  case IFPAN_TS_ATU_TUNE:
+    if (a->mode == PRESSED) { ifpan_atu_tune(); }
     break;
 #endif
   case MOX:

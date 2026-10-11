@@ -86,6 +86,7 @@ extern void      ifpan_tune_power_changed(void);               // tune power set
 extern void      ifpan_set_cat_write(int on);                  // Radio menu "Clicks tune the TS"
 extern void      ifpan_set_tx_mute(int on);                    // Radio menu "Mute when TS in TX"
 extern void      ifpan_remote_command(int what, int value);    // server: CMD_IFPAN from a client
+extern void      ifpan_push_vfo_to_client(void);               // server: VFO / RX / TX / filter data to the client
 // WDSP-processed TX audio to the Kenwood's ACC2 input (sound card output)
 extern char      ifpan_tx_out[128];
 extern void      ifpan_tx_out_select(const char *name);

@@ -68,9 +68,6 @@ extern void      ifpan_start(void);
 extern void      ifpan_stop(void);    // on exit: Kenwood back to RX if we keyed it
 extern void      ifpan_ptt(int on);   // toolbar PTT / MOX: 1 TX, 0 RX, -1 toggle
 extern void      ifpan_ts_here(void); // toolbar "TS here": Kenwood to the RX frequency
-extern int       ifpan_track;         // 1: track the Kenwood tuning from the spectrum (experimental)
-struct _receiver;
-extern void      ifpan_track_frame(struct _receiver *rx);   // every display frame
 extern void      ifpan_save_state(void);
 extern void      ifpan_restore_state(void);
 

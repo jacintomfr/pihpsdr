@@ -3386,7 +3386,11 @@ void radio_save_state(void) {
   //
   // Obtain window position and save in props file
   //
-  gtk_window_get_position(GTK_WINDOW(top_window), &window_x_pos, &window_y_pos);
+  // (not while minimised: Windows then reports a position far off-screen)
+  GdkWindow *top_gdk = gtk_widget_get_window(top_window);
+  if (top_gdk == NULL || !(gdk_window_get_state(top_gdk) & GDK_WINDOW_STATE_ICONIFIED)) {
+    gtk_window_get_position(GTK_WINDOW(top_window), &window_x_pos, &window_y_pos);
+  }
   SetPropI0("WindowPositionX",                               window_x_pos);
   SetPropI0("WindowPositionY",                               window_y_pos);
   SetPropI0("slider_rows",                                   hide_status ? old_slid : slider_rows);

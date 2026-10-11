@@ -279,6 +279,19 @@ on 2026-10-11 (no long-run report yet).
   block, an RF isolation transformer (galvanic isolation) on the IF line,
   and checking how the IF buffer is powered (the seller's recommended
   supply; the user will review the schematic).
+  Narrowed down on 2026-10-11 (TS in USB without modulation, i.e. no RF;
+  IF cable connected): the stall happens with the **microphone PTT** (3 of
+  3, recovered ~2 s after RX by the fast reopen) but **not with PTT by CAT**
+  (0 of 3 with piHPSDR-IF's MOX, 0 of 8 with a test program streaming
+  through 0.5-3 s TX). Shorter cables, ferrites at both ends and a 10 dB
+  attenuator did not help. So the transient comes through the microphone
+  path (mic PTT line / mic preamp supply / mic cable ground), not from the
+  TS's TX/RX switching. Remote operation (PTT always by CAT) is not
+  affected. To check: microphone type (powered desk mic?), what else the
+  mic cable is connected to, PTT with another mic / a bare footswitch on
+  the mic PTT line, ferrite on the mic cable. Also seen during the tests:
+  the FTDI USB-RS232 CAT adapter re-enumerated (19:50); restarting
+  ts570-cat.service brought CAT back.
 
 ## 5. Open items (2026-10-11)
 

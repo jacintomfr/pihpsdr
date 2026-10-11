@@ -259,7 +259,14 @@ offset above 384 kHz would need a 3.072 MS/s hardware rate (aliasing at
 isochronous, 1.536 MS/s, LO offset 250 kHz, USB3 port. Close / reopen in
 the program confirmed by the user; merged into `cu2ed` / `windows-port`
 on 2026-10-11 (no long-run report yet).
-* SDR LNA off (Radio menu, `ifpan.sdr_lna_off`, also from a client;  protocol 0x013100F5): with the strong IF buffer signal the MSi001  overloaded above about RF 80, where libmirisdr's overall gain switches  the +24 dB LNA on (from 43 dB; mixer from 19 dB, baseband 0..59 dB). The  option switches the Soapy gain element "LNA" off after every RF gain  setting; the RF slider works on the remaining stages. (piHPSDR's own  per-stage "RX1 Gains" in the Radio menu are neither saved nor usable  from a client.)
+* SDR LNA off (Radio menu, `ifpan.sdr_lna_off`, also from a client;
+  protocol 0x013100F5): with the strong IF buffer signal the MSi001
+  overloaded above about RF 80, where libmirisdr's overall gain switches
+  the +24 dB LNA on (from 43 dB; mixer from 19 dB, baseband 0..59 dB). The
+  option switches the Soapy gain element "LNA" off after every RF gain
+  setting; the RF slider works on the remaining stages. (piHPSDR's own
+  per-stage "RX1 Gains" in the Radio menu are neither saved nor usable
+  from a client.)
 
 ## 5. Open items (2026-10-11)
 

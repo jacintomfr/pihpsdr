@@ -1383,7 +1383,17 @@ static gpointer client_tcp_thread(gpointer arg) {
         transmitter->cfc_post[i]               = from_double(data.cfc_post[i]);
       }
       vox_min_hang = transmitter->cfc ? 370.0 : 230.0;
-      g_thread_new("remote_txaudio", remote_txaudio_thread, transmitter);
+      //
+      // INFO_TRANSMITTER arrives again after many changes (mode, band, TX
+      // menu, ...), but the TX audio thread runs for ever and must exist
+      // only once: each extra thread read the same microphone and sent its
+      // own packets (rough, then silent TX audio at the server).
+      //
+      static int txaudio_thread_started = 0;
+      if (!txaudio_thread_started) {
+        txaudio_thread_started = 1;
+        g_thread_new("remote_txaudio", remote_txaudio_thread, transmitter);
+      }
       g_idle_add(sliders_drive, GINT_TO_POINTER(100));
       g_idle_add(sliders_mic_gain, GINT_TO_POINTER(100));
       g_idle_add(sliders_cmpr, GINT_TO_POINTER(100));

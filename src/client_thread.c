@@ -786,6 +786,22 @@ static int client_spectrum(gpointer ptr) {
   return G_SOURCE_REMOVE;
 }
 ////////////////////////////////////////////////////////////////////////////
+#ifdef IFPAN
+//
+// Diagnostics: log when RX audio packets from the server stop for more
+// than 100 ms (compare with "server RX audio send gap" in the server log:
+// a gap only here is network loss / delay).
+//
+static void client_rxaudio_gap_check(void) {
+  static gint64 last_us = 0;
+  gint64 now = g_get_monotonic_time();
+  if (last_us != 0 && now - last_us > 100000 && !radio_is_transmitting()) {
+    t_print("audio diag: client RX audio arrival gap %lld ms\n", (long long)((now - last_us) / 1000));
+  }
+  last_us = now;
+}
+#endif
+
 //
 // client_tcp_thread and client_udp_thread are running on the "remote"
 // computer (which communicates with the server on the "local" computer)
@@ -845,6 +861,9 @@ gpointer client_udp_thread(gpointer arg) {
       }
       break;
     case INFO_RXAUDIO: {
+#ifdef IFPAN
+      client_rxaudio_gap_check();
+#endif
       const RXAUDIO_DATA *rxdata = (RXAUDIO_DATA *)buffer;
       RECEIVER *rx = receiver[rxdata->header.b1];
       int numsamples = from_16(rxdata->header.s1);
@@ -876,6 +895,9 @@ gpointer client_udp_thread(gpointer arg) {
     }
     break;
     case INFO_RXAUDIO_OPUS: {
+#ifdef IFPAN
+      client_rxaudio_gap_check();
+#endif
       // Opus-encoded RX audio from server — decode and play
       const OPUS_AUDIO_DATA *pkt = (const OPUS_AUDIO_DATA *)buffer;
       int id = pkt->header.b1;

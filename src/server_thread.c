@@ -391,6 +391,22 @@ void send_txspectrum(void) {
   }
 }
 
+#ifdef IFPAN
+//
+// Diagnostics: log when RX audio packets to the client stop for more than
+// 100 ms while the client is connected (a stall of the server itself:
+// SDR stream or DSP), to tell server stalls from network loss.
+//
+static void rxaudio_gap_check(void) {
+  static gint64 last_us = 0;
+  gint64 now = g_get_monotonic_time();
+  if (last_us != 0 && now - last_us > 100000 && !radio_is_transmitting()) {
+    t_print("audio diag: server RX audio send gap %lld ms\n", (long long)((now - last_us) / 1000));
+  }
+  last_us = now;
+}
+#endif
+
 void remote_rxaudio(const RECEIVER *rx, double sample) {
   int id = rx->id;
   if (!remoteclient.running) {
@@ -408,6 +424,9 @@ void remote_rxaudio(const RECEIVER *rx, double sample) {
       pkt.header.b1 = (uint8_t)id;
       int nbytes = opus_encode(opus_enc[id], opus_pcm_buf[id], OPUS_FRAME_SIZE, pkt.payload, OPUS_MAX_PACKET);
       if (nbytes > 0) {
+#ifdef IFPAN
+        rxaudio_gap_check();
+#endif
         pkt.header.s1 = to_16(nbytes);
         int xferlen = (int)(sizeof(HEADER) + nbytes);
         if (sendto(remoteclient.sock_udp, &pkt, xferlen, 0,
@@ -426,6 +445,9 @@ void remote_rxaudio(const RECEIVER *rx, double sample) {
     rxaudio_data[id].header.data_type = to_16(INFO_RXAUDIO);
     rxaudio_data[id].header.b1 = id;
     rxaudio_data[id].header.s1 = to_16(AUDIO_DATA_SIZE);
+#ifdef IFPAN
+    rxaudio_gap_check();
+#endif
     if (sendto(remoteclient.sock_udp, &rxaudio_data[id], sizeof(RXAUDIO_DATA), 0,
                (struct sockaddr *)&remoteclient.address, sizeof(remoteclient.address))  < 0) {
       perror("RXAUDIO:UDP:SEND");

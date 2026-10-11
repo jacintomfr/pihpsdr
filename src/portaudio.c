@@ -692,6 +692,12 @@ void audio_write (RECEIVER *rx, double left, double right) {
   ad->cwaudio = 0;
   int avail = (ad->audio_buffer_inpt - ad->audio_buffer_outpt) & RING_BUFFER_MASK;
   if (avail <  AUDIO_LAT_LOW) {
+#ifdef IFPAN
+    if (ad->cwaudio == 0 && !radio_is_transmitting()) {
+      t_print("audio diag: RX%d output buffer ran dry (%d left), %d ms silence inserted\n",
+              rx->id + 1, avail, (AUDIO_LAT_TARGET - avail) / 48);
+    }
+#endif
     //
     // Running the RX-audio for a very long time
     // and with audio hardware whose "48000 Hz" are a little faster than the "48000 Hz" of
@@ -723,6 +729,10 @@ void audio_write (RECEIVER *rx, double left, double right) {
     ad->audio_buffer_inpt = oldpt;
   }
   if (avail > AUDIO_LAT_HIGH) {
+#ifdef IFPAN
+    t_print("audio diag: RX%d output buffer overrun (%d), %d ms dropped\n",
+            rx->id + 1, avail, (avail - AUDIO_LAT_TARGET) / 48);
+#endif
     //
     // Running the RX-audio for a very long time
     // and with audio hardware whose "48000 Hz" are a little slower than the "48000 Hz" of

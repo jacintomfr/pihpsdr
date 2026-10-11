@@ -357,6 +357,50 @@ on 2026-10-11 (no long-run report yet).
   change is not yet sent and for 0.5 s after the last one (3.1.165) -
   confirmed "perfect" by the user.
 
+### 4.13 Raspberry Pi 5 server (SDR-IQ, 192.168.0.107) (2026-10-11)
+
+Purpose: test whether the MSi2500 PTT stall (ground loop through the IF coax
+shield, see 4.12) also happens with the Pi 5 as host, and measure RADE there.
+
+- Host: Pi 5 4 GB, Debian 13 trixie aarch64, labwc (Wayland), PipeWire/pulse.
+  SSH as `pi` (key `hpsdr_rpi5`); temporary NOPASSWD sudo in
+  `/etc/sudoers.d/010-pi-claude-setup` (remove when the setup is finished).
+- Packages: libsoapysdr-dev soapysdr-tools libspeexdsp-dev libusb-1.0-0-dev
+  socat. Kernel DVB drivers blacklisted in
+  `/etc/modprobe.d/blacklist-msi2500.conf` (msi2500, msi001, sdr_msi3101);
+  udev `/etc/udev/rules.d/99-msi2500.rules` (1df7:2500 MODE 0666).
+- **Trap:** `soapysdr0.8-module-all` pulls `soapysdr0.8-module-mirisdr`
+  (driver "miri", old libmirisdr-4). It enumerates the clone first; piHPSDR
+  then picks driver=miri and 768 kS/s. Removed that package; only
+  `soapyMiri` remains (DriverKey MIRI, 1.536 MS/s, ISOC).
+- libmirisdr-5 + SoapyMiri (ericek111, 1e0a125) built in `~/deps`, installed
+  to /usr/local (lib) and /usr (Soapy module); `soapymiri-transfer-mode.patch`
+  applied (it needed `sed 's/\r$//'`: copied from Windows with CRLF).
+- RADE libs: `RADE_C_DIR=~/rade_c ./build-rade.sh` (the Opus model download,
+  ~180 MB at ~200 KB/s, is most of the time).
+- Source: `git archive cu2ed` extracted to `~/pihpsdr-if`, CRLF stripped
+  (rnnoise/model_version with CRLF broke the rnnoise model curl URL).
+  `make.config.pihpsdr`: GPIO=OFF MIDI=ON USBOZY=OFF SOAPYSDR=ON IFPAN=ON
+  PORTFORWARD=ON TCI=ON AUDIO=PULSE. Binary `~/pihpsdr-if/pihpsdr-if`,
+  launcher `run-pihpsdr-if.sh` + `~/.local/share/applications/pihpsdr-if.desktop`,
+  log `~/pihpsdr-if.log`. Config: Windows `soapyMiri.props` copied, audio
+  devices cleared (choose the Pi devices in the menus); the Pi default is kept
+  as `soapyMiri.props.pi-default`.
+- CAT: service `ts570-cat.service` (`/usr/local/bin/ts570-cat-bridge.sh`):
+  socat 127.0.0.1:7373 <-> first `/dev/serial/by-id/*FTDI*`, 57600 raw. It
+  waits until the FTDI adapter is plugged into the Pi.
+- Measured (RX only, no RADE, 1.536 MS/s): ~93 % of one core in total
+  (~23 % of the 4 cores), SoC 60 C.
+- USB: behind the external USB 2.0 hub (shared with the FTDI and the Arduino
+  MIDI/audio) libmirisdr reported ~3.5 "504 samples lost" lines/s; on a
+  direct (blue) Pi port ~8 per minute. Keep the MSI on a direct port.
+- Desktop shortcut `~/Desktop/pihpsdr-if.desktop` at x=776 y=142 (under
+  deskHPSDR); a matching box was drawn into `wall_boxes.png` (original kept
+  as `wall_boxes.png.before-pihpsdr-if`).
+- **Result:** SSB 100 W from the microphone with the Pi as host: no stall
+  (with the Windows PC as host, AM 25 W into the dummy load always stalled).
+  The ground loop goes through the PC; on the Pi the problem is gone.
+
 ## 5. Open items (2026-10-11)
 
 1. **ACC2 cable** (user is looking for the plug). Then test on a dummy load:

@@ -1377,10 +1377,9 @@ void send_ping(int s) {
   HEADER header;
   SYNC(header.sync);
   header.data_type = to_16(CMD_PING);
-  // Encode lower 16 bits of ms timestamp so server can echo it back for RTT
-  struct timeval tv;
-  gettimeofday(&tv, NULL);
-  unsigned int ms_mod = (unsigned int)((tv.tv_sec * 1000UL + tv.tv_usec / 1000) & 0x7FFF);
+  // Encode lower 15 bits of a ms timestamp so server can echo it back for RTT.
+  // The monotonic clock: Windows' gettimeofday only advances every ~15.6 ms.
+  unsigned int ms_mod = (unsigned int)((g_get_monotonic_time() / 1000) & 0x7FFF);
   header.s1 = to_16(ms_mod);
   send_tcp(s, (char *)&header, sizeof(HEADER));
 }

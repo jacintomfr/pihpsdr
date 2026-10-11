@@ -592,6 +592,14 @@ static void server_loop(void) {
       }
     }
     break;
+    case CMD_PING:
+      //
+      // Answered here at once (send_tcp is thread-safe): through the main
+      // loop, the client measured the server's GUI load (one or two
+      // display frames) instead of the network round trip
+      //
+      send_pong(remoteclient.sock_tcp, from_16(header.s1));
+      break;
     case CMD_RX_SPECTRUM: {
       int id = header.b1;
       int state = header.b2;
@@ -779,7 +787,6 @@ static void server_loop(void) {
     case CMD_TX_FILTER_CUT:
     case CMD_FILTER_SEL:
     case CMD_FILTER_VAR:
-    case CMD_PING:
     case CMD_LOCK:
     case CMD_METER:
     case CMD_MODE:

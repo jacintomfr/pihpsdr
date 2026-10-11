@@ -420,9 +420,13 @@ static int pa_in_cb(const void *inputBuffer, void *outputBuffer, unsigned long f
     }
     // and let the reader start again with a safe distance (MIC_PRIME)
     ad->mic_starved = 1;
-  } else {
+  } else if (radio_is_transmitting()) {
     //
-    // If transmitting: reset audio_flag
+    // If transmitting: arm audio_flag for the next TX/RX transition.
+    // (A plain "else" also re-armed it during RX, so the mic buffer was
+    // reset every other callback all the time while receiving: VOX and
+    // the mic level got chopped audio, then silence once the reader
+    // waited for MIC_PRIME samples after each reset.)
     //
     ad->audio_flag = 1;
   }

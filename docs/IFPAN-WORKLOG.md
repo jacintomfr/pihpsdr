@@ -328,7 +328,9 @@ on 2026-10-11 (no long-run report yet).
   was at 7.156 here while USB was right; switching LSB -> USB moved the
   signals to the left). The offset of the Kenwood's current mode is added
   to the IF and the SDR is retuned on every Kenwood mode change; the user
-  sets each mode once.
+  sets each mode once. Confirmed by the user (MSI 3.1.151): LSB = -3000 Hz
+  puts the 7.153 station on 7.153; USB 0; CW / CW-R / AM / FM not checked
+  yet. TS MUTE confirmed working from the toolbar.
 
 * Toolbar action **TS MUTE** (`IFPAN_TS_MUTE`): the Kenwood's speaker (AF
   gain, CAT `AGnnn;`, checked on the radio: AG080 / AG000 read back) to 0

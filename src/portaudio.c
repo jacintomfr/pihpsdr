@@ -92,6 +92,7 @@ AUDIO_DEVICE output_devices[MAX_AUDIO_DEVICES];
 #define ST_BUFFER_MASK         2047
 #define MIC_BUFFER_SIZE        8192
 #define MIC_BUFFER_MASK        8191
+#define MIC_PRIME              2400   // 50 ms: mic samples to wait for after running dry
 
 #define AUDIO_LAT_LOW           512
 #define AUDIO_LAT_TARGET       8192
@@ -112,6 +113,7 @@ struct audio_data_ {
   int audio_flag;                          // flag to detect RX/TX transisions in audio in
   int cwaudio;                             // state flag used in RX/TX transitions for audio out
   int cwcount;                             // counter for "silence" in side tone
+  int mic_starved;                         // mic ring ran dry: wait for MIC_PRIME samples
   PaStream *pastream;                      // PortAudio stream
 };
 
@@ -252,6 +254,7 @@ int audio_open_input(TRANSMITTER *tx) {
   }
   ad->audio_buffer = g_new(double, MIC_BUFFER_SIZE);
   ad->audio_buffer_outpt = ad->audio_buffer_inpt = 0;
+  ad->mic_starved = 1;
   if (ad->audio_buffer == NULL) {
     Pa_CloseStream(ad->pastream);
     g_free(ad);
@@ -415,6 +418,8 @@ static int pa_in_cb(const void *inputBuffer, void *outputBuffer, unsigned long f
         ad->audio_buffer_inpt = (ad->audio_buffer_inpt + 1) & MIC_BUFFER_MASK;
       }
     }
+    // and let the reader start again with a safe distance (MIC_PRIME)
+    ad->mic_starved = 1;
   } else {
     //
     // If transmitting: reset audio_flag
@@ -448,6 +453,22 @@ double audio_get_next_mic_sample(TRANSMITTER *tx) {
   //
   // Now the existence of the buffers is guaranteed for 50 msec
   //
+  // The reader must never pass the writer: it would return stale samples
+  // from the ring (heard as a rough, crackling microphone, ~170 jumps per
+  // second measured with Windows MME, which delivers the mic in blocks
+  // larger than the 20 ms margin set at the RX/TX transition). When the
+  // ring runs dry, return silence and wait for MIC_PRIME samples (50 ms)
+  // before reading again, so that the reader keeps a safe distance.
+  //
+  int avail = (ad->audio_buffer_inpt - ad->audio_buffer_outpt) & MIC_BUFFER_MASK;
+  if (ad->mic_starved) {
+    if (avail < MIC_PRIME) { return 0.0; }
+    ad->mic_starved = 0;
+  }
+  if (avail == 0) {
+    ad->mic_starved = 1;
+    return 0.0;
+  }
   int newpt = (ad->audio_buffer_outpt + 1) & MIC_BUFFER_MASK;
   double sample = ad->audio_buffer[ad->audio_buffer_outpt];
   MEMORY_BARRIER;

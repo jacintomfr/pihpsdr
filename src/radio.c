@@ -2178,6 +2178,7 @@ void radio_set_mox(int state) {
     return;
   }
   ifpan_ptt(state);
+  if (!state) { ifpan_tune(0); }      // MOX off also ends a TUNE (tx_set_signal below)
 #endif
   //
   // - setting MOX (no matter in which direction) ends a pending VOX
@@ -2424,9 +2425,6 @@ void radio_toggle_tune(void) {
 }
 
 void radio_set_tune(int state) {
-#ifdef IFPAN
-  return;   // receive-only
-#endif
   if (radio_is_remote) {
     send_tune(cl_sock_tcp, state);
     return;
@@ -2441,6 +2439,17 @@ void radio_set_tune(int state) {
   if (transmitter->tune == state) {
     return;
   }
+#ifdef IFPAN
+  //
+  // IF panadapter: TUNE keys the Kenwood like MOX (tx_set_signal), after
+  // the CAT thread has set the tune power (and USB / LSB in CW / FSK)
+  //
+  if (state && !ifpan_cat_connected) {
+    t_print("%s: TUNE refused, no CAT link to the Kenwood\n", __func__);
+    return;
+  }
+  ifpan_tune(state);
+#endif
   if (state) {
     //
     // Ron has reported that TX underruns occur if TUNEing with
@@ -2649,7 +2658,8 @@ void radio_calc_drive_level(int tune) {
   // Kenwood's PWR setting by CAT (ifpan_set_power); only zero drive (e.g.
   // SWR protection) also silences the audio.
   //
-  transmitter->drive_scale = (transmitter->drive < 0.5) ? 0.0 : 1.0;
+  double ifpan_d = (tune && !transmitter->tune_use_drive) ? transmitter->tune_drive : transmitter->drive;
+  transmitter->drive_scale = (ifpan_d < 0.5) ? 0.0 : 1.0;
   transmitter->drive_iscal = 1.0;
   transmitter->do_scale = 1;
 #endif

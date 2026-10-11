@@ -35,6 +35,9 @@
 #include "sliders.h"
 #include "transmitter.h"
 #include "vfo.h"
+#ifdef IFPAN
+  #include "ifpan.h"
+#endif
 
 static GtkWidget *dialog = NULL;
 static GtkWidget *input;
@@ -224,6 +227,9 @@ static void spinbtn_cb(GtkWidget *widget, gpointer data) {
       if (radio_is_remote) {
         send_txmenu(cl_sock_tcp);
       }
+#ifdef IFPAN
+      ifpan_tune_power_changed();
+#endif
       break;
     case TX_PTT_DELAY:
       radio_set_ptt_delay(vi);
@@ -334,6 +340,9 @@ static void chkbtn_cb(GtkWidget *widget, gpointer data) {
       if (radio_is_remote) {
         send_txmenu(cl_sock_tcp);
       }
+#ifdef IFPAN
+      ifpan_tune_power_changed();
+#endif
       break;
     case TX_SWRTUNE:
       transmitter->swrtune = v;
@@ -964,7 +973,11 @@ void tx_menu(GtkWidget *parent) {
   gtk_container_add(GTK_CONTAINER(tune_container), swr_grid);
   row = 0;
   col = 0;
+#ifdef IFPAN
+  label = gtk_label_new("Tune power (W)");   // the Kenwood's PWR during TUNE
+#else
   label = gtk_label_new("Tune Drive level");
+#endif
   gtk_widget_set_name(label, "boldlabel");
   gtk_widget_set_halign(label, GTK_ALIGN_END);
   gtk_grid_attach(GTK_GRID(swr_grid), label, col, row, 1, 1);

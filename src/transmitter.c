@@ -2825,7 +2825,14 @@ void tx_set_signal(TRANSMITTER *tx, int tune, int txnoise, int twotone) {
     SetTXAPostGenRun(tx->id, 1);
     SetTXAPreGenRun(tx->id, 0);
   } else if (tune) {
+#ifdef IFPAN
+    // IF panadapter: the output is audio for the Kenwood (real part), so
+    // a 1 kHz tone instead of a zero-frequency carrier: its SSB carrier
+    // is then 1 kHz from the dial frequency
+    SetTXAPostGenToneFreq(tx->id, 1000.0);
+#else
     SetTXAPostGenToneFreq(tx->id, 0.0);
+#endif
     SetTXAPostGenToneMag(tx->id, 0.99999);
     SetTXAPostGenMode(tx->id, 0);
     SetTXAPostGenRun(tx->id, 1);

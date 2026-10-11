@@ -389,9 +389,17 @@ shield, see 4.12) also happens with the Pi 5 as host, and measure RADE there.
 - CAT: service `ts570-cat.service` (`/usr/local/bin/ts570-cat-bridge.sh`):
   socat 127.0.0.1:7373 <-> first `/dev/serial/by-id/*FTDI*`, 57600 raw. It
   waits until the FTDI adapter is plugged into the Pi.
-- First numbers: pihpsdr-if ~30 % of one core at 1.536 MS/s (RX only, no
-  RADE). Some "samples lost" lines from libmirisdr (ISOC); to check whether
-  they continue and on which USB port.
+- Measured (RX only, no RADE, 1.536 MS/s): ~93 % of one core in total
+  (~23 % of the 4 cores), SoC 60 C.
+- USB: behind the external USB 2.0 hub (shared with the FTDI and the Arduino
+  MIDI/audio) libmirisdr reported ~3.5 "504 samples lost" lines/s; on a
+  direct (blue) Pi port ~8 per minute. Keep the MSI on a direct port.
+- Desktop shortcut  at x=776 y=142 (under
+  deskHPSDR); a matching box was drawn into  (original kept
+  as ).
+- **Result:** SSB 100 W from the microphone with the Pi as host: no stall
+  (with the Windows PC as host, AM 25 W into the dummy load always stalled).
+  The ground loop goes through the PC; on the Pi the problem is gone.
 
 ## 5. Open items (2026-10-11)
 

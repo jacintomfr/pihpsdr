@@ -796,8 +796,7 @@ static void client_rxaudio_gap_check(void) {
   static gint64 last_us = 0;
   gint64 now = g_get_monotonic_time();
   if (last_us != 0 && now - last_us > 100000 && !radio_is_transmitting()) {
-    t_print("audio diag: client RX audio arrival gap %lld ms
-", (long long)((now - last_us) / 1000));
+    t_print("audio diag: client RX audio arrival gap %lld ms\n", (long long)((now - last_us) / 1000));
   }
   last_us = now;
 }

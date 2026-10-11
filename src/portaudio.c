@@ -668,8 +668,7 @@ void audio_write (RECEIVER *rx, double left, double right) {
   if (avail <  AUDIO_LAT_LOW) {
 #ifdef IFPAN
     if (ad->cwaudio == 0 && !radio_is_transmitting()) {
-      t_print("audio diag: RX%d output buffer ran dry (%d left), %d ms silence inserted
-",
+      t_print("audio diag: RX%d output buffer ran dry (%d left), %d ms silence inserted\n",
               rx->id + 1, avail, (AUDIO_LAT_TARGET - avail) / 48);
     }
 #endif
@@ -705,8 +704,7 @@ void audio_write (RECEIVER *rx, double left, double right) {
   }
   if (avail > AUDIO_LAT_HIGH) {
 #ifdef IFPAN
-    t_print("audio diag: RX%d output buffer overrun (%d), %d ms dropped
-",
+    t_print("audio diag: RX%d output buffer overrun (%d), %d ms dropped\n",
             rx->id + 1, avail, (avail - AUDIO_LAT_TARGET) / 48);
 #endif
     //

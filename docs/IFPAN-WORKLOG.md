@@ -279,6 +279,7 @@ on 2026-10-11 (no long-run report yet).
   block, an RF isolation transformer (galvanic isolation) on the IF line,
   and checking how the IF buffer is powered (the seller's recommended
   supply; the user will review the schematic).
+
 ## 5. Open items (2026-10-11)
 
 1. **ACC2 cable** (user is looking for the plug). Then test on a dummy load:

@@ -829,7 +829,8 @@ void tx_menu(GtkWidget *parent) {
   row = 0;
 #ifdef IFPAN
   //
-  // Microphone noise reduction (WDSP's neural NR, as the receiver's NR3),
+  // Microphone noise reduction (RNNoise, src/mic_nr.c: a neural NR like the
+  // receiver's NR3; the same code as hpsdr-rs),
   // on the raw microphone before VOX and the TX chain: often a better
   // choice than the downward expander below
   //

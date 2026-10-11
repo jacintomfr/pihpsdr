@@ -1636,11 +1636,11 @@ static gpointer client_tcp_thread(gpointer arg) {
     break;
     case CMD_PONG: {
       // Server echoed our ping — measure RTT from sent timestamp in b1/b2
-      struct timeval now;
-      gettimeofday(&now, NULL);
-      unsigned int now_ms = (unsigned int)((now.tv_sec * 1000UL + now.tv_usec / 1000) & 0xFFFF);
-      unsigned int sent_ms = from_16(header.s1);
-      int rtt = (int)((now_ms - sent_ms) & 0xFFFF);  // handles rollover
+      // (monotonic ms, lower 15 bits as sent by send_ping: the 16-bit mask used
+      // before made half of the answers look ~32 s old, so they were dropped)
+      unsigned int now_ms = (unsigned int)((g_get_monotonic_time() / 1000) & 0x7FFF);
+      unsigned int sent_ms = from_16(header.s1) & 0x7FFF;
+      int rtt = (int)((now_ms - sent_ms) & 0x7FFF);  // handles rollover
       if (rtt >= 0 && rtt < 5000) {
         remote_latency_ms = rtt;
       }

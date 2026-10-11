@@ -78,6 +78,9 @@ extern int       ifpan_kenwood_atu;                            // TS antenna tun
 extern int       ifpan_kenwood_atu_tuning;                     // 1 while it is tuning
 extern void      ifpan_atu_toggle(void);                       // toolbar "ATU"
 extern void      ifpan_atu_tune(void);                         // toolbar "ATU tune"
+extern int       ifpan_kenwood_pc;                             // TS PWR setting (W), -1 unknown
+extern void      ifpan_set_power(double drive);                // TX Drive slider -> TS PWR
+extern int       ifpan_power_apply(gpointer data);             // TS PWR -> TX Drive slider
 extern void      ifpan_set_cat_write(int on);                  // Radio menu "Clicks tune the TS"
 extern void      ifpan_set_tx_mute(int on);                    // Radio menu "Mute when TS in TX"
 extern void      ifpan_remote_command(int what, int value);    // server: CMD_IFPAN from a client

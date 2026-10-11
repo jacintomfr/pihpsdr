@@ -66,6 +66,7 @@
 #include "property.h"
 #include "radio.h"
 #include "receiver.h"
+#include "sliders.h"
 #include "vfo.h"
 
 long long ifpan_if_freq = IFPAN_DEFAULT_IF_FREQ;
@@ -184,6 +185,43 @@ void ifpan_atu_tune(void) {
   g_mutex_lock(&cat_mutex);
   atu_request = ifpan_kenwood_atu_tuning ? ATU_TUNE_STOP : ATU_TUNE;
   g_mutex_unlock(&cat_mutex);
+}
+
+//
+// TS-570D output power: the TX Drive slider is the radio's PWR setting.
+// "PCnnn;" sets it, "PC;" reads it (checked on the radio: 5 W steps, 5..100,
+// AM 5..25, kept per mode; 10 / 20 W set gave SM 2 / 4 in TX). Turning PWR
+// on the radio moves the slider. Readings are ignored for a while after
+// the slider was moved, so that a reading taken before the new value was
+// sent does not pull the slider back.
+//
+#define PC_HOLD_US 1500000
+static int       pc_request = -1;     // watts to send, -1: none
+int              ifpan_kenwood_pc = -1;       // PWR setting read by CAT (W), -1 unknown
+static gint64    pc_touched = 0;      // when the slider was last moved (main thread)
+
+// TX Drive slider moved (main thread, client and server)
+void ifpan_set_power(double drive) {
+  pc_touched = g_get_monotonic_time();
+  if (radio_is_remote || !ifpan_cat_connected) { return; }
+  int w = (int)(drive + 0.5);
+  g_mutex_lock(&cat_mutex);
+  pc_request = (w < 5) ? 5 : (w > 100) ? 100 : w;
+  g_mutex_unlock(&cat_mutex);
+}
+
+// the radio's PWR setting changed (main thread): move the slider
+int ifpan_power_apply(gpointer data) {
+  int w = GPOINTER_TO_INT(data);
+  if (transmitter == NULL || w < 0) { return G_SOURCE_REMOVE; }
+  if (g_get_monotonic_time() - pc_touched < PC_HOLD_US) { return G_SOURCE_REMOVE; }
+  if (transmitter->drive < 0.5) { return G_SOURCE_REMOVE; }  // zero drive (SWR protection) stays
+  if ((int)(transmitter->drive + 0.5) != w) {
+    transmitter->drive = w;
+    if (!radio_is_remote) { radio_calc_drive_level(0); }
+    g_idle_add(sliders_drive, GINT_TO_POINTER(100 * suppress_popup_sliders));
+  }
+  return G_SOURCE_REMOVE;
 }
 
 static long long ui_last_freq = -1;   // receiver frequency last seen (main thread only)
@@ -958,6 +996,36 @@ static int be_set_preamp(int sock, int on) {
 }
 
 //
+// Output power in W: Kenwood "PC;" -> "PCnnn", rigctld "l RFPOWER" (0..1).
+// Returns the power, -1 if the connection failed, -2 if not available.
+//
+static int be_get_pc(int sock) {
+  char frame[64];
+  if (ifpan_cat_backend == IFPAN_CAT_KENWOOD) {
+    int rc = kw_query(sock, "PC;", "PC", frame, sizeof(frame));
+    if (rc < 0) { return rc; }
+    if (strlen(frame) < 5) { return -2; }
+    return atoi(frame + 2);
+  }
+  const char *cmd = "l RFPOWER\n";
+  if (send(sock, cmd, strlen(cmd), MSG_NOSIGNAL) != (ssize_t) strlen(cmd)) { return -1; }
+  if (cat_read_line(sock, frame, sizeof(frame)) < 0) { return -1; }
+  if (strncmp(frame, "RPRT", 4) == 0) { return -2; }
+  return (int)(100.0 * atof(frame) + 0.5);
+}
+
+static int be_set_pc(int sock, int w) {
+  char cmd[32], line[64];
+  if (ifpan_cat_backend == IFPAN_CAT_KENWOOD) {
+    int len = snprintf(cmd, sizeof(cmd), "PC%03d;", w);
+    return (send(sock, cmd, len, MSG_NOSIGNAL) == len) ? 0 : -1;
+  }
+  int len = snprintf(cmd, sizeof(cmd), "L RFPOWER %.2f\n", 0.01 * w);
+  if (send(sock, cmd, len, MSG_NOSIGNAL) != len) { return -1; }
+  return (cat_read_line(sock, line, sizeof(line)) < 0) ? -1 : 0;
+}
+
+//
 // Set the Kenwood mode (index into ifpan_mode_names[]): Kenwood "MDn;" (no
 // answer), rigctld "M <mode> 0" (reply "RPRT n"). Returns -1 if the
 // connection failed.
@@ -1239,6 +1307,32 @@ static gpointer cat_thread(gpointer data) {
         ifpan_kenwood_att = p;
         g_idle_add(ext_vfo_update, NULL);
       }
+      // PWR setting (per mode on the radio): the TX Drive slider follows
+      p = be_get_pc(sock);
+      if (p == -1) {
+        close(sock);
+        sock = -1;
+        continue;
+      }
+      if (p < 0) { p = -1; }
+      ifpan_kenwood_pc = p;
+      if (p >= 0 && transmitter != NULL && p != (int)(transmitter->drive + 0.5)) {
+        g_idle_add(ifpan_power_apply, GINT_TO_POINTER(p));
+      }
+    }
+    // TX Drive slider -> Kenwood PWR, read back at once
+    int pc;
+    g_mutex_lock(&cat_mutex);
+    pc = pc_request;
+    pc_request = -1;
+    g_mutex_unlock(&cat_mutex);
+    if (pc >= 0) {
+      if (be_set_pc(sock, pc) < 0) {
+        close(sock);
+        sock = -1;
+        continue;
+      }
+      mode_count = 0;
     }
     //
     // toolbar PRE -> Kenwood preamp, read back at once

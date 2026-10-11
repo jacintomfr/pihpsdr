@@ -161,7 +161,7 @@ enum _header_type_enum {
 // piHPSDR-IF has its own protocol version: an IF panadapter server and a
 // plain piHPSDR client (or the other way round) refuse each other.
 //
-#define CLIENT_SERVER_VERSION 0x013100F1 // 32-bit version number
+#define CLIENT_SERVER_VERSION 0x013100F2 // 32-bit version number
 #else
 #define CLIENT_SERVER_VERSION 0x01310001 // 32-bit version number
 #endif
@@ -836,6 +836,7 @@ typedef struct __attribute__((__packed__)) _ifpan_data {
   uint8_t follow_mode;
   uint8_t atu;               // antenna tuner in line + 1
   uint8_t atu_tuning;
+  uint8_t ts_power;          // Kenwood PWR setting (W) + 1
 } IFPAN_DATA;
 
 // CMD_IFPAN: b1 = what, b2 = value

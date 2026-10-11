@@ -299,8 +299,36 @@ static int       ui_last_mode = -1;   // receiver mode last seen (main thread on
 // Pluto's DC spike away from the Kenwood VFO; soapy_protocol.c shifts the
 // samples back digitally so the IF centre stays in the middle of the display.
 //
+//
+// IF offset per Kenwood mode (Hz, index = ifpan_mode_names[]): the TS-570D
+// moves its 1st LO with the mode so that each mode's pass band sits in its
+// IF filters, so the carrier is not at the same point of the 73.05 MHz IF
+// in USB, LSB, CW, AM, ... (seen 2026-10-11: a station at 7.153 LSB on the
+// TS was at 7.156 in piHPSDR-IF, while USB was right). The value of the
+// Kenwood's current mode is added to the IF; set in the Radio menu.
+//
+int ifpan_mode_if_offset[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+
 long long ifpan_hw_frequency(void) {
-  return calibrated_frequency(ifpan_if_freq + ifpan_lo_offset);
+  long long off = (ifpan_kenwood_mode >= 0 && ifpan_kenwood_mode < 8) ? ifpan_mode_if_offset[ifpan_kenwood_mode] : 0;
+  return calibrated_frequency(ifpan_if_freq + off + ifpan_lo_offset);
+}
+
+// retune the SDR (main thread): after a Kenwood mode change or a new offset
+static gboolean ifpan_retune_sdr(gpointer data) {
+  if (radio_is_remote) { return G_SOURCE_REMOVE; }
+  for (int id = 0; id < receivers; id++) { soapy_protocol_set_rx_frequency(id); }
+  return G_SOURCE_REMOVE;
+}
+
+// Radio menu: IF offset (Hz) of the Kenwood's current mode, applied at once
+void ifpan_set_mode_if_offset(int hz) {
+  int m = ifpan_kenwood_mode;
+  if (m < 0 || m > 7 || radio_is_remote) { return; }
+  if (hz > 10000) { hz = 10000; }
+  if (hz < -10000) { hz = -10000; }
+  ifpan_mode_if_offset[m] = hz;
+  ifpan_retune_sdr(NULL);
 }
 
 void ifpan_save_state(void) {
@@ -319,6 +347,7 @@ void ifpan_save_state(void) {
   SetPropI0("ifpan.follow_mode",   ifpan_follow_mode);
   SetPropI0("ifpan.sdr_lna_off",   ifpan_sdr_lna_off);
   SetPropS0("ifpan.tx_out",        ifpan_tx_out);
+  for (int m = 0; m < 8; m++) { SetPropI1("ifpan.mode_if_offset.%d", m, ifpan_mode_if_offset[m]); }
 }
 
 void ifpan_restore_state(void) {
@@ -337,6 +366,7 @@ void ifpan_restore_state(void) {
   GetPropI0("ifpan.follow_mode",   ifpan_follow_mode);
   GetPropI0("ifpan.sdr_lna_off",   ifpan_sdr_lna_off);
   GetPropS0("ifpan.tx_out",        ifpan_tx_out);
+  for (int m = 0; m < 8; m++) { GetPropI1("ifpan.mode_if_offset.%d", m, ifpan_mode_if_offset[m]); }
   if (ifpan_cat_backend != IFPAN_CAT_KENWOOD) { ifpan_cat_backend = IFPAN_CAT_RIGCTLD; }
   if (ifpan_poll_ms < 20) { ifpan_poll_ms = 20; }
   // keep the IF well inside the Pluto span (+/- 384 kHz at 768 kHz)
@@ -1494,6 +1524,7 @@ static gpointer cat_thread(gpointer data) {
         ifpan_kenwood_mode = m;
         g_idle_add(ext_vfo_update, NULL);
         if (m >= 0) { g_idle_add(mode_apply, GINT_TO_POINTER(m)); }
+        g_idle_add(ifpan_retune_sdr, NULL);   // the IF offset of this mode
       }
       // preamp state (also when switched on the radio itself)
       int p = be_get_preamp(sock);

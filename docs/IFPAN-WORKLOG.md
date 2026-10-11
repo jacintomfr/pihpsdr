@@ -354,7 +354,8 @@ on 2026-10-11 (no long-run report yet).
   to 3 times) before the display follows the Kenwood. A rare one-step
   flick back remained (a Kenwood reading taken before the newest target was
   sent): with "Clicks tune the TS" readings are no longer applied while a
-  change is not yet sent and for 0.5 s after the last one (3.1.165).
+  change is not yet sent and for 0.5 s after the last one (3.1.165) -
+  confirmed "perfect" by the user.
 
 ## 5. Open items (2026-10-11)
 

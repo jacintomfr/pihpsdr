@@ -1653,11 +1653,34 @@ static gboolean win_save(gpointer data) {
 static int win_tracking = 0;          // save moves only after the restore is done
 static int win_have_saved = 0;
 
+//
+// A position is only used / saved if the window's top-left area is on a
+// monitor. While the window is minimised, Windows reports a position far
+// off-screen (about -32000, i.e. -16000 at 200 % scaling): once saved (or
+// "compensated" in win_apply), every start put the window out of sight.
+//
+static int win_on_screen(int x, int y) {
+  GdkDisplay *d = gdk_display_get_default();
+  if (d == NULL) { return 1; }
+  int n = gdk_display_get_n_monitors(d);
+  for (int i = 0; i < n; i++) {
+    GdkRectangle r;
+    gdk_monitor_get_geometry(gdk_display_get_monitor(d, i), &r);
+    if (x + 50 >= r.x && x + 50 < r.x + r.width && y + 20 >= r.y && y + 20 < r.y + r.height) { return 1; }
+  }
+  return 0;
+}
+
+static int win_iconified(void) {
+  GdkWindow *w = gtk_widget_get_window(top_window);
+  return w != NULL && (gdk_window_get_state(w) & GDK_WINDOW_STATE_ICONIFIED);
+}
+
 static gboolean win_moved(GtkWidget *widget, GdkEvent *event, gpointer data) {
   int x, y;
-  if (!win_tracking) { return FALSE; }
+  if (!win_tracking || win_iconified()) { return FALSE; }
   gtk_window_get_position(GTK_WINDOW(widget), &x, &y);
-  if ((x != 0 || y != 0) && (x != win_x || y != win_y)) {
+  if ((x != 0 || y != 0) && (x != win_x || y != win_y) && win_on_screen(x, y)) {
     win_x = x;
     win_y = y;
     if (win_save_timer) { g_source_remove(win_save_timer); }
@@ -1677,11 +1700,12 @@ static gboolean win_apply(gpointer data) {
   gtk_window_get_position(GTK_WINDOW(top_window), &x, &y);
   if (win_have_saved && pass == 0) {
     gtk_window_move(GTK_WINDOW(top_window), win_x, win_y);
-  } else if (win_have_saved && pass == 1 && (x != win_x || y != win_y)) {
+  } else if (win_have_saved && pass == 1 && (x != win_x || y != win_y) && !win_iconified()
+             && win_on_screen(2 * win_x - x, 2 * win_y - y)) {
     //
     // Some window managers place the frame, others the client area, so the
     // position read back may differ from the one requested by the frame
-    // size: compensate once.
+    // size: compensate once (not if minimised: that position is fictitious).
     //
     gtk_window_move(GTK_WINDOW(top_window), 2 * win_x - x, 2 * win_y - y);
   }
@@ -1690,8 +1714,10 @@ static gboolean win_apply(gpointer data) {
   } else {
     // from now on, only moves by the user are saved
     t_print("%s: window at %d,%d (saved %d,%d)\n", __func__, x, y, win_x, win_y);
-    win_x = x;
-    win_y = y;
+    if (win_on_screen(x, y)) {
+      win_x = x;
+      win_y = y;
+    }
     win_tracking = 1;
   }
   return G_SOURCE_REMOVE;
@@ -1705,7 +1731,9 @@ static void win_restore(void) {
       // some window managers refuse negative positions: use the screen edge
       win_x = (x < 0) ? 0 : x;
       win_y = (y < 0) ? 0 : y;
-      win_have_saved = 1;
+      // a position off all monitors (saved while minimised) is not used
+      win_have_saved = win_on_screen(win_x, win_y);
+      if (!win_have_saved) { t_print("%s: saved position %d,%d is off-screen, not used\n", __func__, x, y); }
     }
     fclose(fp);
   }

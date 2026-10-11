@@ -172,6 +172,11 @@ static void lo_offset_cb(GtkWidget *widget, gpointer data) {
   ifpan_set_lo_offset_khz(gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(widget)));
 }
 
+// SDR front-end LNA kept off (strong IF buffer input)
+static void lna_off_cb(GtkWidget *widget, gpointer data) {
+  ifpan_set_sdr_lna_off(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)));
+}
+
 // sound card output carrying the processed TX audio to the Kenwood (entry 0: none)
 static void tx_out_cb(GtkWidget *widget, gpointer data) {
   int i = gtk_combo_box_get_active(GTK_COMBO_BOX(widget)) - 1;
@@ -981,6 +986,13 @@ void radio_menu(GtkWidget *parent) {
       g_signal_connect(lo_spin, "value_changed", G_CALLBACK(lo_offset_cb), NULL);
       row++;
     }
+    // SDR front-end LNA off: more headroom for the strong IF buffer signal
+    Btn = gtk_check_button_new_with_label("SDR LNA off");
+    gtk_widget_set_halign(Btn, GTK_ALIGN_END);
+    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (Btn), ifpan_sdr_lna_off);
+    gtk_grid_attach(GTK_GRID(grid), Btn, 5, row, 2, 1);
+    g_signal_connect(Btn, "toggled", G_CALLBACK(lna_off_cb), NULL);
+    row++;
     if (!radio_is_remote) {
       //
       // sound card output wired to the Kenwood's ACC2 audio input

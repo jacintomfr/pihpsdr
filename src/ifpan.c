@@ -92,6 +92,7 @@ int       ifpan_kenwood_smeter = -999;
 //
 int       ifpan_tx_mute = 1;
 int       ifpan_follow_mode = 1;      // receiver mode follows the Kenwood mode
+int       ifpan_sdr_lna_off = 0;      // SDR front-end LNA kept off (strong IF input; Radio menu)
 int       ifpan_kenwood_tx = 0;
 int       ifpan_kenwood_pwr = -1;     // "SM;" while transmitting
 int       ifpan_kenwood_swr = -1;     // "RM1nnnn;"
@@ -316,6 +317,7 @@ void ifpan_save_state(void) {
   SetPropI0("ifpan.kenwood_port",  ifpan_kenwood_port);
   SetPropI0("ifpan.tx_mute",       ifpan_tx_mute);
   SetPropI0("ifpan.follow_mode",   ifpan_follow_mode);
+  SetPropI0("ifpan.sdr_lna_off",   ifpan_sdr_lna_off);
   SetPropS0("ifpan.tx_out",        ifpan_tx_out);
 }
 
@@ -333,6 +335,7 @@ void ifpan_restore_state(void) {
   GetPropI0("ifpan.kenwood_port",  ifpan_kenwood_port);
   GetPropI0("ifpan.tx_mute",       ifpan_tx_mute);
   GetPropI0("ifpan.follow_mode",   ifpan_follow_mode);
+  GetPropI0("ifpan.sdr_lna_off",   ifpan_sdr_lna_off);
   GetPropS0("ifpan.tx_out",        ifpan_tx_out);
   if (ifpan_cat_backend != IFPAN_CAT_KENWOOD) { ifpan_cat_backend = IFPAN_CAT_RIGCTLD; }
   if (ifpan_poll_ms < 20) { ifpan_poll_ms = 20; }
@@ -670,6 +673,20 @@ void ifpan_set_lo_offset_khz(int khz) {
 }
 
 //
+// Radio menu "SDR LNA off": the SDR's front-end LNA (Soapy gain element
+// "LNA", e.g. the Mirics MSi001's +24 dB) is switched off after every RF
+// gain setting (soapy_protocol_set_rx_gain). The IF buffer output is strong,
+// and above about RF 80 the LNA made the MSi001 overload; the RF slider
+// keeps working on the remaining stages. Applied at once.
+//
+void ifpan_set_sdr_lna_off(int on) {
+  ifpan_sdr_lna_off = on ? 1 : 0;
+  if (radio_is_remote) { send_ifpan(cl_sock_tcp, IFPAN_REMOTE_LNA_OFF, ifpan_sdr_lna_off); return; }
+  t_print("%s: SDR LNA %s\n", __func__, ifpan_sdr_lna_off ? "kept off" : "as set by the RF gain");
+  for (int id = 0; id < receivers; id++) { soapy_protocol_set_rx_gain(id); }
+}
+
+//
 // Server side of client/server: a Kenwood action or IF panadapter option
 // sent by the client (CMD_IFPAN), carried out here as if done locally
 //
@@ -687,6 +704,7 @@ void ifpan_remote_command(int what, int value) {
   case IFPAN_REMOTE_ATU:         ifpan_atu_toggle(); break;
   case IFPAN_REMOTE_ATU_TUNE:    ifpan_atu_tune(); break;
   case IFPAN_REMOTE_LO_OFFSET:   ifpan_set_lo_offset_khz(value); break;
+  case IFPAN_REMOTE_LNA_OFF:     ifpan_set_sdr_lna_off(value); break;
   default:
     t_print("%s: unknown IF panadapter command %d\n", __func__, what);
     break;

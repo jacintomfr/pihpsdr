@@ -48,6 +48,7 @@ extern int       ifpan_kenwood_smeter; // S-meter in dB relative to S9, -999: un
 extern const char *ifpan_mode_names[];
 extern int       ifpan_tx_mute;       // 1: mute the RX audio while the Kenwood transmits
 extern int       ifpan_follow_mode;   // 1: the receiver mode follows the Kenwood mode
+extern int       ifpan_sdr_lna_off;   // 1: the SDR front-end LNA is kept off (Radio menu)
 extern int       ifpan_kenwood_tx;    // 1: the Kenwood is transmitting (Kenwood TCP only)
 extern int       ifpan_kenwood_pwr;   // raw TX meters, -1: not read yet
 extern int       ifpan_kenwood_swr;
@@ -86,6 +87,7 @@ extern void      ifpan_tune_power_changed(void);               // tune power set
 extern void      ifpan_set_cat_write(int on);                  // Radio menu "Clicks tune the TS"
 extern void      ifpan_set_tx_mute(int on);                    // Radio menu "Mute when TS in TX"
 extern void      ifpan_set_lo_offset_khz(int khz);             // Radio menu "SDR LO offset (kHz)"
+extern void      ifpan_set_sdr_lna_off(int on);                // Radio menu "SDR LNA off"
 extern void      ifpan_remote_command(int what, int value);    // server: CMD_IFPAN from a client
 extern void      ifpan_push_vfo_to_client(void);               // server: VFO / RX / TX / filter data to the client
 // WDSP-processed TX audio to the Kenwood's ACC2 input (sound card output)

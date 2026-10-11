@@ -1585,6 +1585,9 @@ int process_action(gpointer data) {
       if (radio_is_remote) {
         send_txmenu(cl_sock_tcp);
       }
+#ifdef IFPAN
+      ifpan_tune_power_changed();
+#endif
       queue_popup_slider(TUNE_DRIVE, -1, 0.0, 100.0, 1.0, value, "TUNE DRIVE");
     }
     break;

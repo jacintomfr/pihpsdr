@@ -200,10 +200,57 @@ static int       pc_request = -1;     // watts to send, -1: none
 int              ifpan_kenwood_pc = -1;       // PWR setting read by CAT (W), -1 unknown
 static gint64    pc_touched = 0;      // when the slider was last moved (main thread)
 
+//
+// TUNE: piHPSDR's TUNE tone (a 1 kHz tone in IFPAN, see tx_set_signal) is
+// sent to ACC2 and the Kenwood keyed as for MOX. The CAT thread first sets
+// the tune power ("Tune Drive level" in W, or the TX Drive with "Tune use
+// drive"), remembering the radio's PWR setting to put it back after. In CW
+// and FSK the Kenwood ignores ACC2 audio, so it is switched to USB (CW-R /
+// FSK-R: LSB) for the tune and back afterwards; meanwhile its mode readings
+// are not applied to the receiver.
+//
+static int       tune_request = -1;   // 1 start, 0 stop, -1 none (cat_mutex)
+static int       tune_watts = 10;     // tune power (cat_mutex)
+static int       tune_pc_dirty = 0;   // tune power changed while tuning (cat_mutex)
+static int       tune_active = 0;     // CAT thread only
+static int       tune_stopping = 0;   // CAT thread only: restore once in RX
+static int       tune_saved_mode = -1;
+static int       tune_saved_pc = -1;
+
+// tune power in W from the TX menu settings (main thread)
+static int tune_power(void) {
+  if (transmitter == NULL) { return 10; }
+  int w = transmitter->tune_use_drive ? (int)(transmitter->drive + 0.5) : transmitter->tune_drive;
+  return (w < 5) ? 5 : (w > 100) ? 100 : w;
+}
+
+// TUNE on / off on the server (radio_set_tune, radio_set_mox), main thread
+void ifpan_tune(int on) {
+  if (radio_is_remote) { return; }
+  g_mutex_lock(&cat_mutex);
+  if (on || tune_request == 1 || tune_active) { tune_request = on; }
+  tune_watts = tune_power();
+  g_mutex_unlock(&cat_mutex);
+}
+
+// "Tune Drive level" / "Tune use drive" / Drive changed: while tuning, the
+// new tune power is sent at once
+void ifpan_tune_power_changed(void) {
+  if (radio_is_remote || transmitter == NULL || !transmitter->tune) { return; }
+  g_mutex_lock(&cat_mutex);
+  tune_watts = tune_power();
+  tune_pc_dirty = 1;
+  g_mutex_unlock(&cat_mutex);
+}
+
 // TX Drive slider moved (main thread, client and server)
 void ifpan_set_power(double drive) {
   pc_touched = g_get_monotonic_time();
   if (radio_is_remote || !ifpan_cat_connected) { return; }
+  if (transmitter != NULL && transmitter->tune) {
+    ifpan_tune_power_changed();       // the radio's own setting is restored after the tune
+    return;
+  }
   int w = (int)(drive + 0.5);
   g_mutex_lock(&cat_mutex);
   pc_request = (w < 5) ? 5 : (w > 100) ? 100 : w;
@@ -216,6 +263,7 @@ int ifpan_power_apply(gpointer data) {
   if (transmitter == NULL || w < 0) { return G_SOURCE_REMOVE; }
   if (g_get_monotonic_time() - pc_touched < PC_HOLD_US) { return G_SOURCE_REMOVE; }
   if (transmitter->drive < 0.5) { return G_SOURCE_REMOVE; }  // zero drive (SWR protection) stays
+  if (transmitter->tune) { return G_SOURCE_REMOVE; }         // that is the tune power
   if ((int)(transmitter->drive + 0.5) != w) {
     transmitter->drive = w;
     if (!radio_is_remote) { radio_calc_drive_level(0); }
@@ -734,6 +782,7 @@ static int kw_get_strength(int sock, int *db) {
 //
 static int kw_meter_user = 0;         // RM selection before TX (0: not in TX)
 static int kw_high_swr = 0;           // consecutive SWR readings above the alarm
+static gint64 kw_high_since = 0;      // since when (monotonic us)
 
 //
 // SWR protection (TX menu "SWR alarm at" / "SWR Protection"), as piHPSDR
@@ -741,6 +790,7 @@ static int kw_high_swr = 0;           // consecutive SWR readings above the alar
 // PTT do not put audio into a bad antenna again until the operator acts.
 //
 static gboolean swr_protect_cb(gpointer data) {
+  if (transmitter != NULL && transmitter->tune) { radio_set_tune(0); }
   if (mox) { radio_set_mox(0); }
   radio_set_drive(0.0);
   return G_SOURCE_REMOVE;
@@ -750,6 +800,7 @@ static int kw_tx_meters(int sock) {
   char frame[64];
   char cmd[8];
   if (!ifpan_kenwood_tx) {
+    kw_high_swr = 0;
     if (kw_meter_user != 0) {
       snprintf(cmd, sizeof(cmd), "RM%d;", kw_meter_user);
       kw_meter_user = 0;
@@ -772,19 +823,22 @@ static int kw_tx_meters(int sock) {
       //
       // Two readings in a row above the alarm (not an artifact), and not
       // while the tuner tunes: warn, and with protection on drop the
-      // Kenwood to RX at once, then MOX off and drive to zero
+      // Kenwood to RX at once, then MOX / TUNE off and drive to zero.
+      // During TUNE (e.g. adjusting an external tuner) the SWR may stay
+      // high for up to 10 s before the protection acts.
       //
       double swr = (val >= 24) ? 9.9 : 60.0 / (30.0 - val) - 1.0;
       if (transmitter != NULL && swr >= transmitter->swr_alarm && !ifpan_kenwood_atu_tuning) {
-        if (++kw_high_swr >= 2) {
-          high_swr_seen = 1;
+        gint64 now = g_get_monotonic_time();
+        if (kw_high_swr++ == 0) { kw_high_since = now; }
+        if (kw_high_swr >= 2) { high_swr_seen = 1; }
+        int trip = transmitter->tune ? (now - kw_high_since >= 10000000) : (kw_high_swr >= 2);
+        if (trip && transmitter->swr_protection) {
+          t_print("%s: SWR %.1f >= %.1f, TX stopped\n", __func__, swr, transmitter->swr_alarm);
+          if (send(sock, "RX;", 3, MSG_NOSIGNAL) != 3) { return -1; }
+          ptt_keyed = 0;
           kw_high_swr = 0;
-          if (transmitter->swr_protection && !transmitter->tune) {
-            t_print("%s: SWR %.1f >= %.1f, TX stopped\n", __func__, swr, transmitter->swr_alarm);
-            if (send(sock, "RX;", 3, MSG_NOSIGNAL) != 3) { return -1; }
-            ptt_keyed = 0;
-            g_idle_add(swr_protect_cb, NULL);
-          }
+          g_idle_add(swr_protect_cb, NULL);
         }
       } else {
         kw_high_swr = 0;
@@ -1195,6 +1249,50 @@ static gpointer cat_thread(gpointer data) {
       }
     }
     //
+    // TUNE start (before its PTT): mode for the ACC2 tone, tune power
+    //
+    int tr, tw, tdirty;
+    g_mutex_lock(&cat_mutex);
+    tr = tune_request;
+    tune_request = -1;
+    tw = tune_watts;
+    tdirty = tune_pc_dirty;
+    tune_pc_dirty = 0;
+    g_mutex_unlock(&cat_mutex);
+    if (tr == 1 && !tune_active) {
+      int m = ifpan_kenwood_mode;
+      int swap = (m == 2 || m == 6) ? 0 : (m == 3 || m == 7) ? 1 : -1;  // CW/FSK -> USB, CW-R/FSKR -> LSB
+      tune_active = 1;
+      tune_stopping = 0;
+      tune_saved_mode = -1;
+      if (swap >= 0) {
+        if (be_set_mode(sock, swap) < 0) {
+          close(sock);
+          sock = -1;
+          continue;
+        }
+        tune_saved_mode = m;
+        usleep(50000);
+      }
+      tune_saved_pc = be_get_pc(sock);
+      if (tune_saved_pc == -1) {
+        close(sock);
+        sock = -1;
+        continue;
+      }
+      tdirty = 1;
+      t_print("%s: TUNE at %d W%s%s\n", __func__, tw, swap >= 0 ? ", Kenwood to " : "",
+              swap >= 0 ? ifpan_mode_names[swap] : "");
+    }
+    if (tr == 0 && tune_active) { tune_stopping = 1; }
+    if (tune_active && !tune_stopping && tdirty) {
+      if (be_set_pc(sock, tw) < 0) {
+        close(sock);
+        sock = -1;
+        continue;
+      }
+    }
+    //
     // piHPSDR-IF PTT (toolbar PTT / MOX) -> Kenwood
     //
     int ptt;
@@ -1218,6 +1316,31 @@ static gpointer cat_thread(gpointer data) {
       }
       ptt_keyed = ptt;
       t_print("%s: PTT %s sent to the Kenwood\n", __func__, ptt ? "TX" : "RX");
+    }
+    //
+    // TUNE end, once the Kenwood is back in RX: its PWR setting, then its mode
+    //
+    if (tune_stopping && !ptt_keyed) {
+      if (tune_saved_pc >= 0 && be_set_pc(sock, tune_saved_pc) < 0) {
+        close(sock);
+        sock = -1;
+        continue;
+      }
+      if (tune_saved_mode >= 0) {
+        usleep(50000);
+        if (be_set_mode(sock, tune_saved_mode) < 0) {
+          close(sock);
+          sock = -1;
+          continue;
+        }
+      }
+      t_print("%s: TUNE done, Kenwood PWR %d W%s%s\n", __func__, tune_saved_pc,
+              tune_saved_mode >= 0 ? ", mode " : "", tune_saved_mode >= 0 ? ifpan_mode_names[tune_saved_mode] : "");
+      tune_active = 0;
+      tune_stopping = 0;
+      tune_saved_mode = -1;
+      tune_saved_pc = -1;
+      mode_count = 0;
     }
     long long f = be_get_freq(sock);
     if (f == -2) {
@@ -1278,7 +1401,8 @@ static gpointer cat_thread(gpointer data) {
         continue;
       }
       if (m == -3) { m = -1; }
-      if (m >= -1 && m != ifpan_kenwood_mode) {
+      // (not while TUNE has switched the Kenwood to USB / LSB for the tone)
+      if (m >= -1 && m != ifpan_kenwood_mode && tune_saved_mode < 0) {
         ifpan_kenwood_mode = m;
         g_idle_add(ext_vfo_update, NULL);
         if (m >= 0) { g_idle_add(mode_apply, GINT_TO_POINTER(m)); }
@@ -1315,8 +1439,8 @@ static gpointer cat_thread(gpointer data) {
         continue;
       }
       if (p < 0) { p = -1; }
-      ifpan_kenwood_pc = p;
-      if (p >= 0 && transmitter != NULL && p != (int)(transmitter->drive + 0.5)) {
+      if (!tune_active) { ifpan_kenwood_pc = p; }   // (the client follows it too)
+      if (p >= 0 && !tune_active && transmitter != NULL && p != (int)(transmitter->drive + 0.5)) {
         g_idle_add(ifpan_power_apply, GINT_TO_POINTER(p));
       }
     }

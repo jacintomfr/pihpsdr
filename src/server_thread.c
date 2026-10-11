@@ -2239,6 +2239,9 @@ static int server_command(gpointer data) {
       transmitter->swr_protection = command->swr_protection;
       transmitter->swr_alarm = from_double(command->swr_alarm);
       radio_set_ptt_delay(from_16(command->ptt_delay));
+#ifdef IFPAN
+      ifpan_tune_power_changed();     // tune power changed on the client while tuning
+#endif
       schedule_transmit_specific();
       send_tx_data(remoteclient.sock_tcp);
     }

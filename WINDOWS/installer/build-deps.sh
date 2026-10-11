@@ -87,6 +87,42 @@ else
   ls -la "$SOAPYMOD"/librtlsdrSupport.dll
 fi
 
+#
+# libmirisdr-5 + SoapyMiri (the "soapyMiri" SoapySDR module): Mirics
+# MSi2500 / MSi001 receivers, i.e. the SDRplay RSP1 and its clones (USB
+# 1DF7:2500), without the closed SDRplay API. GPL, so they can be shipped.
+# The device needs the WinUSB driver (Zadig) on the user's PC. libmirisdr's
+# two command-line tools use POSIX signals and do not build with MinGW;
+# only the library is built and installed.
+#
+MIRISDR_GIT=https://github.com/ericek111/libmirisdr-5.git
+SOAPYMIRI_GIT=https://github.com/ericek111/SoapyMiri.git
+if [ -f "$MINGW/bin/libmirisdr.dll" ]; then
+  echo "==> libmirisdr already installed: $MINGW/bin/libmirisdr.dll"
+else
+  echo "==> libmirisdr-5"
+  [ -d "$DEPS/libmirisdr-5" ] || git clone "$MIRISDR_GIT" "$DEPS/libmirisdr-5"
+  sed -i 's/^add_executable(miri_sdr miri_sdr.c)/add_executable(miri_sdr EXCLUDE_FROM_ALL miri_sdr.c)/;
+          s/^add_executable(miri_fm miri_fm.c)/add_executable(miri_fm EXCLUDE_FROM_ALL miri_fm.c)/;
+          s/^set(INSTALL_TARGETS mirisdr_shared mirisdr_static miri_sdr miri_fm)/set(INSTALL_TARGETS mirisdr_shared mirisdr_static)/' \
+      "$DEPS/libmirisdr-5/src/CMakeLists.txt"
+  cmake -S "$DEPS/libmirisdr-5" -B "$DEPS/libmirisdr-5/build" -G "MSYS Makefiles" \
+        -DCMAKE_INSTALL_PREFIX=$MINGW -DCMAKE_BUILD_TYPE=Release
+  cmake --build "$DEPS/libmirisdr-5/build" -j"$JOBS"
+  cmake --install "$DEPS/libmirisdr-5/build"
+fi
+if [ -f "$SOAPYMOD/libsoapyMiriSupport.dll" ]; then
+  echo "==> SoapyMiri already installed: $SOAPYMOD/libsoapyMiriSupport.dll"
+else
+  echo "==> SoapyMiri"
+  [ -d "$DEPS/SoapyMiri" ] || git clone "$SOAPYMIRI_GIT" "$DEPS/SoapyMiri"
+  cmake -S "$DEPS/SoapyMiri" -B "$DEPS/SoapyMiri/build" -G "MSYS Makefiles" \
+        -DCMAKE_INSTALL_PREFIX=$MINGW -DCMAKE_BUILD_TYPE=Release
+  cmake --build "$DEPS/SoapyMiri/build" -j"$JOBS"
+  cmake --install "$DEPS/SoapyMiri/build"
+  ls -la "$SOAPYMOD"/libsoapyMiriSupport.dll
+fi
+
 # ---------------------------------------------------------------- Hamlib rigctld
 HAMLIB=$DEPS/hamlib
 if [ -f "$HAMLIB/tests/.libs/rigctld.exe" ] || [ -f "$HAMLIB/tests/rigctld.exe" ]; then

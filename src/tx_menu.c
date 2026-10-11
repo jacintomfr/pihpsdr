@@ -982,7 +982,12 @@ void tx_menu(GtkWidget *parent) {
   gtk_widget_set_halign(label, GTK_ALIGN_END);
   gtk_grid_attach(GTK_GRID(swr_grid), label, col, row, 1, 1);
   col++;
+#ifdef IFPAN
+  tunedrive_spin = gtk_spin_button_new_with_range(5.0, 100.0, DRIVE_STEP);   // W, the Kenwood's 5 W steps
+  gtk_spin_button_set_snap_to_ticks(GTK_SPIN_BUTTON(tunedrive_spin), TRUE);
+#else
   tunedrive_spin = gtk_spin_button_new_with_range(1.0, 100.0, 1.0);
+#endif
   gtk_spin_button_set_value(GTK_SPIN_BUTTON(tunedrive_spin), (double)transmitter->tune_drive);
   gtk_grid_attach(GTK_GRID(swr_grid), tunedrive_spin, col, row, 1, 1);
   g_signal_connect(tunedrive_spin, "value-changed", G_CALLBACK(spinbtn_cb), GINT_TO_POINTER(TX_TUNE_DRIVE));

@@ -621,7 +621,7 @@ int sliders_drive(gpointer data) {
       gtk_range_set_value (GTK_RANGE(drive_scale), (double) transmitter->drive);
       g_signal_handler_unblock(G_OBJECT(drive_scale), drive_signal_id);
     } else if (val < 100) {
-      show_popup_slider(DRIVE, -1, drive_min, drive_max, 1.0, (double) transmitter->drive, "TX Drive");
+      show_popup_slider(DRIVE, -1, drive_min, drive_max, DRIVE_STEP, (double) transmitter->drive, "TX Drive");
     }
   }
   return G_SOURCE_REMOVE;
@@ -1062,10 +1062,10 @@ void sliders_create(int width, int height, int rows) {
           gtk_widget_set_halign(label, GTK_ALIGN_END);
           gtk_grid_attach(GTK_GRID(sliders_grid), label, pos, i, twidth, 1);
           drive_scale = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL,
-                                                 drive_min, drive_max, 1.00);
+                                                 drive_min, drive_max, DRIVE_STEP);
           gtk_widget_set_size_request(drive_scale, 0, height);
           gtk_widget_set_valign(drive_scale, GTK_ALIGN_CENTER);
-          gtk_range_set_increments (GTK_RANGE(drive_scale), 1.0, 1.0);
+          gtk_range_set_increments (GTK_RANGE(drive_scale), DRIVE_STEP, DRIVE_STEP);
           gtk_range_set_value (GTK_RANGE(drive_scale), radio_get_drive());
           gtk_grid_attach(GTK_GRID(sliders_grid), drive_scale, pos + twidth, i, swidth, 1);
           drive_signal_id = g_signal_connect(G_OBJECT(drive_scale), "value_changed",

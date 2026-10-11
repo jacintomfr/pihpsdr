@@ -2960,6 +2960,9 @@ void radio_set_attenuation(int id, int value) {
 
 void radio_set_drive(double value) {
   if (transmitter == NULL) { return; }
+#ifdef IFPAN
+  value = DRIVE_STEP * floor(value / DRIVE_STEP + 0.5);  // the Kenwood's PWR steps
+#endif
   int txmode = vfo_get_tx_mode();
   if (txmode == modeDIGU || txmode == modeDIGL) {
     if (value > drive_digi_max) { value = drive_digi_max; }

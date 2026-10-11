@@ -853,7 +853,7 @@ int process_action(gpointer data) {
     break;
   case DRIVE:
     if (a->mode == ABSOLUTE || a->mode == RELATIVE) {
-      value = KnobOrWheel(a, radio_get_drive(), 0.0, drive_max, 1.0);
+      value = KnobOrWheel(a, radio_get_drive(), 0.0, drive_max, DRIVE_STEP);
       radio_set_drive(value);
     }
     break;
@@ -1579,7 +1579,13 @@ int process_action(gpointer data) {
     break;
   case TUNE_DRIVE:
     if (transmitter != NULL && (a->mode == ABSOLUTE || a->mode == RELATIVE)) {
+#ifdef IFPAN
+      // tune power in W, 5 W steps as the Kenwood
+      value = KnobOrWheel(a, (double) transmitter->tune_drive, 5.0, 100.0, DRIVE_STEP);
+      value = DRIVE_STEP * floor(value / DRIVE_STEP + 0.5);
+#else
       value = KnobOrWheel(a, (double) transmitter->tune_drive, 0.0, 100.0, 1.0);
+#endif
       transmitter->tune_drive = (int) value;
       transmitter->tune_use_drive = 0;
       if (radio_is_remote) {
@@ -1588,7 +1594,7 @@ int process_action(gpointer data) {
 #ifdef IFPAN
       ifpan_tune_power_changed();
 #endif
-      queue_popup_slider(TUNE_DRIVE, -1, 0.0, 100.0, 1.0, value, "TUNE DRIVE");
+      queue_popup_slider(TUNE_DRIVE, -1, 0.0, 100.0, DRIVE_STEP, value, "TUNE DRIVE");
     }
     break;
   case TUNE_FULL:

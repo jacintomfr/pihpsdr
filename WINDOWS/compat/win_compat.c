@@ -1007,4 +1007,33 @@ int flock(int fd, int operation) {
   return 0;
 }
 
+/* ------------------------------------------------------------------ */
+/* clock_nanosleep: absolute sleeps that really sleep                 */
+/* ------------------------------------------------------------------ */
+
+/*
+ * WHY: winpthreads' clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, ...)
+ * returns -1 immediately (see compat/time.h). Here an absolute time is
+ * turned into a relative nanosleep() (1 ms timer resolution, see
+ * compat_init); a late wake-up is made up by the next absolute target.
+ */
+#undef clock_nanosleep
+int compat_clock_nanosleep(clockid_t clock_id, int flags,
+                           const struct timespec *request, struct timespec *remain) {
+  struct timespec rel;
+  if (flags & TIMER_ABSTIME) {
+    struct timespec now;
+    if (clock_gettime(clock_id, &now) != 0) { return EINVAL; }
+    long long ns = (long long)(request->tv_sec - now.tv_sec) * 1000000000LL
+                   + (request->tv_nsec - now.tv_nsec);
+    if (ns <= 0) { return 0; }
+    rel.tv_sec = (time_t)(ns / 1000000000LL);
+    rel.tv_nsec = (long)(ns % 1000000000LL);
+    request = &rel;
+    remain = NULL;
+  }
+  return (nanosleep(request, remain) == 0) ? 0 : errno;
+}
+
 #endif /* _WIN32 */
+

@@ -163,7 +163,7 @@ enum _header_type_enum {
 // piHPSDR-IF has its own protocol version: an IF panadapter server and a
 // plain piHPSDR client (or the other way round) refuse each other.
 //
-#define CLIENT_SERVER_VERSION 0x013100F4 // 32-bit version number
+#define CLIENT_SERVER_VERSION 0x013100F5 // 32-bit version number
 #else
 #define CLIENT_SERVER_VERSION 0x01310001 // 32-bit version number
 #endif
@@ -840,6 +840,7 @@ typedef struct __attribute__((__packed__)) _ifpan_data {
   uint8_t atu_tuning;
   uint8_t ts_power;          // Kenwood PWR setting (W) + 1
   uint8_t lo_khz;            // SDR LO offset from the IF (kHz, 0 .. 250)
+  uint8_t sdr_lna_off;       // SDR front-end LNA kept off
 } IFPAN_DATA;
 
 // CMD_IFPAN: b1 = what, b2 = value
@@ -856,6 +857,7 @@ enum {
   IFPAN_REMOTE_ATU,          // toggle
   IFPAN_REMOTE_ATU_TUNE,     // start / stop a tuning cycle
   IFPAN_REMOTE_LO_OFFSET,    // b2: SDR LO offset in kHz
+  IFPAN_REMOTE_LNA_OFF,      // b2: SDR LNA kept off
 };
 
 //

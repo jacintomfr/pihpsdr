@@ -1132,6 +1132,21 @@ void soapy_protocol_set_rx_gain(const int id) {
   if (rc != 0) {
     t_print("%s: SetGain failed: %s\n", __func__, SoapySDR_errToStr(rc));
   }
+#ifdef IFPAN
+  //
+  // Radio menu "SDR LNA off": the overall gain above may switch the LNA on
+  // (Mirics: from 43 dB); keep it off, if the device has such an element
+  //
+  if (ifpan_sdr_lna_off && radio != NULL && id < 2) {
+    for (int i = 0; i < radio->soapy.rx[id].gains; i++) {
+      if (strcmp(radio->soapy.rx[id].gain_elem_name[i], "LNA") == 0) {
+        rc = SoapySDRDevice_setGainElement(soapy_device, SOAPY_SDR_RX, id, "LNA", 0.0);
+        if (rc != 0) { t_print("%s: LNA off failed: %s\n", __func__, SoapySDR_errToStr(rc)); }
+        break;
+      }
+    }
+  }
+#endif
 }
 
 static void soapy_protocol_rx_attenuate(const int id) {

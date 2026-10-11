@@ -322,6 +322,14 @@ on 2026-10-11 (no long-run report yet).
   on battery. (The clone has its own input limiter; the buffer has a TX
   mute.)
 
+* IF offset per Kenwood mode (Radio menu "IF offset (Hz), TS <mode>",
+  server only, `ifpan.mode_if_offset.N`): the TS-570D moves its carrier
+  inside the 73.05 MHz IF with the mode (a station at 7.153 LSB on the TS
+  was at 7.156 here while USB was right; switching LSB -> USB moved the
+  signals to the left). The offset of the Kenwood's current mode is added
+  to the IF and the SDR is retuned on every Kenwood mode change; the user
+  sets each mode once.
+
 ## 5. Open items (2026-10-11)
 
 1. **ACC2 cable** (user is looking for the plug). Then test on a dummy load:

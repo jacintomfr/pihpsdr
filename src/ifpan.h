@@ -88,6 +88,8 @@ extern void      ifpan_set_cat_write(int on);                  // Radio menu "Cl
 extern void      ifpan_set_tx_mute(int on);                    // Radio menu "Mute when TS in TX"
 extern void      ifpan_set_lo_offset_khz(int khz);             // Radio menu "SDR LO offset (kHz)"
 extern void      ifpan_set_sdr_lna_off(int on);                // Radio menu "SDR LNA off"
+extern int       ifpan_mode_if_offset[8];                      // IF offset per Kenwood mode (Hz)
+extern void      ifpan_set_mode_if_offset(int hz);             // Radio menu: offset of the current Kenwood mode
 extern void      ifpan_remote_command(int what, int value);    // server: CMD_IFPAN from a client
 extern void      ifpan_push_vfo_to_client(void);               // server: VFO / RX / TX / filter data to the client
 // WDSP-processed TX audio to the Kenwood's ACC2 input (sound card output)

@@ -177,6 +177,11 @@ static void lna_off_cb(GtkWidget *widget, gpointer data) {
   ifpan_set_sdr_lna_off(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)));
 }
 
+// IF offset (Hz) of the Kenwood's current mode
+static void mode_if_offset_cb(GtkWidget *widget, gpointer data) {
+  ifpan_set_mode_if_offset(gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(widget)));
+}
+
 // sound card output carrying the processed TX audio to the Kenwood (entry 0: none)
 static void tx_out_cb(GtkWidget *widget, gpointer data) {
   int i = gtk_combo_box_get_active(GTK_COMBO_BOX(widget)) - 1;
@@ -993,6 +998,28 @@ void radio_menu(GtkWidget *parent) {
     gtk_grid_attach(GTK_GRID(grid), Btn, 5, row, 2, 1);
     g_signal_connect(Btn, "toggled", G_CALLBACK(lna_off_cb), NULL);
     row++;
+    if (!radio_is_remote) {
+      //
+      // IF offset of the Kenwood's current mode (the TS-570D moves the
+      // carrier inside its IF with the mode): set it so that a station is
+      // at the same frequency on the Kenwood and here
+      //
+      GtkWidget *off_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+      char off_text[64];
+      int km = ifpan_kenwood_mode;
+      snprintf(off_text, sizeof(off_text), "IF offset (Hz), TS %s", (km >= 0 && km < 8) ? ifpan_mode_names[km] : "?");
+      GtkWidget *off_label = gtk_label_new(off_text);
+      gtk_widget_set_name(off_label, "boldlabel");
+      GtkWidget *off_spin = gtk_spin_button_new_with_range(-10000.0, 10000.0, 10.0);
+      gtk_spin_button_set_value(GTK_SPIN_BUTTON(off_spin), (km >= 0 && km < 8) ? (double)ifpan_mode_if_offset[km] : 0.0);
+      gtk_widget_set_sensitive(off_spin, km >= 0 && km < 8);
+      gtk_box_pack_start(GTK_BOX(off_box), off_label, FALSE, FALSE, 0);
+      gtk_box_pack_start(GTK_BOX(off_box), off_spin, FALSE, FALSE, 0);
+      gtk_widget_set_halign(off_box, GTK_ALIGN_END);
+      gtk_grid_attach(GTK_GRID(grid), off_box, 5, row, 2, 1);
+      g_signal_connect(off_spin, "value_changed", G_CALLBACK(mode_if_offset_cb), NULL);
+      row++;
+    }
     if (!radio_is_remote) {
       //
       // sound card output wired to the Kenwood's ACC2 audio input

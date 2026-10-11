@@ -488,6 +488,9 @@ typedef struct __attribute__((__packed__)) _dexp_data {
   //
   uint8_t  dexp;
   uint8_t  dexp_filter;
+#ifdef IFPAN
+  uint8_t  mic_nr;           // microphone noise reduction (mic_nr.c)
+#endif
 } DEXP_DATA;
 
 typedef struct __attribute__((__packed__)) _adc_data {
@@ -583,6 +586,9 @@ typedef struct __attribute__((__packed__)) _transmitter_data {
   uint8_t  phrot_enable;
   uint8_t  phrot_stages;
   uint8_t  phrot_reverse;
+#ifdef IFPAN
+  uint8_t  mic_nr;           // microphone noise reduction (mic_nr.c)
+#endif
 } TRANSMITTER_DATA;
 
 //

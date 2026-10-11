@@ -59,6 +59,7 @@
 #include "waterfall.h"
 #ifdef IFPAN
   #include "ifpan.h"
+  #include "mic_nr.h"
 #endif
 
 #ifdef IFPAN
@@ -413,6 +414,9 @@ void tx_save_state(const TRANSMITTER *tx) {
     SetPropI1("transmitter.%d.dexp",                                tx->id,    tx->dexp);
     SetPropI1("transmitter.%d.dexp_exp",                            tx->id,    tx->dexp_exp);
     SetPropI1("transmitter.%d.dexp_filter",                         tx->id,    tx->dexp_filter);
+#ifdef IFPAN
+    SetPropI1("transmitter.%d.mic_nr",                              tx->id,    tx->mic_nr);
+#endif
     SetPropI1("transmitter.%d.dexp_filter_low",                     tx->id,    tx->dexp_filter_low);
     SetPropI1("transmitter.%d.dexp_filter_high",                    tx->id,    tx->dexp_filter_high);
     SetPropI1("transmitter.%d.dexp_trigger",                        tx->id,    tx->dexp_trigger);
@@ -506,6 +510,9 @@ void tx_restore_state(TRANSMITTER *tx) {
     GetPropI1("transmitter.%d.dexp",                                tx->id,    tx->dexp);
     GetPropI1("transmitter.%d.dexp_exp",                            tx->id,    tx->dexp_exp);
     GetPropI1("transmitter.%d.dexp_filter",                         tx->id,    tx->dexp_filter);
+#ifdef IFPAN
+    GetPropI1("transmitter.%d.mic_nr",                              tx->id,    tx->mic_nr);
+#endif
     GetPropI1("transmitter.%d.dexp_filter_low",                     tx->id,    tx->dexp_filter_low);
     GetPropI1("transmitter.%d.dexp_filter_high",                    tx->id,    tx->dexp_filter_high);
     GetPropI1("transmitter.%d.dexp_trigger",                        tx->id,    tx->dexp_trigger);
@@ -1123,6 +1130,9 @@ TRANSMITTER *tx_create_transmitter(int id, int pixels, int width, int height) {
   tx->dexp_hyst        =   0.750;
   tx->dexp_trigger     =     -25;  // in dB
   tx->dexp_filter      =       0;
+#ifdef IFPAN
+  tx->mic_nr           =       0;
+#endif
   tx->dexp_filter_low  =    1000;
   tx->dexp_filter_high =    2000;
   tx->local_audio = 0;
@@ -1831,6 +1841,15 @@ void tx_add_mic_sample(TRANSMITTER *tx, double mic_sample) {
     mic_sample = remote_get_mic_sample();
   }
 #ifdef IFPAN
+  //
+  // Microphone noise reduction, before VOX and the TX chain. A remote
+  // client's microphone has already been cleaned on the client.
+  //
+  if (tx->mic_nr && !remoteclient.running) {
+    static MIC_NR *nr = NULL;
+    if (nr == NULL) { nr = mic_nr_create(); }
+    mic_sample = mic_nr_process(nr, mic_sample);
+  }
   ifpan_tx_dump(0, mic_sample);   // diagnostics only (see ifpan.c)
 #endif
   // If there is captured data to transmit, replace incoming

@@ -108,7 +108,8 @@ enum _dexp_choices {
   DEXP_TAU,
   DEXP_HYST,
   DEXP_TRIGGER,
-  DEXP_EXP
+  DEXP_EXP,
+  DEXP_MICNR                // piHPSDR-IF: microphone noise reduction (mic_nr.c)
 };
 
 enum _cfc_choices {
@@ -392,6 +393,12 @@ static void chkbtn_cb(GtkWidget *widget, gpointer data) {
     case DEXP_FILTER:
       transmitter->dexp_filter = v;
       break;
+#ifdef IFPAN
+    case DEXP_MICNR:
+      // applied where the microphone is captured; tx_set_dexp passes it on
+      transmitter->mic_nr = v;
+      break;
+#endif
     }
     tx_set_dexp(transmitter);
     g_idle_add(ext_vfo_update, NULL);
@@ -808,6 +815,18 @@ void tx_menu(GtkWidget *parent) {
   gtk_grid_set_row_spacing (GTK_GRID(dexp_grid), 5);
   gtk_container_add(GTK_CONTAINER(dexp_container), dexp_grid);
   row = 0;
+#ifdef IFPAN
+  //
+  // Microphone noise reduction (WDSP's neural NR, as the receiver's NR3),
+  // on the raw microphone before VOX and the TX chain: often a better
+  // choice than the downward expander below
+  //
+  btn = gtk_check_button_new_with_label("Mic Noise Reduction (NR3)");
+  gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (btn), transmitter->mic_nr);
+  gtk_grid_attach(GTK_GRID(dexp_grid), btn, 0, row, 1, 1);
+  g_signal_connect(btn, "toggled", G_CALLBACK(chkbtn_cb), GINT_TO_POINTER(DEXP_MICNR));
+  row++;
+#endif
   btn = gtk_check_button_new_with_label("Use Downward Expander");
   gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (btn), transmitter->dexp);
   gtk_grid_attach(GTK_GRID(dexp_grid), btn, 0, row, 1, 1);

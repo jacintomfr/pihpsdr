@@ -166,6 +166,9 @@ typedef struct _transmitter {
   int    dexp_filter;       // Do side channel filtering
   int    dexp_filter_low;   // low-cut of side channel filter
   int    dexp_filter_high;  // high-cut of side channel filter
+#ifdef IFPAN
+  int    mic_nr;            // microphone noise reduction (WDSP NNR, see mic_nr.c)
+#endif
   int    dexp_vox_delay;    // VOX delay in msec
 
   int phrot_enable;

@@ -1,0 +1,4 @@
+src/rnnoise_data.c
+src/rnnoise_data.h
+*.tar.gz
+*.o

@@ -2261,6 +2261,9 @@ static int server_command(gpointer data) {
       const DEXP_DATA  *command = (DEXP_DATA *)data;
       transmitter->dexp = command->dexp;
       transmitter->dexp_filter = command->dexp_filter;
+#ifdef IFPAN
+      transmitter->mic_nr = command->mic_nr;
+#endif
       transmitter->dexp_trigger = from_16(command->dexp_trigger);
       transmitter->dexp_exp = from_16(command->dexp_exp);
       transmitter->dexp_filter_low = from_16(command->dexp_filter_low);

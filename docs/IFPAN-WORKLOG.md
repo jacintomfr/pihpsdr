@@ -394,9 +394,9 @@ shield, see 4.12) also happens with the Pi 5 as host, and measure RADE there.
 - USB: behind the external USB 2.0 hub (shared with the FTDI and the Arduino
   MIDI/audio) libmirisdr reported ~3.5 "504 samples lost" lines/s; on a
   direct (blue) Pi port ~8 per minute. Keep the MSI on a direct port.
-- Desktop shortcut  at x=776 y=142 (under
-  deskHPSDR); a matching box was drawn into  (original kept
-  as ).
+- Desktop shortcut `~/Desktop/pihpsdr-if.desktop` at x=776 y=142 (under
+  deskHPSDR); a matching box was drawn into `wall_boxes.png` (original kept
+  as `wall_boxes.png.before-pihpsdr-if`).
 - **Result:** SSB 100 W from the microphone with the Pi as host: no stall
   (with the Windows PC as host, AM 25 W into the dummy load always stalled).
   The ground loop goes through the PC; on the Pi the problem is gone.

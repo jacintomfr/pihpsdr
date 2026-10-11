@@ -1042,6 +1042,14 @@ static void ifpan_layout(cairo_t *cr, const VFO_BAR_LAYOUT *src, double width,
   dial->base = top + 0.5 * (room + k * e3.height);
   dial->status_x = src->vfo_a_l;
   dial->status_y = src->mode_y;
+  //
+  // client: the latency readout goes on the status line too, after the
+  // widest tuner text (it was drawn over the dial)
+  //
+  cairo_set_font_size(cr, src->size1);
+  cairo_text_extents(cr, "ATU TUNING", &e3);
+  dst->lat_x = (int)(dial->status_x + e3.x_advance + 1.5 * src->size1);
+  dst->lat_y = (int) dial->status_y;
 }
 #endif
 

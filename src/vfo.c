@@ -929,6 +929,7 @@ typedef struct {
   double gap;          // gap between kHz and Hz parts
   double status_x;     // status line above the dial (Kenwood tuner, ...)
   double status_y;
+  double mute_x;       // "TS MUTE", after the tuner text and the client latency slot
 } IFPAN_DIAL;
 
 static int ifpan_pre_x = 0, ifpan_pre_y = 0;   // "PRE" (Kenwood preamp) position
@@ -1050,6 +1051,9 @@ static void ifpan_layout(cairo_t *cr, const VFO_BAR_LAYOUT *src, double width,
   cairo_text_extents(cr, "ATU TUNING", &e3);
   dst->lat_x = (int)(dial->status_x + e3.x_advance + 1.5 * src->size1);
   dst->lat_y = (int) dial->status_y;
+  cairo_text_extents_t e4;
+  cairo_text_extents(cr, "999 ms", &e4);
+  dial->mute_x = dst->lat_x + e4.x_advance + 1.5 * src->size1;
 }
 #endif
 
@@ -1270,6 +1274,13 @@ void vfo_update(void) {
     cairo_set_font_size(cr, vfl->size1);
     cairo_move_to(cr, dial.status_x, dial.status_y);
     cairo_show_text(cr, atu);
+  }
+  // TS MUTE (toolbar): the Kenwood's speaker held at 0
+  if (ifpan_cat_connected && ifpan_ts_muted) {
+    cairo_set_source_rgba(cr, COLOUR_ALARM);
+    cairo_set_font_size(cr, vfl->size1);
+    cairo_move_to(cr, dial.mute_x, dial.status_y);
+    cairo_show_text(cr, "TS MUTE");
   }
   if (vfo[0].entered_frequency[0]) {
     cairo_set_source_rgba(cr, COLOUR_ATTN);

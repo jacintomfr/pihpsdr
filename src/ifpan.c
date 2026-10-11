@@ -138,6 +138,7 @@ void ifpan_preamp_toggle(void) {
   g_mutex_unlock(&cat_mutex);
 }
 static long long ui_last_freq = -1;   // receiver frequency last seen (main thread only)
+static int       ui_last_mode = -1;   // receiver mode last seen (main thread only)
 
 //
 // Frequency the PlutoSDR LO is tuned to: the IF centre plus the LO offset
@@ -219,8 +220,27 @@ static gboolean mode_apply(gpointer data) {
   if (vfo[VFO_A].mode != to_mode[m]) {
     t_print("%s: Kenwood %s -> receiver %s\n", __func__, ifpan_mode_names[m], mode_string[to_mode[m]]);
     vfo_id_mode_changed(VFO_A, to_mode[m]);
+    ui_last_mode = to_mode[m];        // came from the Kenwood: not to be sent back
   }
   return G_SOURCE_REMOVE;
+}
+
+//
+// piHPSDR mode -> index into ifpan_mode_names[] (the Kenwood's modes),
+// -1 for modes the Kenwood does not have (DSB, SAM, SPEC, DRM)
+//
+static int kenwood_mode_index(int mode) {
+  switch (mode) {
+  case modeUSB:  return 0;
+  case modeLSB:  return 1;
+  case modeCWU:  return 2;
+  case modeCWL:  return 3;
+  case modeAM:   return 4;
+  case modeFMN:  return 5;
+  case modeDIGL: return 6;
+  case modeDIGU: return 7;
+  default:       return -1;
+  }
 }
 
 // Radio menu: switching "Follow TS mode" on applies the Kenwood mode at once
@@ -272,6 +292,25 @@ static gboolean ui_watch(gpointer data) {
     if (ifpan_cat_write && ifpan_cat_connected) {
       g_mutex_lock(&cat_mutex);
       cat_set_target = f;
+      g_mutex_unlock(&cat_mutex);
+    }
+  }
+  //
+  // "Sync mode with TS": a mode chosen in piHPSDR-IF (mode menu, band
+  // change, ...) is sent to the Kenwood as well (sent 300 ms later and
+  // checked, see the CAT thread); changes coming from the Kenwood are not
+  // sent back (mode_apply sets ui_last_mode).
+  //
+  int mode = vfo[VFO_A].mode;
+  if (ui_last_mode < 0) {
+    ui_last_mode = mode;
+  } else if (mode != ui_last_mode) {
+    ui_last_mode = mode;
+    int k = kenwood_mode_index(mode);
+    if (ifpan_follow_mode && ifpan_cat_connected && k >= 0 && k != ifpan_kenwood_mode) {
+      t_print("%s: receiver mode %s -> Kenwood\n", __func__, mode_string[mode]);
+      g_mutex_lock(&cat_mutex);
+      cat_set_mode = k;
       g_mutex_unlock(&cat_mutex);
     }
   }
@@ -352,19 +391,8 @@ void ifpan_ts_here(void) {
 // Kenwood does not have (DSB, SAM, DRM, ...) are not sent.
 //
 void ifpan_band_changed(long long f, int mode) {
-  int m;
   if (!ifpan_cat_connected) { return; }
-  switch (mode) {
-  case modeUSB:  m = 0; break;
-  case modeLSB:  m = 1; break;
-  case modeCWU:  m = 2; break;
-  case modeCWL:  m = 3; break;
-  case modeAM:   m = 4; break;
-  case modeFMN:  m = 5; break;
-  case modeDIGL: m = 6; break;
-  case modeDIGU: m = 7; break;
-  default:       m = -1; break;
-  }
+  int m = kenwood_mode_index(mode);
   t_print("%s: Kenwood to %lld Hz, mode %s (receiver mode %s)\n", __func__, f,
           m >= 0 ? ifpan_mode_names[m] : "not sent", mode_string[mode]);
   g_mutex_lock(&cat_mutex);

@@ -280,6 +280,11 @@ extern int have_radioberry3;           // RadioBerry with third-generation firmw
 extern int rx_gain_calibration;        // used to calibrate the input signal
 
 extern double drive_min;               // minimum value of the drive slider
+#ifdef IFPAN
+#define DRIVE_STEP 5.0                  // TX Drive = Kenwood PWR, which has 5 W steps
+#else
+#define DRIVE_STEP 1.0
+#endif
 extern double drive_max;               // maximum value of the drive slider
 extern double drive_digi_max;          // maximum value allowed in DIGU/DIGL
 

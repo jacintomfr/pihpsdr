@@ -499,7 +499,9 @@ void radio_menu(GtkWidget *parent) {
   int hwpanel = 0;
   GtkWidget *label;
   GtkWidget *Btn;
+#ifndef IFPAN
   GtkWidget *Separator;
+#endif
   dialog = gtk_dialog_new();
   gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(parent));
   GtkWidget *headerbar = gtk_header_bar_new();
@@ -694,6 +696,10 @@ void radio_menu(GtkWidget *parent) {
     row++;
   }
   max_row = row;
+#ifdef IFPAN
+  int ifpan_row = max_row;       // next free row of the left side (Kenwood options)
+  int ifpan_gain_row = max_row;  // first row of the SDR gains, right-hand column
+#endif
   //
   // Machine-specific stuff is now put in columns 5+6
   //
@@ -938,131 +944,122 @@ void radio_menu(GtkWidget *parent) {
     row++;
 #ifdef IFPAN
     //
-    // IF panadapter: receiver follows the Kenwood dial (else it keeps the
-    // station being heard while the Kenwood is tuned)
-    //
-    Btn = gtk_check_button_new_with_label("Follow Kenwood");
-    gtk_widget_set_halign(Btn, GTK_ALIGN_END);
-    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (Btn), ifpan_follow_vfo);
-    gtk_grid_attach(GTK_GRID(grid), Btn, 5, row, 2, 1);
-    g_signal_connect(Btn, "toggled", G_CALLBACK(follow_cb), NULL);
-    row++;
-    //
-    // Tuning in piHPSDR-IF (click, wheel, keypad) also tunes the Kenwood.
-    // Off: only the piHPSDR-IF receiver moves inside the IF span, so the
-    // spectrum stays still (like CTUN on a direct-sampling SDR); the
-    // Kenwood stays where it is (and transmits there).
-    //
-    Btn = gtk_check_button_new_with_label("Clicks tune the TS");
-    gtk_widget_set_halign(Btn, GTK_ALIGN_END);
-    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (Btn), ifpan_cat_write);
-    gtk_grid_attach(GTK_GRID(grid), Btn, 5, row, 2, 1);
-    g_signal_connect(Btn, "toggled", G_CALLBACK(cat_write_cb), NULL);
-    row++;
-    // receiver mode and Kenwood mode kept the same, both ways (USB, LSB, CW, ...)
-    Btn = gtk_check_button_new_with_label("Sync mode with TS");
-    gtk_widget_set_halign(Btn, GTK_ALIGN_END);
-    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (Btn), ifpan_follow_mode);
-    gtk_grid_attach(GTK_GRID(grid), Btn, 5, row, 2, 1);
-    g_signal_connect(Btn, "toggled", G_CALLBACK(follow_mode_cb), NULL);
-    row++;
-    // mute the RX audio while the Kenwood transmits (TX state via Kenwood TCP)
-    Btn = gtk_check_button_new_with_label("Mute when TS in TX");
-    gtk_widget_set_halign(Btn, GTK_ALIGN_END);
-    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (Btn), ifpan_tx_mute);
-    gtk_grid_attach(GTK_GRID(grid), Btn, 5, row, 2, 1);
-    g_signal_connect(Btn, "toggled", G_CALLBACK(tx_mute_cb), NULL);
-    row++;
-    //
-    // SDR LO offset from the IF: the SDR's DC spike (and the Mirics' mirror)
-    // appear this far from the VFO; above half the span they are out of
-    // sight (> 192 kHz for a 384k receiver)
+    // IF panadapter options: in the free space under the general settings
+    // (columns 0-3, two per row), so that the window stays small; the
+    // right-hand column keeps only the SDR's own settings and its gains.
     //
     {
-      GtkWidget *lo_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-      GtkWidget *lo_label = gtk_label_new("SDR LO offset (kHz)");
-      gtk_widget_set_name(lo_label, "boldlabel");
+      int r = ifpan_row;
+      label = gtk_label_new("Kenwood / IF panadapter");
+      gtk_widget_set_name(label, "slider1");
+      gtk_widget_set_halign(label, GTK_ALIGN_CENTER);
+      gtk_grid_attach(GTK_GRID(grid), label, 0, r, 4, 1);
+      r++;
+      // receiver follows the Kenwood dial (else it keeps the station being
+      // heard while the Kenwood is tuned)
+      Btn = gtk_check_button_new_with_label("Follow Kenwood");
+      gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (Btn), ifpan_follow_vfo);
+      gtk_grid_attach(GTK_GRID(grid), Btn, 0, r, 2, 1);
+      g_signal_connect(Btn, "toggled", G_CALLBACK(follow_cb), NULL);
+      // tuning in piHPSDR-IF also tunes the Kenwood (off: the spectrum
+      // stays still, only the receiver moves inside the IF span)
+      Btn = gtk_check_button_new_with_label("Clicks tune the TS");
+      gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (Btn), ifpan_cat_write);
+      gtk_grid_attach(GTK_GRID(grid), Btn, 2, r, 2, 1);
+      g_signal_connect(Btn, "toggled", G_CALLBACK(cat_write_cb), NULL);
+      r++;
+      // receiver mode and Kenwood mode kept the same, both ways
+      Btn = gtk_check_button_new_with_label("Sync mode with TS");
+      gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (Btn), ifpan_follow_mode);
+      gtk_grid_attach(GTK_GRID(grid), Btn, 0, r, 2, 1);
+      g_signal_connect(Btn, "toggled", G_CALLBACK(follow_mode_cb), NULL);
+      // mute the RX audio while the Kenwood transmits
+      Btn = gtk_check_button_new_with_label("Mute when TS in TX");
+      gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (Btn), ifpan_tx_mute);
+      gtk_grid_attach(GTK_GRID(grid), Btn, 2, r, 2, 1);
+      g_signal_connect(Btn, "toggled", G_CALLBACK(tx_mute_cb), NULL);
+      r++;
+      // SDR front-end LNA off: more headroom for the strong IF buffer signal
+      Btn = gtk_check_button_new_with_label("SDR LNA off");
+      gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (Btn), ifpan_sdr_lna_off);
+      gtk_grid_attach(GTK_GRID(grid), Btn, 0, r, 2, 1);
+      g_signal_connect(Btn, "toggled", G_CALLBACK(lna_off_cb), NULL);
+      r++;
+      // SDR LO offset from the IF: the SDR's DC spike (and the Mirics'
+      // mirror) appear this far from the VFO; above half the span they are
+      // out of sight (> 192 kHz for a 384k receiver)
+      label = gtk_label_new("SDR LO offs. (kHz)");
+      gtk_widget_set_name(label, "boldlabel");
+      gtk_widget_set_halign(label, GTK_ALIGN_END);
+      gtk_grid_attach(GTK_GRID(grid), label, 0, r, 1, 1);
       GtkWidget *lo_spin = gtk_spin_button_new_with_range(0.0, 250.0, 10.0);
       gtk_spin_button_set_value(GTK_SPIN_BUTTON(lo_spin), (double)(ifpan_lo_offset / 1000));
-      gtk_box_pack_start(GTK_BOX(lo_box), lo_label, FALSE, FALSE, 0);
-      gtk_box_pack_start(GTK_BOX(lo_box), lo_spin, FALSE, FALSE, 0);
-      gtk_widget_set_halign(lo_box, GTK_ALIGN_END);
-      gtk_grid_attach(GTK_GRID(grid), lo_box, 5, row, 2, 1);
+      gtk_grid_attach(GTK_GRID(grid), lo_spin, 1, r, 1, 1);
       g_signal_connect(lo_spin, "value_changed", G_CALLBACK(lo_offset_cb), NULL);
-      row++;
-    }
-    // SDR front-end LNA off: more headroom for the strong IF buffer signal
-    Btn = gtk_check_button_new_with_label("SDR LNA off");
-    gtk_widget_set_halign(Btn, GTK_ALIGN_END);
-    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (Btn), ifpan_sdr_lna_off);
-    gtk_grid_attach(GTK_GRID(grid), Btn, 5, row, 2, 1);
-    g_signal_connect(Btn, "toggled", G_CALLBACK(lna_off_cb), NULL);
-    row++;
-    if (!radio_is_remote) {
-      //
-      // IF offset of the Kenwood's current mode (the TS-570D moves the
-      // carrier inside its IF with the mode): set it so that a station is
-      // at the same frequency on the Kenwood and here
-      //
-      GtkWidget *off_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-      char off_text[64];
-      int km = ifpan_kenwood_mode;
-      snprintf(off_text, sizeof(off_text), "IF offset (Hz), TS %s", (km >= 0 && km < 8) ? ifpan_mode_names[km] : "?");
-      GtkWidget *off_label = gtk_label_new(off_text);
-      gtk_widget_set_name(off_label, "boldlabel");
-      GtkWidget *off_spin = gtk_spin_button_new_with_range(-10000.0, 10000.0, 10.0);
-      gtk_spin_button_set_value(GTK_SPIN_BUTTON(off_spin), (km >= 0 && km < 8) ? (double)ifpan_mode_if_offset[km] : 0.0);
-      gtk_widget_set_sensitive(off_spin, km >= 0 && km < 8);
-      gtk_box_pack_start(GTK_BOX(off_box), off_label, FALSE, FALSE, 0);
-      gtk_box_pack_start(GTK_BOX(off_box), off_spin, FALSE, FALSE, 0);
-      gtk_widget_set_halign(off_box, GTK_ALIGN_END);
-      gtk_grid_attach(GTK_GRID(grid), off_box, 5, row, 2, 1);
-      g_signal_connect(off_spin, "value_changed", G_CALLBACK(mode_if_offset_cb), NULL);
-      row++;
-    }
-    if (!radio_is_remote) {
-      //
-      // sound card output wired to the Kenwood's ACC2 audio input
-      // (the processed TX audio of the WDSP TX chain goes there)
-      //
-      GtkWidget *tx_out_combo = gtk_combo_box_text_new();
-      gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(tx_out_combo), NULL, "TX audio to TS: none");
-      int active = 0;
-      for (int i = 0; i < n_output_devices; i++) {
-        gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(tx_out_combo), NULL, output_devices[i].description);
-        if (strcmp(output_devices[i].name, ifpan_tx_out) == 0) { active = i + 1; }
+      if (!radio_is_remote) {
+        // IF offset of the Kenwood's current mode (the TS-570D moves the
+        // carrier inside its IF with the mode)
+        char off_text[64];
+        int km = ifpan_kenwood_mode;
+        snprintf(off_text, sizeof(off_text), "IF offs. %s (Hz)", (km >= 0 && km < 8) ? ifpan_mode_names[km] : "?");
+        label = gtk_label_new(off_text);
+        gtk_widget_set_name(label, "boldlabel");
+        gtk_widget_set_halign(label, GTK_ALIGN_END);
+        gtk_grid_attach(GTK_GRID(grid), label, 2, r, 1, 1);
+        GtkWidget *off_spin = gtk_spin_button_new_with_range(-10000.0, 10000.0, 10.0);
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(off_spin), (km >= 0 && km < 8) ? (double)ifpan_mode_if_offset[km] : 0.0);
+        gtk_widget_set_sensitive(off_spin, km >= 0 && km < 8);
+        gtk_grid_attach(GTK_GRID(grid), off_spin, 3, r, 1, 1);
+        g_signal_connect(off_spin, "value_changed", G_CALLBACK(mode_if_offset_cb), NULL);
       }
-      gtk_combo_box_set_active(GTK_COMBO_BOX(tx_out_combo), active);
-      my_combo_attach(GTK_GRID(grid), tx_out_combo, 5, row, 2, 1);
-      g_signal_connect(tx_out_combo, "changed", G_CALLBACK(tx_out_cb), NULL);
-      row++;
-    }
-    //
-    // CAT link to the Kenwood: rigctld, or Kenwood CAT over TCP straight to
-    // an RS-232/WiFi bridge at "host:port"
-    //
-    GtkWidget *cat_combo = gtk_combo_box_text_new();
-    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(cat_combo), NULL, "CAT via rigctld");
-    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(cat_combo), NULL, "CAT via Kenwood TCP");
-    gtk_combo_box_set_active(GTK_COMBO_BOX(cat_combo), ifpan_cat_backend);
-    my_combo_attach(GTK_GRID(grid), cat_combo, 5, row, 2, 1);
-    g_signal_connect(cat_combo, "changed", G_CALLBACK(cat_backend_cb), NULL);
-    row++;
-    char addr[96];
-    snprintf(addr, sizeof(addr), "%s:%d", ifpan_kenwood_host, ifpan_kenwood_port);
-    cat_addr_entry = gtk_entry_new();
-    gtk_entry_set_text(GTK_ENTRY(cat_addr_entry), addr);
-    gtk_entry_set_width_chars(GTK_ENTRY(cat_addr_entry), 18);
-    gtk_widget_set_sensitive(cat_addr_entry, ifpan_cat_backend == IFPAN_CAT_KENWOOD);
-    gtk_grid_attach(GTK_GRID(grid), cat_addr_entry, 5, row, 2, 1);
-    g_signal_connect(cat_addr_entry, "activate", G_CALLBACK(cat_addr_activate_cb), NULL);
-    g_signal_connect(cat_addr_entry, "focus-out-event", G_CALLBACK(cat_addr_focus_cb), NULL);
-    g_signal_connect(cat_addr_entry, "destroy", G_CALLBACK(cat_addr_destroy_cb), NULL);
-    row++;
-    if (radio_is_remote) {
-      // client: the CAT link to the Kenwood belongs to the server
-      gtk_widget_set_sensitive(cat_combo, FALSE);
-      gtk_widget_set_sensitive(cat_addr_entry, FALSE);
+      r++;
+      if (!radio_is_remote) {
+        // sound card output wired to the Kenwood's ACC2 audio input
+        label = gtk_label_new("TX audio to TS");
+        gtk_widget_set_name(label, "boldlabel");
+        gtk_widget_set_halign(label, GTK_ALIGN_END);
+        gtk_grid_attach(GTK_GRID(grid), label, 0, r, 1, 1);
+        GtkWidget *tx_out_combo = gtk_combo_box_text_new();
+        gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(tx_out_combo), NULL, "none");
+        int active = 0;
+        for (int i = 0; i < n_output_devices; i++) {
+          gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(tx_out_combo), NULL, output_devices[i].description);
+          if (strcmp(output_devices[i].name, ifpan_tx_out) == 0) { active = i + 1; }
+        }
+        gtk_combo_box_set_active(GTK_COMBO_BOX(tx_out_combo), active);
+        my_combo_attach(GTK_GRID(grid), tx_out_combo, 1, r, 3, 1);
+        g_signal_connect(tx_out_combo, "changed", G_CALLBACK(tx_out_cb), NULL);
+        r++;
+      }
+      // CAT link to the Kenwood: rigctld, or Kenwood CAT over TCP straight
+      // to an RS-232/WiFi bridge at "host:port"
+      label = gtk_label_new("CAT");
+      gtk_widget_set_name(label, "boldlabel");
+      gtk_widget_set_halign(label, GTK_ALIGN_END);
+      gtk_grid_attach(GTK_GRID(grid), label, 0, r, 1, 1);
+      GtkWidget *cat_combo = gtk_combo_box_text_new();
+      gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(cat_combo), NULL, "via rigctld");
+      gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(cat_combo), NULL, "Kenwood TCP");
+      gtk_combo_box_set_active(GTK_COMBO_BOX(cat_combo), ifpan_cat_backend);
+      my_combo_attach(GTK_GRID(grid), cat_combo, 1, r, 1, 1);
+      g_signal_connect(cat_combo, "changed", G_CALLBACK(cat_backend_cb), NULL);
+      char addr[96];
+      snprintf(addr, sizeof(addr), "%s:%d", ifpan_kenwood_host, ifpan_kenwood_port);
+      cat_addr_entry = gtk_entry_new();
+      gtk_entry_set_text(GTK_ENTRY(cat_addr_entry), addr);
+      gtk_entry_set_width_chars(GTK_ENTRY(cat_addr_entry), 18);
+      gtk_widget_set_sensitive(cat_addr_entry, ifpan_cat_backend == IFPAN_CAT_KENWOOD);
+      gtk_grid_attach(GTK_GRID(grid), cat_addr_entry, 2, r, 2, 1);
+      g_signal_connect(cat_addr_entry, "activate", G_CALLBACK(cat_addr_activate_cb), NULL);
+      g_signal_connect(cat_addr_entry, "focus-out-event", G_CALLBACK(cat_addr_focus_cb), NULL);
+      g_signal_connect(cat_addr_entry, "destroy", G_CALLBACK(cat_addr_destroy_cb), NULL);
+      r++;
+      if (radio_is_remote) {
+        // client: the CAT link to the Kenwood belongs to the server
+        gtk_widget_set_sensitive(cat_combo, FALSE);
+        gtk_widget_set_sensitive(cat_addr_entry, FALSE);
+      }
+      ifpan_row = r;
     }
 #endif
     for (int id = 0; id < RECEIVERS; id++) {
@@ -1078,6 +1075,15 @@ void radio_menu(GtkWidget *parent) {
       }
     }
   }
+#ifdef IFPAN
+  // the SDR gains go under the right-hand column; the window is as tall as
+  // the taller of the two sides
+  ifpan_gain_row = row;
+  if (device == SOAPYSDR_USB_DEVICE && !radio_is_remote && radio->soapy.rx[0].gains > 1) {
+    row += 1 + radio->soapy.rx[0].gains;
+  }
+  if (ifpan_row > row) { row = ifpan_row; }
+#endif
   if (row > max_row) { max_row = row; }
   if (hwpanel) {
     label = gtk_label_new("Hardware Settings");
@@ -1112,10 +1118,12 @@ void radio_menu(GtkWidget *parent) {
     soapy_display_gains = 0;
   }
   if (soapy_display_gains) {
+#ifndef IFPAN
     Separator = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
     gtk_widget_set_size_request(Separator, -1, 3);
     gtk_grid_attach(GTK_GRID(grid), Separator, 0, max_row, 7, 1);
     max_row++;
+#endif
     //
     // Display spin buttons for gain elements, but only if there are more than one
     // Use columns 0/1, 2/3, 5/6
@@ -1123,8 +1131,15 @@ void radio_menu(GtkWidget *parent) {
     for (int id = 0; id < RECEIVERS; id++) {
       if (radio->soapy.rx[id].gains > 0) {
         char text[64];
+#ifdef IFPAN
+        // right-hand column, under the SDR settings (the left one holds
+        // the Kenwood options)
+        row = ifpan_gain_row;
+        col = 5;
+#else
         row = max_row;
         col = 2 * id;
+#endif
         snprintf(text, sizeof(text), "RX%d Gains", id + 1);
         label = gtk_label_new(text);
         gtk_widget_set_name(label, "boldlabel");

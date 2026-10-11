@@ -461,6 +461,9 @@ void send_tx_data(int sock) {
     data.cfc_eq = tx->cfc_eq;
     data.dexp = tx->dexp;
     data.dexp_filter = tx->dexp_filter;
+#ifdef IFPAN
+    data.mic_nr = tx->mic_nr;
+#endif
     data.eq_enable = tx->eq_enable;
     data.alcmode = tx->alcmode;
     data.metermode = tx->metermode;
@@ -1155,6 +1158,9 @@ void send_dexp(int s) {
     command.header.data_type = to_16(CMD_DEXP);
     command.dexp = transmitter->dexp;
     command.dexp_filter = transmitter->dexp_filter;
+#ifdef IFPAN
+    command.mic_nr = transmitter->mic_nr;
+#endif
     command.dexp_trigger = to_16(transmitter->dexp_trigger);
     command.dexp_exp = to_16(transmitter->dexp_exp);
     command.dexp_filter_low = to_16(transmitter->dexp_filter_low);

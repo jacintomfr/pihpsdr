@@ -463,8 +463,18 @@ ifeq ($(IFPAN),ON)
 ifneq ($(SOAPYSDR),ON)
 $(error IFPAN=ON requires SOAPYSDR=ON)
 endif
-IFPAN_OPTIONS=-D IFPAN
-IFPAN_OBJS=src/ifpan.o
+IFPAN_OPTIONS=-D IFPAN -I./rnnoise/include
+#
+# RNNoise (xiph, BSD-3-Clause) for the microphone noise reduction
+# (src/mic_nr.c): its portable sources as in its own Makefile.am, the same
+# set as hpsdr-rs. The trained model (rnnoise_data.c/.h, ~78 MB of C) is
+# not kept in git: it is downloaded on the first build, by the hash in
+# rnnoise/model_version (as rnnoise's own download_model.sh does).
+#
+RNNOISE_SRC=denoise.c rnn.c pitch.c kiss_fft.c celt_lpc.c nnet.c nnet_default.c \
+	parse_lpcnet_weights.c rnnoise_data.c rnnoise_tables.c
+RNNOISE_OBJS=$(addprefix rnnoise/src/,$(RNNOISE_SRC:.c=.o))
+IFPAN_OBJS=src/ifpan.o src/mic_nr.o $(RNNOISE_OBJS)
 endif
 
 ##############################################################################
@@ -789,8 +799,18 @@ cppcheck:
 	cppcheck $(CPP_OPTIONS) $(CPP_INCLUDE) $(CPP_DEFINES) $(SOURCES) $(CPP_SOURCES)
 
 .PHONY:	clean
+# RNNoise (IFPAN): its own sources, compiled without piHPSDR's warnings.
+# (These rules must not come before the program's own target, the default.)
+rnnoise/src/%.o: rnnoise/src/%.c rnnoise/src/rnnoise_data.h
+	$(CC) -O2 -I./rnnoise/include -I./rnnoise/src -c -o $@ $<
+
+rnnoise/src/rnnoise_data.c rnnoise/src/rnnoise_data.h:
+	cd rnnoise && h=$$(cat model_version) && \
+	curl -L -f -o rnnoise_data-$$h.tar.gz https://media.xiph.org/rnnoise/models/rnnoise_data-$$h.tar.gz && \
+	tar xzf rnnoise_data-$$h.tar.gz && touch src/rnnoise_data.c src/rnnoise_data.h
+
 clean:
-	rm -f src/*.o
+	rm -f src/*.o rnnoise/src/*.o
 	rm -f $(PROGRAM) hpsdrsim bootloader
 	rm -rf $(PROGRAM).app
 	yes | rm -rf LINUX/SoapySDR

@@ -65,6 +65,7 @@ extern int clock_nanosleep(clockid_t __clock_id, int __flags,
 #include "vfo.h"
 #ifdef IFPAN
   #include "ifpan.h"
+  #include "mic_nr.h"
 #endif
 #include "waterfall.h"
 
@@ -379,6 +380,17 @@ static gpointer remote_txaudio_thread(gpointer data) {
       int cwmode = (txmode == modeCWL || txmode == modeCWU || tx->tune || tx->twotone || tx->txnoise);
       if (tx->local_audio) {
         sample = audio_get_next_mic_sample(tx);
+#ifdef IFPAN
+        //
+        // Microphone noise reduction here, where the microphone is: VOX
+        // below and the server's TX chain both get the cleaned signal
+        //
+        if (tx->mic_nr) {
+          static MIC_NR *nr = NULL;
+          if (nr == NULL) { nr = mic_nr_create(); }
+          sample = mic_nr_process(nr, sample);
+        }
+#endif
       }
 #ifdef TCI
       //
@@ -1336,6 +1348,9 @@ static gpointer client_tcp_thread(gpointer arg) {
       transmitter->cfc_eq                    = data.cfc_eq;
       transmitter->dexp                      = data.dexp;
       transmitter->dexp_filter               = data.dexp_filter;
+#ifdef IFPAN
+      transmitter->mic_nr                    = data.mic_nr;
+#endif
       transmitter->eq_enable                 = data.eq_enable;
       transmitter->alcmode                   = data.alcmode;
       transmitter->metermode                 = data.metermode;

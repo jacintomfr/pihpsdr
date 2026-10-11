@@ -5,7 +5,7 @@ verified, and what is still open. Kept up to date with the work; the commit
 messages hold the per-change detail (hashes below are on `cu2ed` unless
 marked `windows-port`). RADE has its own document: `docs/RADE-IFPAN.md`.
 
-Last update: 2026-10-11 (MSI 3.1.118 main line; 3.1.129 on the SDRplay branches).
+Last update: 2026-10-11 (SDRplay work merged into the main line).
 
 ## 1. What piHPSDR-IF is
 
@@ -256,9 +256,9 @@ RTL-SDR ("equal to the Hermes-Lite 2"); with **250 kHz offset at 384k**
 spike and mirror are out of sight. At 768k they come back weaker — an
 offset above 384 kHz would need a 3.072 MS/s hardware rate (aliasing at
 1.536 MS/s); the user stays at ≤ 384k. Recommended set-up: libusbK,
-isochronous, 1.536 MS/s, LO offset 250 kHz, USB3 port. Pending before
-merging into `cu2ed` / `windows-port`: close / reopen in the program and a
-long run.
+isochronous, 1.536 MS/s, LO offset 250 kHz, USB3 port. Close / reopen in
+the program confirmed by the user; merged into `cu2ed` / `windows-port`
+on 2026-10-11 (no long-run report yet).
 
 ## 5. Open items (2026-10-11)
 
@@ -271,9 +271,9 @@ long run.
    needs a locator field; runs on the server).
 3. **RADE phase 4 / Pi server**: aarch64 build with NEON, RNNoise model and
    RADE libraries on the Pi, CPU measurement on a Pi 4 (Pi 5 fallback).
-4. **SDRplay RSP1A clone** (1DF7:2500): working with SoapyMiri (section
-   4.12); merge `sdrplay` / `windows-sdrplay` after the reopen and
-   long-run checks. For the Pi: build libmirisdr-5 + SoapyMiri there and
+4. **SDRplay RSP1A clone** (1DF7:2500): working with SoapyMiri, merged (section
+   4.12). Still to watch: long runs (lost samples on USB2 reported
+   upstream). For the Pi: build libmirisdr-5 + SoapyMiri there and
    blacklist the kernel modules `msi2500` / `msi001`.
 5. Optional: panadapter "-80 dBm/H" label overlap; offer the upstream bug
    fixes of 4.6 to DL1YCF; ESP32 bridge on hardware.

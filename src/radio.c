@@ -884,11 +884,16 @@ static void radio_create_visual(void) {
     }
 #ifdef IFPAN
     //
-    // IF panadapter: strictly receive-only, whatever the hardware can do.
-    // Without a transmitter object, no TX stream is set up and every
-    // MOX/TUNE/VOX/CW/two-tone path is a no-op.
+    // IF panadapter: the SDR only ever receives (all Soapy TX entry points
+    // are no-ops, whatever the hardware can do). The transmitter object is
+    // still created, as the WDSP TX audio chain for the Kenwood: microphone
+    // (local sound card or remote client) -> EQ / leveler / CFC /
+    // compressor / TX filter / ALC -> 48 kHz -> the real part of the
+    // (baseband SSB) output is the processed audio, played on a sound card
+    // wired to the Kenwood's ACC2 input (see soapy_protocol_iq_samples and
+    // ifpan.c). MOX keys the Kenwood by CAT.
     //
-    radio_has_transmitter = 0;
+    radio_has_transmitter = 1;
 #endif
     if (radio_has_transmitter) {
       if (duplex) {
@@ -1224,8 +1229,14 @@ void radio_start_radio(void) {
     pa_power = PA_100W; // Anan-800 needs to update this in the RADIO menu
     break;
   case SOAPYSDR_USB_DEVICE:
+#ifdef IFPAN
+    // IF panadapter: Drive is the TX audio level to the Kenwood, in percent
+    drive_min = 0;
+    drive_max = 100;
+#else
     drive_min = radio->soapy.tx.gain_min;
     drive_max = radio->soapy.tx.gain_max;
+#endif
     pa_power = PA_1W;
     break;
   default:
@@ -2124,9 +2135,6 @@ void radio_set_pan(int id, int value) {
 }
 
 void radio_set_mox(int state) {
-#ifdef IFPAN
-  return;   // receive-only
-#endif
   if (radio_is_remote) {
     send_mox(cl_sock_tcp, state);
     return;
@@ -2143,6 +2151,17 @@ void radio_set_mox(int state) {
     tx_set_out_of_band(transmitter);
   }
   if (state && TxInhibit) { return; }
+#ifdef IFPAN
+  //
+  // IF panadapter: the Kenwood transmits; it is keyed / unkeyed by CAT
+  // together with the WDSP TX audio chain. Without a CAT link no MOX.
+  //
+  if (state && !ifpan_cat_connected) {
+    t_print("%s: MOX refused, no CAT link to the Kenwood\n", __func__);
+    return;
+  }
+  ifpan_ptt(state);
+#endif
   //
   // - setting MOX (no matter in which direction) ends a pending VOX
   // - activating MOX while VOX is pending continues transmission
@@ -2606,6 +2625,15 @@ void radio_calc_drive_level(int tune) {
     transmitter->drive_iscal = 0.9999 / transmitter->drive_scale;
     transmitter->do_scale = 1;
   }
+#ifdef IFPAN
+  //
+  // IF panadapter: the TX output is audio for the Kenwood; Drive (0..100)
+  // scales it directly, as for the Penelope: the level at the ACC2 input
+  //
+  transmitter->drive_scale = 0.01 * (tune ? transmitter->tune_drive : transmitter->drive);
+  transmitter->drive_iscal = (transmitter->drive_scale > 0.0) ? 0.9999 / transmitter->drive_scale : 1.0;
+  transmitter->do_scale = 1;
+#endif
   schedule_high_priority();
 }
 

@@ -56,6 +56,7 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 
+#include "audio.h"
 #include "client_server.h"
 #include "ext.h"
 #include "ifpan.h"
@@ -178,6 +179,7 @@ void ifpan_save_state(void) {
   SetPropI0("ifpan.kenwood_port",  ifpan_kenwood_port);
   SetPropI0("ifpan.tx_mute",       ifpan_tx_mute);
   SetPropI0("ifpan.follow_mode",   ifpan_follow_mode);
+  SetPropS0("ifpan.tx_out",        ifpan_tx_out);
 }
 
 void ifpan_restore_state(void) {
@@ -194,6 +196,7 @@ void ifpan_restore_state(void) {
   GetPropI0("ifpan.kenwood_port",  ifpan_kenwood_port);
   GetPropI0("ifpan.tx_mute",       ifpan_tx_mute);
   GetPropI0("ifpan.follow_mode",   ifpan_follow_mode);
+  GetPropS0("ifpan.tx_out",        ifpan_tx_out);
   if (ifpan_cat_backend != IFPAN_CAT_KENWOOD) { ifpan_cat_backend = IFPAN_CAT_RIGCTLD; }
   if (ifpan_poll_ms < 20) { ifpan_poll_ms = 20; }
   // keep the IF well inside the Pluto span (+/- 384 kHz at 768 kHz)
@@ -405,6 +408,43 @@ void ifpan_ts_here(void) {
   g_mutex_lock(&cat_mutex);
   cat_set_target = f;
   g_mutex_unlock(&cat_mutex);
+}
+
+// ---------------------------------------------------------------------
+// TX audio to the Kenwood
+// ---------------------------------------------------------------------
+//
+// The WDSP TX chain (mic gain, EQ, leveler, CFC, compressor, TX filter,
+// ALC; TX menu) processes the microphone - local sound card, or the remote
+// client's, as in piHPSDR - and its 48 kHz output (soapy_protocol_iq_samples)
+// is played on the sound card selected here, wired through an isolation
+// transformer to the Kenwood's rear ACC2 audio input. A receiver structure
+// of its own only carries this output stream, so the existing audio
+// modules (PortAudio, PulseAudio, ALSA) are used unchanged.
+//
+char ifpan_tx_out[128] = "";          // sound card output to the Kenwood ("": none)
+static RECEIVER txout_rx;
+
+// (re)open the output (main thread); "" closes it
+void ifpan_tx_out_select(const char *name) {
+  char tmp[128];
+  g_strlcpy(tmp, name ? name : "", sizeof(tmp));   // name may be ifpan_tx_out itself
+  if (txout_rx.audio_handle != NULL) { audio_close_output(&txout_rx); }
+  g_strlcpy(ifpan_tx_out, tmp, sizeof(ifpan_tx_out));
+  if (ifpan_tx_out[0] == 0) { return; }
+  txout_rx.id = 8;                    // only used in log lines / stream names
+  g_strlcpy(txout_rx.audio_name, ifpan_tx_out, sizeof(txout_rx.audio_name));
+  if (audio_open_output(&txout_rx) != 0) {
+    t_print("%s: cannot open %s\n", __func__, ifpan_tx_out);
+  } else {
+    t_print("%s: TX audio to the Kenwood on %s\n", __func__, ifpan_tx_out);
+  }
+}
+
+// one 48 kHz sample of processed TX audio (TX thread)
+void ifpan_tx_audio_sample(double s) {
+  if (txout_rx.audio_handle == NULL) { return; }
+  audio_write(&txout_rx, s, s);
 }
 
 //
@@ -1260,6 +1300,7 @@ void ifpan_start(void) {
   cat_thread_id = g_thread_new("ifpan_cat", cat_thread, NULL);
   g_timeout_add(50, ui_watch, NULL);
   win_restore();
+  ifpan_tx_out_select(ifpan_tx_out);   // processed TX audio to the Kenwood's ACC2
 }
 
 //

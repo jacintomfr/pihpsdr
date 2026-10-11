@@ -41,30 +41,24 @@ enum ACTION tb_actions[MAX_TB_FUNCTIONS][MAX_TB_BUTTONS] = {
 };
 
 //
-// Actions that make no sense without a transmitter (or that would break
-// the CAT-locked display centre, such as CTUN which is always on).
-// Such buttons get an empty label and do nothing, even if they come from
-// an old props file.
+// Actions that make no sense for the IF panadapter: no SDR transmitter
+// (TUNE, two-tone, PureSignal, split / XIT, the internal CW keyer: the
+// Kenwood does that), or they would break the CAT-locked display centre
+// (CTUN, which is always on). Such buttons get an empty label and do
+// nothing, even if they come from an old props file. MOX / PTT, the TX
+// menu, Mic gain, VOX, Drive and the compressor stay: they drive the WDSP
+// TX audio chain for the Kenwood (radio_set_mox keys it by CAT).
 //
 static int ifpan_hidden_action(enum ACTION a) {
-  // (MOX and PTT stay: they key the Kenwood by CAT, see ifpan_ptt)
   switch (a) {
   case TUNE:
   case TUNE_DRIVE:
   case TUNE_FULL:
   case TUNE_MEMORY:
-  case DRIVE:
   case TWO_TONE:
   case TX_NOISE:
-  case MENU_TX:
   case PS:
   case MENU_PS:
-  case VOX:
-  case VOXLEVEL:
-  case MIC_GAIN:
-  case LINEIN_GAIN:
-  case COMP_ENABLE:
-  case COMPRESSION:
   case DUPLEX:
   case SPLIT:
   case SAT:

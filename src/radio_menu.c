@@ -167,6 +167,11 @@ static void tx_mute_cb(GtkWidget *widget, gpointer data) {
   ifpan_set_tx_mute(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)));
 }
 
+// SDR LO offset from the IF in kHz (moves the SDR's DC spike / mirror away)
+static void lo_offset_cb(GtkWidget *widget, gpointer data) {
+  ifpan_set_lo_offset_khz(gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(widget)));
+}
+
 // sound card output carrying the processed TX audio to the Kenwood (entry 0: none)
 static void tx_out_cb(GtkWidget *widget, gpointer data) {
   int i = gtk_combo_box_get_active(GTK_COMBO_BOX(widget)) - 1;
@@ -958,6 +963,24 @@ void radio_menu(GtkWidget *parent) {
     gtk_grid_attach(GTK_GRID(grid), Btn, 5, row, 2, 1);
     g_signal_connect(Btn, "toggled", G_CALLBACK(tx_mute_cb), NULL);
     row++;
+    //
+    // SDR LO offset from the IF: the SDR's DC spike (and the Mirics' mirror)
+    // appear this far from the VFO; above half the span they are out of
+    // sight (> 192 kHz for a 384k receiver)
+    //
+    {
+      GtkWidget *lo_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+      GtkWidget *lo_label = gtk_label_new("SDR LO offset (kHz)");
+      gtk_widget_set_name(lo_label, "boldlabel");
+      GtkWidget *lo_spin = gtk_spin_button_new_with_range(0.0, 250.0, 10.0);
+      gtk_spin_button_set_value(GTK_SPIN_BUTTON(lo_spin), (double)(ifpan_lo_offset / 1000));
+      gtk_box_pack_start(GTK_BOX(lo_box), lo_label, FALSE, FALSE, 0);
+      gtk_box_pack_start(GTK_BOX(lo_box), lo_spin, FALSE, FALSE, 0);
+      gtk_widget_set_halign(lo_box, GTK_ALIGN_END);
+      gtk_grid_attach(GTK_GRID(grid), lo_box, 5, row, 2, 1);
+      g_signal_connect(lo_spin, "value_changed", G_CALLBACK(lo_offset_cb), NULL);
+      row++;
+    }
     if (!radio_is_remote) {
       //
       // sound card output wired to the Kenwood's ACC2 audio input

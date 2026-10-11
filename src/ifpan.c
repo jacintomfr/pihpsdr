@@ -68,6 +68,7 @@
 #include "radio.h"
 #include "receiver.h"
 #include "sliders.h"
+#include "soapy_protocol.h"
 #include "vfo.h"
 
 long long ifpan_if_freq = IFPAN_DEFAULT_IF_FREQ;
@@ -336,8 +337,8 @@ void ifpan_restore_state(void) {
   if (ifpan_cat_backend != IFPAN_CAT_KENWOOD) { ifpan_cat_backend = IFPAN_CAT_RIGCTLD; }
   if (ifpan_poll_ms < 20) { ifpan_poll_ms = 20; }
   // keep the IF well inside the Pluto span (+/- 384 kHz at 768 kHz)
-  if (ifpan_lo_offset >  200000) { ifpan_lo_offset =  200000; }
-  if (ifpan_lo_offset < -200000) { ifpan_lo_offset = -200000; }
+  if (ifpan_lo_offset >  250000) { ifpan_lo_offset =  250000; }
+  if (ifpan_lo_offset < -250000) { ifpan_lo_offset = -250000; }
 }
 
 //
@@ -653,6 +654,22 @@ void ifpan_set_tx_mute(int on) {
 }
 
 //
+// Radio menu "SDR LO offset (kHz)": how far the SDR's LO sits from the IF.
+// The SDR's DC spike (and on the Mirics MSi001 a weaker mirror on the other
+// side) appears that far from the VFO; with an offset larger than half the
+// displayed span they are out of sight. The SDR is retuned at once (the
+// sample rotation follows by itself).
+//
+void ifpan_set_lo_offset_khz(int khz) {
+  if (khz < 0) { khz = 0; }
+  if (khz > 250) { khz = 250; }
+  ifpan_lo_offset = 1000LL * khz;
+  if (radio_is_remote) { send_ifpan(cl_sock_tcp, IFPAN_REMOTE_LO_OFFSET, khz); return; }
+  t_print("%s: SDR LO offset %d kHz\n", __func__, khz);
+  for (int id = 0; id < receivers; id++) { soapy_protocol_set_rx_frequency(id); }
+}
+
+//
 // Server side of client/server: a Kenwood action or IF panadapter option
 // sent by the client (CMD_IFPAN), carried out here as if done locally
 //
@@ -669,6 +686,7 @@ void ifpan_remote_command(int what, int value) {
   case IFPAN_REMOTE_FOLLOW_MODE: ifpan_set_follow_mode(value); break;
   case IFPAN_REMOTE_ATU:         ifpan_atu_toggle(); break;
   case IFPAN_REMOTE_ATU_TUNE:    ifpan_atu_tune(); break;
+  case IFPAN_REMOTE_LO_OFFSET:   ifpan_set_lo_offset_khz(value); break;
   default:
     t_print("%s: unknown IF panadapter command %d\n", __func__, what);
     break;

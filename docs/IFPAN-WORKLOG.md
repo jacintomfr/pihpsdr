@@ -400,6 +400,18 @@ shield, see 4.12) also happens with the Pi 5 as host, and measure RADE there.
 - **Result:** SSB 100 W from the microphone with the Pi as host: no stall
   (with the Windows PC as host, AM 25 W into the dummy load always stalled).
   The ground loop goes through the PC; on the Pi the problem is gone.
+- **Audio cuts (~0.5 s) with server on the Pi, client on Windows:** network.
+  UDP echo test PC->Pi->PC, 100 pkt/s x 1400 bytes (scratchpad udptest.py,
+  Pi ~/udpecho.py): 0.5-0.9 % lost, single packets, RTT 0.8 ms. In a 2 min
+  run the Pi counted 54 new rx_frame_check_sequence_errors (+9 symbol
+  errors) for 56 lost packets: frames arrive corrupted at the Pi (physical
+  layer: cable / switch port / RF). The PC's Realtek GbE negotiated only
+  100 Mbps (Gigabit needs all 4 pairs: suspect cable). Same symptom the
+  user had once with the HL2 behind the switch (fixed by a direct link).
+  The RX audio is UDP without sequence numbers, so each lost packet drains
+  the client's output buffer; under 512 samples it inserts ~170 ms of
+  silence. Diagnostics (252743d1 + fix) log server send gaps, client
+  arrival gaps and output buffer dry/overrun with timestamps (MSI 3.1.177).
 
 ## 5. Open items (2026-10-11)
 

@@ -351,7 +351,10 @@ on 2026-10-11 (no long-run report yet).
 * Mouse-wheel tuning jumped back and forth (3.1.161): the TS-570 drops FA
   commands that arrive while it is busy, and after the 400 ms hold the
   display followed its stale frequency. Now the target is sent again (up
-  to 3 times) before the display follows the Kenwood.
+  to 3 times) before the display follows the Kenwood. A rare one-step
+  flick back remained (a Kenwood reading taken before the newest target was
+  sent): with "Clicks tune the TS" readings are no longer applied while a
+  change is not yet sent and for 0.5 s after the last one (3.1.165).
 
 ## 5. Open items (2026-10-11)
 

@@ -81,6 +81,7 @@ extern void      ifpan_remote_command(int what, int value);    // server: CMD_IF
 extern char      ifpan_tx_out[128];
 extern void      ifpan_tx_out_select(const char *name);
 extern void      ifpan_tx_audio_sample(double s);
+extern void      ifpan_tx_dump(int which, double s);   // diagnostics: 0 mic in, 1 processed out
 
 //
 // TS-570 frequency coverage: the band menu and frequency checks use this

@@ -441,8 +441,38 @@ void ifpan_tx_out_select(const char *name) {
   }
 }
 
+//
+// TX audio diagnostics: if a file "ifpan-txdump" exists in the settings
+// folder at start-up, the first 30 s of microphone input (as it enters the
+// WDSP TX chain) and of processed output are written, while transmitting,
+// as raw 32-bit float mono 48 kHz files txdump_mic.f32 / txdump_out.f32.
+//
+#define TXDUMP_MAX (48000 * 30)
+static int    txdump_on = 0;
+static FILE  *txdump_fp[2] = { NULL, NULL };
+static long   txdump_n[2] = { 0, 0 };
+
+void ifpan_tx_dump(int which, double s) {
+  if (!txdump_on || !radio_is_transmitting() || which < 0 || which > 1) { return; }
+  if (txdump_n[which] >= TXDUMP_MAX) { return; }
+  if (txdump_fp[which] == NULL) {
+    txdump_fp[which] = fopen(which ? "txdump_out.f32" : "txdump_mic.f32", "wb");
+    if (txdump_fp[which] == NULL) { return; }
+  }
+  float f = (float) s;
+  fwrite(&f, sizeof(f), 1, txdump_fp[which]);
+  if (++txdump_n[which] == TXDUMP_MAX) {
+    fclose(txdump_fp[which]);
+    txdump_fp[which] = NULL;
+    t_print("%s: %s written\n", __func__, which ? "txdump_out.f32" : "txdump_mic.f32");
+  } else if ((txdump_n[which] % 48000) == 0) {
+    fflush(txdump_fp[which]);
+  }
+}
+
 // one 48 kHz sample of processed TX audio (TX thread)
 void ifpan_tx_audio_sample(double s) {
+  ifpan_tx_dump(1, s);
   if (txout_rx.audio_handle == NULL) { return; }
   audio_write(&txout_rx, s, s);
 }
@@ -1301,6 +1331,8 @@ void ifpan_start(void) {
   g_timeout_add(50, ui_watch, NULL);
   win_restore();
   ifpan_tx_out_select(ifpan_tx_out);   // processed TX audio to the Kenwood's ACC2
+  txdump_on = (access("ifpan-txdump", F_OK) == 0);
+  if (txdump_on) { t_print("%s: TX audio diagnostics on (ifpan-txdump)\n", __func__); }
 }
 
 //

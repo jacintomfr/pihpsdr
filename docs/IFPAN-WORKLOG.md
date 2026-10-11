@@ -357,6 +357,42 @@ on 2026-10-11 (no long-run report yet).
   change is not yet sent and for 0.5 s after the last one (3.1.165) -
   confirmed "perfect" by the user.
 
+### 4.13 Raspberry Pi 5 server (SDR-IQ, 192.168.0.107) (2026-10-11)
+
+Purpose: test whether the MSi2500 PTT stall (ground loop through the IF coax
+shield, see 4.12) also happens with the Pi 5 as host, and measure RADE there.
+
+- Host: Pi 5 4 GB, Debian 13 trixie aarch64, labwc (Wayland), PipeWire/pulse.
+  SSH as `pi` (key `hpsdr_rpi5`); temporary NOPASSWD sudo in
+  `/etc/sudoers.d/010-pi-claude-setup` (remove when the setup is finished).
+- Packages: libsoapysdr-dev soapysdr-tools libspeexdsp-dev libusb-1.0-0-dev
+  socat. Kernel DVB drivers blacklisted in
+  `/etc/modprobe.d/blacklist-msi2500.conf` (msi2500, msi001, sdr_msi3101);
+  udev `/etc/udev/rules.d/99-msi2500.rules` (1df7:2500 MODE 0666).
+- **Trap:** `soapysdr0.8-module-all` pulls `soapysdr0.8-module-mirisdr`
+  (driver "miri", old libmirisdr-4). It enumerates the clone first; piHPSDR
+  then picks driver=miri and 768 kS/s. Removed that package; only
+  `soapyMiri` remains (DriverKey MIRI, 1.536 MS/s, ISOC).
+- libmirisdr-5 + SoapyMiri (ericek111, 1e0a125) built in `~/deps`, installed
+  to /usr/local (lib) and /usr (Soapy module); `soapymiri-transfer-mode.patch`
+  applied (it needed `sed 's/\r$//'`: copied from Windows with CRLF).
+- RADE libs: `RADE_C_DIR=~/rade_c ./build-rade.sh` (the Opus model download,
+  ~180 MB at ~200 KB/s, is most of the time).
+- Source: `git archive cu2ed` extracted to `~/pihpsdr-if`, CRLF stripped
+  (rnnoise/model_version with CRLF broke the rnnoise model curl URL).
+  `make.config.pihpsdr`: GPIO=OFF MIDI=ON USBOZY=OFF SOAPYSDR=ON IFPAN=ON
+  PORTFORWARD=ON TCI=ON AUDIO=PULSE. Binary `~/pihpsdr-if/pihpsdr-if`,
+  launcher `run-pihpsdr-if.sh` + `~/.local/share/applications/pihpsdr-if.desktop`,
+  log `~/pihpsdr-if.log`. Config: Windows `soapyMiri.props` copied, audio
+  devices cleared (choose the Pi devices in the menus); the Pi default is kept
+  as `soapyMiri.props.pi-default`.
+- CAT: service `ts570-cat.service` (`/usr/local/bin/ts570-cat-bridge.sh`):
+  socat 127.0.0.1:7373 <-> first `/dev/serial/by-id/*FTDI*`, 57600 raw. It
+  waits until the FTDI adapter is plugged into the Pi.
+- First numbers: pihpsdr-if ~30 % of one core at 1.536 MS/s (RX only, no
+  RADE). Some "samples lost" lines from libmirisdr (ISOC); to check whether
+  they continue and on which USB port.
+
 ## 5. Open items (2026-10-11)
 
 1. **ACC2 cable** (user is looking for the plug). Then test on a dummy load:

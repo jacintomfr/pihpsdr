@@ -1318,6 +1318,11 @@ int process_action(gpointer data) {
     }
     break;
   case PREAMP:
+#ifdef IFPAN
+    // IF panadapter: the Kenwood's preamp, by CAT
+    if (a->mode == PRESSED) { ifpan_preamp_toggle(); }
+    break;
+#endif
     if (a->mode == PRESSED) {
       radio_toggle_preamp(active_receiver->id);
     }

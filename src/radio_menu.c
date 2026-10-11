@@ -1027,6 +1027,15 @@ void radio_menu(GtkWidget *parent) {
           if (strcmp(output_devices[i].name, ifpan_tx_out) == 0) { active = i + 1; }
         }
         gtk_combo_box_set_active(GTK_COMBO_BOX(tx_out_combo), active);
+        // long sound card names ("MME: Altifalantes (ASUS ...") are cut
+        // with "...", so that they do not widen all the columns
+        {
+          GList *cells = gtk_cell_layout_get_cells(GTK_CELL_LAYOUT(tx_out_combo));
+          for (GList *c = cells; c != NULL; c = c->next) {
+            g_object_set(c->data, "ellipsize", PANGO_ELLIPSIZE_END, "width-chars", 22, NULL);
+          }
+          g_list_free(cells);
+        }
         my_combo_attach(GTK_GRID(grid), tx_out_combo, 1, r, 3, 1);
         g_signal_connect(tx_out_combo, "changed", G_CALLBACK(tx_out_cb), NULL);
         r++;

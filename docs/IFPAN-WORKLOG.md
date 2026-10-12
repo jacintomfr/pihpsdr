@@ -92,6 +92,12 @@ radio drops CAT commands that arrive while it answers another client):
 * Every change: commit on `cu2ed` (English message, `Co-Authored-By`
   line), `git merge --no-edit cu2ed` into `windows-port`, build the MSI, the
   user installs it on both PCs and tests.
+* **GitHub releases** (MSI downloads): `gh release create ifpan-3.1.N <msi>
+  --repo jacintomfr/pihpsdr --target <full SHA of the windows-port commit the
+  MSI was built from> --prerelease`. The tag name must **not** start with
+  `v` (the version comes from `git describe --match 'v[0-9]*.[0-9]*'`).
+  First one: `ifpan-3.1.188` (2026-10-12, commit 276da965, plain x86-64
+  build for a test from outside home through Tailscale).
 * RNNoise model (`rnnoise/src/rnnoise_data.c`, ~78 MB) is not in git; the
   Makefile downloads it by `rnnoise/model_version`.
 * RADE libraries: `./build-rade.sh` (or copy `deskhpsdr/rade-libs` on

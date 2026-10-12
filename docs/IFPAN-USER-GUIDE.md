@@ -166,6 +166,16 @@ SNR, callsigns decoded; signals under about +3.8 dB SNR do not decode the
 callsign). Own callsign: RADE menu "My callsign". VOX does not work with
 RADE — use PTT / MOX. Details: `docs/RADE-IFPAN.md`.
 
+**No sound in the headphones with RADE on?** With RADE enabled only the
+decoded speech goes to the speaker: with no RADE station on the air it stays
+(almost) silent. Two options in the RADE menu decide what you hear meanwhile:
+**"Mute analog audio"** (on: the ordinary band audio — noise, SSB — is cut
+while no RADE is decoded; off: you hear the band until a RADE station
+appears) and **"Squelch gate"** (on: the audio closes on weak RADE
+signals). Untick both to always hear something; tick them to hear only the
+decoded speech. (Seen on the Pi 5, 2026-10-12: "no audio" was simply RADE
+switched on.)
+
 ## 7. Server and client
 
 * The **server** sits next to the radio (now the Raspberry Pi 5): SDR, CAT,

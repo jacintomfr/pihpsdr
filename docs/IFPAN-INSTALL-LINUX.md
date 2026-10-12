@@ -359,6 +359,22 @@ its Discovery window ("Use Server", host:50000).
 * The RX audio to the client is UDP without retransmission: the network
   must be clean (see 10).
 
+**Remote access over the internet: Tailscale** (no router ports opened).
+Installed on the Pi 5 on 2026-10-12 with the official script and logged in
+to the user's Tailscale account (machine `sdr-iq`, **100.88.105.1**,
+`sdr-iq.tailacd12.ts.net`; no exit node, no Tailscale SSH):
+
+```bash
+curl -fsSL https://tailscale.com/install.sh -o /tmp/ts-install.sh && sudo sh /tmp/ts-install.sh
+sudo tailscale up            # prints a login URL: open it and authorise the machine
+tailscale ip -4
+```
+
+The client PC runs Tailscale with the same account and connects to
+`100.88.105.1:50000` (or the MagicDNS name). Alternative: the Server menu's
+UPnP port forwarding + DuckDNS (DuckDNS is free) — that exposes port 50000
+to the internet, so set a server password.
+
 ## 10. Checks and troubleshooting
 
 | Symptom | Cause / fix |

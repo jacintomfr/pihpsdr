@@ -151,6 +151,10 @@ device is set to 48 kHz in Windows). MME works with any rate.
 * **Client**: Discovery window → "Use Server" → `host:50000` (a Pi server:
   `192.168.0.107:50000`) → Start. Same MSI version as the server.
 * Both on one PC (as during development): client to `127.0.0.1:50000`.
+* **From outside home:** install Tailscale on the client PC (same account as
+  the Pi) and connect to the Pi's Tailscale address, `100.88.105.1:50000`
+  (Linux guide, section 9). The MSI is plain x86-64 (no AVX / AVX2: 0 ymm
+  instructions in `pihpsdr-if.exe`, RADE / Opus included), so older PCs run it.
 * The client's RX audio is UDP: the LAN must not lose packets (half-second
   audio cuts = packet loss; test with `ifpan-tools/net/`, see the Linux
   guide section 10). Check the PC's link speed (Settings → Network, or

@@ -471,6 +471,22 @@ Change (display only; audio and tuning unchanged):
   skipped (`#ifdef IFPAN`, only when `ifpan_cat_write`): the receiver may run
   ahead, the display slides, the Kenwood follows and the display re-centres.
   (While the receiver is beyond the span its audio is briefly silent.)
+- **Real cause found the same evening:** the vfo.c change alone did not
+  help (user screenshot: right ~36 kHz of the span empty/low for seconds,
+  TS = VFO). While the knob turns continuously, cat_apply ignored every
+  Kenwood reading (the 0.5 s wheel hold) and the CAT thread ignored readings
+  during each 400 ms set hold, so the display centre (vfo.frequency) froze at
+  the old Kenwood frequency while the Kenwood - and the IF - kept moving.
+  The slide was computed from that stale centre (data shifted too far, empty
+  strip), the receiver offset (audio) was off by the same amount, and the
+  final re-centre shifted the WDSP display average by tens of kHz at once
+  (edge values smeared over the gap until the average recovered). Fix
+  (`centre_only()` / `centre_apply()`): during tuning every Kenwood reading
+  moves only the display centre (and the display average, in small steps),
+  never the CTUN receiver; readings taken during the set hold are posted for
+  this too. The receiver stays on the target, its offset is recomputed, and
+  the slide is drawn from where the Kenwood really is. The SDR is not
+  retuned (IF unchanged, cached in soapy_protocol.c).
 
 **Tuning from a MIDI VFO instead of the Kenwood dial (the remote setup).**
 The user tunes the Pi 5 server with a MIDI VFO knob (the Arduino Due

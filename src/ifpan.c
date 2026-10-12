@@ -481,6 +481,39 @@ void ifpan_set_follow_mode(int on) {
   if (on && ifpan_kenwood_mode >= 0) { mode_apply(GINT_TO_POINTER(ifpan_kenwood_mode)); }
 }
 
+//
+// While the receiver is being tuned here, the Kenwood follows a little
+// behind, and the IF the SDR sees is centred on where the Kenwood really is.
+// Move only the display centre there (and the WDSP display average with it),
+// not the receiver (CTUN frequency): the receiver stays on the target being
+// tuned, its offset from the centre is recomputed so the audio stays right,
+// and the sliding display (ifpan_display_shift) draws the IF data where it
+// belongs. Without this, a continuously turning knob (MIDI VFO) froze the
+// centre until it stopped, and the display / audio were off by the distance
+// the Kenwood had already travelled.
+//
+static void centre_only(long long f) {
+  if (f <= 0 || receivers < 1 || receiver[0] == NULL || !vfo[VFO_A].ctun) { return; }
+  if (vfo[VFO_A].frequency == f) { return; }
+  tuning_moved(f - vfo[VFO_A].frequency);
+  vfo[VFO_A].frequency = f;
+  rx_frequency_changed(receiver[0]);
+  g_idle_add(ext_vfo_update, NULL);
+}
+
+static long long centre_pending = 0;  // Kenwood reading taken while a set is on its way
+static int       centre_scheduled = 0;
+
+static gboolean centre_apply(gpointer data) {
+  long long f;
+  g_mutex_lock(&cat_mutex);
+  f = centre_pending;
+  centre_scheduled = 0;
+  g_mutex_unlock(&cat_mutex);
+  centre_only(f);
+  return G_SOURCE_REMOVE;
+}
+
 static gboolean cat_apply(gpointer data) {
   long long f;
   g_mutex_lock(&cat_mutex);
@@ -491,11 +524,15 @@ static gboolean cat_apply(gpointer data) {
     //
     // While the receiver is being tuned here (mouse wheel), a Kenwood
     // reading taken before the newest target reached it made the display
-    // flick back a step: ignore readings while a change is not yet sent
-    // (ui_watch has not seen it) and for 0.5 s after the last one
+    // flick back a step: do not move the receiver while a change is not yet
+    // sent (ui_watch has not seen it) and for 0.5 s after the last one;
+    // only the display centre follows the Kenwood meanwhile
     //
     long long cur = vfo[VFO_A].ctun ? vfo[VFO_A].ctun_frequency : vfo[VFO_A].frequency;
-    if (cur != ui_last_freq || g_get_monotonic_time() - ui_tuned_us < 500000) { return G_SOURCE_REMOVE; }
+    if (cur != ui_last_freq || g_get_monotonic_time() - ui_tuned_us < 500000) {
+      centre_only(f);
+      return G_SOURCE_REMOVE;
+    }
   }
   tuning_moved(f - vfo[VFO_A].frequency);
   vfo_id_set_center(VFO_A, f);
@@ -1833,6 +1870,17 @@ static gpointer cat_thread(gpointer data) {
     // rounds to 10 Hz, so accept anything within 10 Hz of the target.
     //
     if (hold_until != 0) {
+      if (llabs(f - hold_freq) >= 10 && f > 0 && f != vfo[VFO_A].frequency) {
+        // not there yet, but this is where the Kenwood (and so the IF) is
+        // now: the display centre follows it (centre_only, main thread)
+        g_mutex_lock(&cat_mutex);
+        centre_pending = f;
+        if (!centre_scheduled) {
+          centre_scheduled = 1;
+          g_idle_add(centre_apply, NULL);
+        }
+        g_mutex_unlock(&cat_mutex);
+      }
       if (llabs(f - hold_freq) < 10) {
         hold_until = 0;
         hold_resends = 0;

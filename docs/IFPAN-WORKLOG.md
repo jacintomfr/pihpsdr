@@ -386,6 +386,9 @@ shield, see 4.12) also happens with the Pi 5 as host, and measure RADE there.
   log `~/pihpsdr-if.log`. Config: Windows `soapyMiri.props` copied, audio
   devices cleared (choose the Pi devices in the menus); the Pi default is kept
   as `soapyMiri.props.pi-default`.
+  The copied props also carried "Server runs protocol only if client is
+  connected" (radio.server_stops_protocol=1): with no client the Pi showed a
+  black spectrum. Switched off in the Server menu (2026-10-12).
 - CAT: service `ts570-cat.service` (`/usr/local/bin/ts570-cat-bridge.sh`):
   socat 127.0.0.1:7373 <-> first `/dev/serial/by-id/*FTDI*`, 57600 raw. It
   waits until the FTDI adapter is plugged into the Pi.

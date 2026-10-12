@@ -443,6 +443,27 @@ Change (display only; audio and tuning unchanged):
   Kenwood confirms, frequency + 0 = the same display frequency: no jump.
 - Known limit: a click on the panadapter during the slide (< 1 s) maps
   with the shifted axis.
+- **Confirmed by the user (2026-10-12, Pi 5 build, 96k):** "does exactly
+  what I want". Tuning now behaves like a normal radio: the filter stays in
+  the centre, the spectrum and waterfall slide, the Kenwood follows.
+
+**Tuning from a MIDI VFO instead of the Kenwood dial (the remote setup).**
+The user tunes the Pi 5 server with a MIDI VFO knob (the Arduino Due
+controller with the 600 PPR optical encoder, project
+`jacintomfr/hpsdr-midi-optical`, USB MIDI on the Pi). The TS dial is not
+touched any more, which is what a remote station needs: the operator turns
+a knob at the piHPSDR-IF end, piHPSDR-IF tunes the Kenwood by CAT. Settings
+for this way of working (Radio menu, "Kenwood / IF panadapter"):
+- "Clicks tune the TS" **on**: every tuning step (MIDI VFO, mouse wheel,
+  clicks) is sent to the Kenwood; with 4.14 the display slides at once.
+- "Follow Kenwood" on (the receiver stays on the Kenwood frequency).
+- CTUN on (piHPSDR default in IFPAN).
+- Span: 96k gives the most detail around the station and is fine now that
+  the display slides (the re-centres at the span edge are smooth). 384k +
+  zoom remains the choice for watching a whole band.
+- With "Clicks tune the TS" off the spectrum stays still and only the
+  receiver moves inside the span; "TS here" (toolbar) then brings the
+  Kenwood to the receiver before transmitting.
 
 ## 5. Open items (2026-10-11)
 

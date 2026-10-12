@@ -1,0 +1,46 @@
+diff --git a/SoapyMiri.hpp b/SoapyMiri.hpp
+index ca589a6..c9f2d7a 100644
+--- a/SoapyMiri.hpp
++++ b/SoapyMiri.hpp
+@@ -206,7 +206,7 @@ private:
+         { "SDRplay", MIRISDR_HW_SDRPLAY },
+     };
+     mirisdr_hw_flavour_t hwFlavour = MIRISDR_HW_DEFAULT;
+-    const char* transferMode = "";
++    std::string transferMode;   // a copy (was a pointer into setupStream's args, gone in activateStream)
+ 
+ public:
+     struct Buffer {
+diff --git a/Streaming.cpp b/Streaming.cpp
+index 998bbe4..fdcbe81 100644
+--- a/Streaming.cpp
++++ b/Streaming.cpp
+@@ -164,11 +164,11 @@ SoapySDR::Stream *SoapyMiri::setupStream(
+     transferMode = "";
+     if (args.count("transfer") != 0) {
+         transferMode = args.at("transfer").c_str();
+-        int res = mirisdr_set_transfer(dev, transferMode);
++        int res = mirisdr_set_transfer(dev, transferMode.c_str());
+         if (res != 0) {
+-            SoapySDR_logf(SOAPY_SDR_ERROR, "SoapyMiri failed to set transfer mode: %s", transferMode);
++            SoapySDR_logf(SOAPY_SDR_ERROR, "SoapyMiri failed to set transfer mode: %s", transferMode.c_str());
+         } else {
+-            SoapySDR_logf(SOAPY_SDR_DEBUG, "SoapyMiri Using %s transfer mode", transferMode);
++            SoapySDR_logf(SOAPY_SDR_DEBUG, "SoapyMiri Using %s transfer mode", transferMode.c_str());
+         }
+     }
+ 
+@@ -208,10 +208,10 @@ int SoapyMiri::activateStream(
+     resetBuffer = true;
+     remainingElems = 0;
+ 
+-    if (transferMode[0] != '\0') { // not empty
+-        int res = mirisdr_set_transfer(dev, transferMode);
++    if (!transferMode.empty()) {
++        int res = mirisdr_set_transfer(dev, transferMode.c_str());
+         if (res != 0) {
+-            SoapySDR_logf(SOAPY_SDR_ERROR, "MiriSDR failed to set transfer mode: %s", transferMode);
++            SoapySDR_logf(SOAPY_SDR_ERROR, "MiriSDR failed to set transfer mode: %s", transferMode.c_str());
+         }
+     }
+ 

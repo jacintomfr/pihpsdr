@@ -1,0 +1,11 @@
+[Unit]
+Description=TS-570D CAT bridge (TCP 7373 <-> /dev/ttyUSB0) for piHPSDR-IF
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/ts570-cat-bridge.sh
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

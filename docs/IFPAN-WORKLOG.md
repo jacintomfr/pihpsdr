@@ -4,8 +4,12 @@ Detailed record of what has been built in this fork, why, how it was
 verified, and what is still open. Kept up to date with the work; the commit
 messages hold the per-change detail (hashes below are on `cu2ed` unless
 marked `windows-port`). RADE has its own document: `docs/RADE-IFPAN.md`.
+User-facing documentation: `docs/README-IFPAN.md` (index),
+`docs/IFPAN-USER-GUIDE.md`, `docs/IFPAN-INSTALL-LINUX.md`,
+`docs/IFPAN-INSTALL-WINDOWS.md`; helper scripts in `ifpan-tools/`.
 
-Last update: 2026-10-11 (SDRplay work merged into the main line).
+Last update: 2026-10-12 (Pi 5 server, sliding display, documentation,
+public fork).
 
 ## 1. What piHPSDR-IF is
 
@@ -13,7 +17,8 @@ A build of piHPSDR (`make IFPAN=ON`, binary `pihpsdr-if`, name in
 `src/appname.h`, settings in `~/.config/pihpsdr-if` / `%LOCALAPPDATA%\piHPSDR-IF`)
 used as a panadapter and remote front end for a **Kenwood TS-570D**:
 
-* An SDR (first a PlutoSDR, now an **RTL-SDR R820T with TCXO**) receives the
+* An SDR (first a PlutoSDR, then an RTL-SDR R820T with TCXO, now an
+  **MSi2500 / SDRplay RSP1A clone** via SoapyMiri) receives the
   TS-570D's **1st IF (73.05 MHz)**; the display is centred on the Kenwood's
   VFO, read by CAT. The SDR never transmits.
 * The Kenwood is controlled by **CAT** (frequency, mode, PTT, preamp,
@@ -21,9 +26,10 @@ used as a panadapter and remote front end for a **Kenwood TS-570D**:
 * **TX audio**: the WDSP TX chain processes the microphone (local, or the
   remote client's) and plays it on a sound card wired through an isolation
   transformer into the TS-570D **ACC2** input.
-* **Client / server**: the server (planned: Raspberry Pi 4 next to the
-  radio) owns the radio; the client (Windows / Linux) is the operator's
-  station — a mirror of everything, with microphone and speaker.
+* **Client / server**: the server (since 2026-10-11 a **Raspberry Pi 5**
+  next to the radio, section 4.13) owns the radio; the client (Windows /
+  Linux) is the operator's station — a mirror of everything, with
+  microphone and speaker.
 * **RADE V1** digital voice runs on the server (`docs/RADE-IFPAN.md`).
 
 Repositories / branches:
@@ -32,8 +38,9 @@ Repositories / branches:
 |---|---|---|
 | `Documents/pihpsdr-cu2ed` | `cu2ed` | main line (Linux + shared code) |
 | `Documents/pihpsdr-cu2ed-win` (worktree of the same repo) | `windows-port` | Windows build + MSI; `cu2ed` is merged into it after every change |
-| bookmarks | `stable-3.1.118`, `stable-win-3.1.118` | known-good state of 2026-10-11 (MSI 3.1.118) |
-| work branches | `sdrplay`, `windows-sdrplay` | SDRplay RSP1A-clone work (not started) |
+| bookmarks | `stable-3.1.118/133/165`, `stable-win-3.1.118/133/165` | known-good states of 2026-10-11 (MSI versions) |
+| work branches | `sdrplay`, `windows-sdrplay` | SDRplay RSP1A-clone work (merged into the main line) |
+| GitHub | all of the above | public fork **https://github.com/jacintomfr/pihpsdr** (remote `origin`, pushed 2026-10-12). Remote `upstream` = dl1ycf/pihpsdr, fetch only: its push URL is disabled on purpose — nothing goes to the author without the user's explicit authorization. |
 
 Never tag: the MSI version comes from `git describe` (3.1.N, N = commits
 since the v3.1 tag). Both worktrees share one repository, so branch names
@@ -465,7 +472,7 @@ for this way of working (Radio menu, "Kenwood / IF panadapter"):
   receiver moves inside the span; "TS here" (toolbar) then brings the
   Kenwood to the receiver before transmitting.
 
-## 5. Open items (2026-10-11)
+## 5. Open items (updated 2026-10-12)
 
 1. **ACC2 cable** (user is looking for the plug). Then test on a dummy load:
    TUNE / TwoTone power, ALC level (set by the sound card volume), CW → USB
@@ -474,13 +481,22 @@ for this way of working (Radio menu, "Kenwood / IF panadapter"):
    for the EOO).
 2. **RADE phase 3**: FreeDV Reporter (port `rade_reporter.c` of deskHPSDR;
    needs a locator field; runs on the server).
-3. **RADE phase 4 / Pi server**: aarch64 build with NEON, RNNoise model and
-   RADE libraries on the Pi, CPU measurement on a Pi 4 (Pi 5 fallback).
-4. **SDRplay RSP1A clone** (1DF7:2500): working with SoapyMiri, merged (section
-   4.12). Still to watch: long runs (lost samples on USB2 reported
-   upstream). For the Pi: build libmirisdr-5 + SoapyMiri there and
-   blacklist the kernel modules `msi2500` / `msi001`.
-5. Optional: panadapter "-80 dBm/H" label overlap; offer the upstream bug
-   fixes of 4.6 to DL1YCF; ESP32 bridge on hardware.
-6. Ideas from the user: full TS-570D coverage — the user proposes further
+3. **RADE phase 4 / Pi server**: the Pi 5 build with RADE is done and runs
+   (4.13); still to measure the CPU while decoding RADE on the Pi.
+4. **SDRplay RSP1A clone** (1DF7:2500): working with SoapyMiri on Windows and
+   on the Pi 5 (4.12, 4.13). Still to watch: long runs.
+5. **LAN packet loss PC <-> Pi** (4.13, client audio cuts): the user is
+   replacing cables / switch port; then re-run `ifpan-tools/net/udptest.py`
+   and, if cuts remain, install the diagnostic builds (MSI 3.1.177+ on the
+   client, Pi binary already built) and read the `audio diag:` lines.
+6. **TX chain dead after an SDR stall during MOX** (Windows PC server only:
+   TX spectrum / mic / ALC empty until restart). Not seen with the Pi
+   server; `mic diag:` lines are in place if it recurs.
+7. IF offset per mode for CW / CW-R / AM / FM (only LSB / USB set).
+8. Pi 5 housekeeping: remove the temporary sudo rule
+   `/etc/sudoers.d/010-pi-claude-setup`.
+9. Optional: panadapter "-80 dBm/H" label overlap; ESP32 bridge on hardware;
+   the upstream bug fixes of 4.6 are candidates for DL1YCF **only if the
+   user authorizes it** (nothing is sent upstream otherwise).
+10. Ideas from the user: full TS-570D coverage — the user proposes further
    CAT functions as they are found (check each on the radio first).

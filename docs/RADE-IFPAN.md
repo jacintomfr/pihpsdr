@@ -16,7 +16,10 @@ test notes in the deskHPSDR document apply unchanged.
 * Phase 2: client/server — the RADE menu on a client acts on the server's
   engine and shows its state (section 7).
 * Phase 3: FreeDV Reporter (the deskHPSDR `rade_reporter.c` client).
-* Phase 4: Raspberry Pi build (aarch64, NEON) and CPU measurement on a Pi 4.
+* Phase 4: Raspberry Pi build (aarch64, NEON) and CPU measurement. Built
+  and running on the Pi 5 server since 2026-10-11
+  (`docs/IFPAN-INSTALL-LINUX.md` section 3; RX without RADE ~23 % of the
+  four cores); CPU while decoding RADE still to measure.
 
 ## 2. Architecture decision: RADE runs on the server
 

@@ -1,5 +1,10 @@
 # piHPSDR-IF for Windows: build, install, run
 
+> **Current documentation:** `docs/IFPAN-INSTALL-WINDOWS.md` (install, Zadig
+> drivers incl. libusbK for the MSi2500 clone, CAT bridge via WSL, audio,
+> server / client, building the MSI) and `docs/README-IFPAN.md` (index).
+> This file is the original port note (Pluto / RTL-SDR / rigctld era).
+
 This branch (`windows-port`) builds piHPSDR-IF (piHPSDR with `IFPAN=ON`:
 receive-only IF panadapter for a Kenwood TS-570D with an ADALM-Pluto via
 SoapySDR, CAT through Hamlib rigctld) natively for Windows and packages it

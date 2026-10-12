@@ -397,13 +397,14 @@ void send_txspectrum(void) {
 // 100 ms while the client is connected (a stall of the server itself:
 // SDR stream or DSP), to tell server stalls from network loss.
 //
+static gint64 rxaudio_last_us = 0;     // 0: no packet sent to this client yet
+
 static void rxaudio_gap_check(void) {
-  static gint64 last_us = 0;
   gint64 now = g_get_monotonic_time();
-  if (last_us != 0 && now - last_us > 100000 && !radio_is_transmitting()) {
-    t_print("audio diag: server RX audio send gap %lld ms\n", (long long)((now - last_us) / 1000));
+  if (rxaudio_last_us != 0 && now - rxaudio_last_us > 100000 && !radio_is_transmitting()) {
+    t_print("audio diag: server RX audio send gap %lld ms\n", (long long)((now - rxaudio_last_us) / 1000));
   }
-  last_us = now;
+  rxaudio_last_us = now;
 }
 #endif
 
@@ -1042,6 +1043,9 @@ static gpointer listen_thread(gpointer arg) {
     unsigned char sha[SHA512_DIGEST_LENGTH];
     inet_ntop(AF_INET, &(((struct sockaddr_in *)&remoteclient.address)->sin_addr), (char *)s, 2 * SHA512_DIGEST_LENGTH);
     t_print("%s: client connected from %s\n", __func__, s);
+#ifdef IFPAN
+    rxaudio_last_us = 0;              // the time between two clients is no gap
+#endif
     //
     // send version number to the client
     //

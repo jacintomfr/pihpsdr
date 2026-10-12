@@ -643,11 +643,19 @@ void vfo_id_step(int id, int st) {
       long long half = (long long)myrx->sample_rate / 2LL;
       long long min_freq = frequency - half;
       long long max_freq = frequency + half;
+#ifdef IFPAN
+      // "Clicks tune the TS": the Kenwood follows the receiver and the
+      // display re-centres on it, so a fast VFO knob may run ahead of the span
+      if (!ifpan_cat_write) {
+#endif
       if (rx_low <= min_freq) {
         return;
       } else if (rx_high >= max_freq) {
         return;
       }
+#ifdef IFPAN
+      }
+#endif
       delta = vfo[id].ctun_frequency;
       vfo[id].ctun_frequency = ROUND(vfo[id].ctun_frequency, st, vfo[id].step);
       delta = vfo[id].ctun_frequency - delta;
@@ -754,11 +762,18 @@ void vfo_id_move(int id, long long hz, int round) {
       long long half = (long long)myrx->sample_rate / 2LL;
       long long min_freq = frequency - half;
       long long max_freq = frequency + half;
+#ifdef IFPAN
+      // "Clicks tune the TS": see vfo_id_step()
+      if (!ifpan_cat_write) {
+#endif
       if (rx_low <= min_freq) {
         return;
       } else if (rx_high >= max_freq) {
         return;
       }
+#ifdef IFPAN
+      }
+#endif
       delta = vfo[id].ctun_frequency;
       // *Add* the shift (hz) to the ctun frequency
       vfo[id].ctun_frequency = vfo[id].ctun_frequency + hz;

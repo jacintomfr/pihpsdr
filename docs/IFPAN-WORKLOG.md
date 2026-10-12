@@ -460,6 +460,18 @@ Change (display only; audio and tuning unchanged):
   what I want". Tuning now behaves like a normal radio: the filter stays in
   the centre, the spectrum and waterfall slide, the Kenwood follows.
 
+- **Follow-up (2026-10-12 evening, MIDI VFO at 96k):** the old effect came
+  back when turning the MIDI VFO fast. Cause: piHPSDR's CTUN keeps the
+  receiver inside the span (`vfo_id_step()` / `vfo_id_move()` refuse a step
+  whose passband would cross frequency +- sample_rate / 2). At 96k (+-48 kHz)
+  a fast knob reaches the edge before the Kenwood has followed; the steps
+  were refused, the slide stopped (no CTUN change for 2 s) and the filter
+  showed at the edge until the Kenwood caught up. In the morning test the
+  knob was turned slowly. Fix: with "Clicks tune the TS" the edge check is
+  skipped (`#ifdef IFPAN`, only when `ifpan_cat_write`): the receiver may run
+  ahead, the display slides, the Kenwood follows and the display re-centres.
+  (While the receiver is beyond the span its audio is briefly silent.)
+
 **Tuning from a MIDI VFO instead of the Kenwood dial (the remote setup).**
 The user tunes the Pi 5 server with a MIDI VFO knob (the Arduino Due
 controller with the 600 PPR optical encoder, project

@@ -28,6 +28,9 @@
 #include "band.h"
 #include "message.h"
 #include "waterfall.h"
+#ifdef IFPAN
+  #include "ifpan.h"
+#endif
 
 static int colorLowR = 0; // black
 static int colorLowG = 0;
@@ -89,6 +92,11 @@ void waterfall_update(RECEIVER *rx) {
   if (rx->pixbuf && rx->pixels_available) {
     const float *samples;
     long long frequency = vfo[rx->id].frequency; // access only once to be thread-safe
+#ifdef IFPAN
+    // tuning with "Clicks tune the TS": as in the panadapter (see ifpan.c)
+    long long ifpan_shift = ifpan_display_shift(rx);
+    frequency += ifpan_shift;
+#endif
     int  freq_changed = 0;                    // flag whether we have just "rotated"
     unsigned char *pixels = gdk_pixbuf_get_pixels (rx->pixbuf);
     int width = gdk_pixbuf_get_width(rx->pixbuf);
@@ -171,6 +179,9 @@ void waterfall_update(RECEIVER *rx) {
       unsigned char *p;
       p = pixels;
       samples = rx->pixel_samples;
+#ifdef IFPAN
+      samples = ifpan_shifted_pixels(samples, width, ifpan_shift, rx->cAp, 1);
+#endif
       float wf_low, wf_high, rangei;
       int id = rx->id;
       int b = vfo[id].band;

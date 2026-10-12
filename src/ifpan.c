@@ -522,6 +522,50 @@ void ifpan_set_follow(int on) {
 }
 
 //
+// Display while tuning here with "Clicks tune the TS" (main thread, also
+// in the client): the receiver moves at once, the IF contents only when
+// the Kenwood has followed (CAT, a few hundred ms). Instead of letting the
+// filter run ahead and jump back to the centre, the panadapter and the
+// waterfall are drawn as if the Kenwood were already there: centre =
+// receiver frequency, IF pixels moved by the same amount (an empty strip
+// at one edge until the Kenwood catches up, then the shift is zero again).
+// Only after a tuning step made here (the receiver frequency changed), for
+// at most 2 s (no CAT answer: show the real position again). Turning the
+// Kenwood dial with "Follow Kenwood" off keeps its CTUN offset unchanged.
+//
+#define IFPAN_SHIFT_HOLD_US 2000000
+
+long long ifpan_display_shift(const RECEIVER *rx) {
+  static long long last_ctun = -1;
+  static gint64 moved_us = 0;
+  if (rx == NULL || rx->id != 0 || !vfo[VFO_A].ctun) { return 0; }
+  long long c = vfo[VFO_A].ctun_frequency;
+  gint64 now = g_get_monotonic_time();
+  if (c != last_ctun) {
+    if (last_ctun >= 0) { moved_us = now; }
+    last_ctun = c;
+  }
+  if (!ifpan_cat_write || now - moved_us > IFPAN_SHIFT_HOLD_US) { return 0; }
+  return c - vfo[VFO_A].frequency;
+}
+
+const float *ifpan_shifted_pixels(const float *in, int width, long long shift_hz, double cAp, int slot) {
+  static float *buf[2] = { NULL, NULL };
+  static int len[2] = { 0, 0 };
+  if (shift_hz == 0 || width <= 0 || slot < 0 || slot > 1) { return in; }
+  if (len[slot] < width) {
+    buf[slot] = g_renew(float, buf[slot], width);
+    len[slot] = width;
+  }
+  int sp = (int)lround((double)shift_hz * cAp);
+  for (int x = 0; x < width; x++) {
+    int j = x + sp;
+    buf[slot][x] = (j >= 0 && j < width) ? in[j] : -200.0F;
+  }
+  return buf[slot];
+}
+
+//
 // Main loop, every 50 ms: if the receiver was tuned in piHPSDR-IF, ask the
 // CAT thread to move the Kenwood there (only the latest target is kept).
 //

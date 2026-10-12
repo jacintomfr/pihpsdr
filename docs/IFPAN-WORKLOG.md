@@ -386,6 +386,9 @@ shield, see 4.12) also happens with the Pi 5 as host, and measure RADE there.
   log `~/pihpsdr-if.log`. Config: Windows `soapyMiri.props` copied, audio
   devices cleared (choose the Pi devices in the menus); the Pi default is kept
   as `soapyMiri.props.pi-default`.
+  The copied props also carried "Server runs protocol only if client is
+  connected" (radio.server_stops_protocol=1): with no client the Pi showed a
+  black spectrum. Switched off in the Server menu (2026-10-12).
 - CAT: service `ts570-cat.service` (`/usr/local/bin/ts570-cat-bridge.sh`):
   socat 127.0.0.1:7373 <-> first `/dev/serial/by-id/*FTDI*`, 57600 raw. It
   waits until the FTDI adapter is plugged into the Pi.
@@ -400,6 +403,46 @@ shield, see 4.12) also happens with the Pi 5 as host, and measure RADE there.
 - **Result:** SSB 100 W from the microphone with the Pi as host: no stall
   (with the Windows PC as host, AM 25 W into the dummy load always stalled).
   The ground loop goes through the PC; on the Pi the problem is gone.
+- **Audio cuts (~0.5 s) with server on the Pi, client on Windows:** network.
+  UDP echo test PC->Pi->PC, 100 pkt/s x 1400 bytes (scratchpad udptest.py,
+  Pi ~/udpecho.py): 0.5-0.9 % lost, single packets, RTT 0.8 ms. In a 2 min
+  run the Pi counted 54 new rx_frame_check_sequence_errors (+9 symbol
+  errors) for 56 lost packets: frames arrive corrupted at the Pi (physical
+  layer: cable / switch port / RF). The PC's Realtek GbE negotiated only
+  100 Mbps (Gigabit needs all 4 pairs: suspect cable). Same symptom the
+  user had once with the HL2 behind the switch (fixed by a direct link).
+  The RX audio is UDP without sequence numbers, so each lost packet drains
+  the client's output buffer; under 512 samples it inserts ~170 ms of
+  silence. Diagnostics (252743d1 + fix) log server send gaps, client
+  arrival gaps and output buffer dry/overrun with timestamps (MSI 3.1.177).
+
+### 4.14 Display slides while the Kenwood follows (2026-10-12)
+
+User report: with "Clicks tune the TS", turning the wheel moved the filter
+ahead; when the wheel stopped it jumped back to the centre as the Kenwood
+followed (CAT answer, then `cat_apply` re-centres). Also, at 96k the new
+part of the band "came up from the bottom" after the re-centre at the span
+edge: the TS-570 mutes its receiver while its PLL relocks, plus the display
+averaging (lower the Display menu averaging; 384k + zoom avoids most
+re-centres).
+
+Change (display only; audio and tuning unchanged):
+- `ifpan_display_shift(rx)`: after a tuning step made here (the receiver /
+  CTUN frequency changed), with "Clicks tune the TS" on, for at most 2 s,
+  returns ctun_frequency - frequency (the part the Kenwood has not followed
+  yet); 0 otherwise. Turning the Kenwood dial with "Follow Kenwood" off
+  does not change the CTUN frequency, so its offset is not touched. Works
+  in the client too (no CAT state needed).
+- `ifpan_shifted_pixels()`: the pixel samples moved by shift * cAp pixels,
+  -200 dB in the empty strip (slot 0 panadapter, 1 waterfall).
+- `rx_panadapter.c`: centre frequency += shift, filter/cursor offset -=
+  shift (filter stays in the centre), shifted samples; the dashed Kenwood
+  line is drawn where the Kenwood really is (cBp - shift).
+- `waterfall.c`: frequency += shift (its own horizontal rotation then
+  slides the old rows at once), new rows from the shifted samples. When the
+  Kenwood confirms, frequency + 0 = the same display frequency: no jump.
+- Known limit: a click on the panadapter during the slide (< 1 s) maps
+  with the shifted axis.
 
 ## 5. Open items (2026-10-11)
 

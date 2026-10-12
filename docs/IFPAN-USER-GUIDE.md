@@ -107,6 +107,56 @@ shifted scale.
 * TS-570D side for ACC2 audio: speech processor off, TX EQ flat, ALC low;
   set the level with the sound card output volume.
 
+### 5.1 ACC2 wiring and TS-570D menus
+
+From the TS-570 instruction manual ("MCP and TNC", ACC2 table, and the
+menu table; checked 2026-10-12 in the Italian edition, pages I-62 and
+the menu list). ACC2 is a **13-pin DIN** on the rear panel.
+
+| Pin | Name | Function |
+|---|---|---|
+| 1 | NC | not connected |
+| 2 | RTK | RTTY keying input |
+| 3 | ANO | AF output from the transceiver (independent of the AF knob; level menu 34; 4.7 kΩ) |
+| 4 | GND | shield for pin 3 |
+| 5 | PSQ | squelch control (open: low impedance) |
+| 6 | SMET | S-meter output |
+| 7 | NC | not connected |
+| 8 | GND | chassis ground |
+| 9 | PKS | PTT for a TNC / MCP — **the front microphone audio is muted** while keyed this way |
+| 10 | NC | not connected |
+| **11** | **PKD** | **audio input ("microphone audio input": connect the TX data / audio here)** |
+| **12** | **GND** | **shield for pin 11** |
+| 13 | SS | PTT in parallel with the MIC jack (foot switch etc.) |
+
+**piHPSDR-IF TX audio:** the sound card output through the 600 Ω isolation
+transformer → **pin 11 (hot)** and **pin 12 (ground / shield)**. Nothing
+else is needed: PTT is by CAT (`TX;` / `RX;`), the receive side is the IF
+tap. (Pins 3 / 4 would give the RX audio, not used.)
+
+**Menus** (press MENU, choose the number with the dial / [UP] [DOWN]):
+
+| Menu | Function | Values (default) | Setting for piHPSDR-IF |
+|---|---|---|---|
+| **33** | AF **input** level for digital operation (ACC2 pin 11), all modes except CW / FSK | 0 (minimum) .. 2 (maximum) (**2**) | start at 0 or 1; fine level with the sound card output volume so that the ALC barely moves |
+| 34 | AF **output** level on ANO (pin 3) | 0 .. 9 (4) | not used |
+| **32** | filter bandwidth for digital operation (SSB / FM) | OFF / narrow filters (**OFF**) | **OFF** for voice and RADE (the filters are too narrow for speech; with a filter on, "FSK" shows next to the mode) |
+
+Other settings from the manual's digital-operation notes: **speech
+processor OFF** (and for RADE also TX EQ flat, ALC low), SSB / FM modes.
+TS-570 CAT has only `TX;` (no choice of TX audio source as on the TS-590's
+`TX1;`), so it is not documented whether the front microphone stays live
+together with pin 11 when keyed by CAT; only PKS (pin 9) is said to mute
+it. **Check on the dummy load:** key by CAT with the microphone plugged in
+and speak into it — if it is heard on the monitor, unplug the microphone
+(or turn MIC gain to minimum) for ACC2 / remote operation.
+
+Low-frequency response: the ACC2 input was designed for data audio and is
+reported (NU9N, for the TS-570 / TS-870 family) to cut low frequencies;
+a modification (C131 to 4.7 µF on the TS-570) is described there for fuller
+voice through ACC2. Not done here; only if the transmitted voice sounds
+thin.
+
 ## 6. RADE (FreeDV RADE V1)
 
 Runs on the server; the client's RADE menu (RADE-M) remote-controls it.

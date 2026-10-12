@@ -112,6 +112,58 @@ cai com a escala deslocada.
   EQ de TX plano, ALC baixo; o nível acerta-se com o volume de saída da
   placa de som.
 
+### 5.1 Ligação da ACC2 e menus do TS-570D
+
+Retirado do manual de instruções do TS-570 (secção "MCP e TNC", tabela da
+ACC2 e tabela de menus; verificado a 2026-10-12 na edição italiana,
+página I-62 e lista de menus). A ACC2 é uma **DIN de 13 pinos** no painel
+traseiro.
+
+| Pino | Nome | Função |
+|---|---|---|
+| 1 | NC | não ligado |
+| 2 | RTK | entrada de manipulação RTTY |
+| 3 | ANO | saída de áudio do rádio (independente do botão AF; nível no menu 34; 4,7 kΩ) |
+| 4 | GND | blindagem do pino 3 |
+| 5 | PSQ | controlo de squelch (aberto: baixa impedância) |
+| 6 | SMET | saída do S-meter |
+| 7 | NC | não ligado |
+| 8 | GND | massa do chassis |
+| 9 | PKS | PTT para TNC / MCP — **o áudio do microfone da frente é silenciado** quando se transmite por aqui |
+| 10 | NC | não ligado |
+| **11** | **PKD** | **entrada de áudio ("entrada de áudio microfónico": é aqui que entra o áudio / dados de TX)** |
+| **12** | **GND** | **blindagem do pino 11** |
+| 13 | SS | PTT em paralelo com a ficha MIC (pedal, etc.) |
+
+**Áudio de TX do piHPSDR-IF:** saída da placa de som → transformador de
+isolamento de 600 Ω → **pino 11 (vivo)** e **pino 12 (massa / blindagem)**.
+Não é preciso mais nada: o PTT é por CAT (`TX;` / `RX;`) e a receção vem
+da FI. (Os pinos 3 / 4 dariam o áudio de RX; não são usados.)
+
+**Menus** (carregar em MENU, escolher o número com o botão de sintonia /
+[UP] [DOWN]):
+
+| Menu | Função | Valores (defeito) | Valor para o piHPSDR-IF |
+|---|---|---|---|
+| **33** | nível de **entrada** de áudio para funcionamento digital (ACC2 pino 11), todos os modos exceto CW / FSK | 0 (mínimo) .. 2 (máximo) (**2**) | começar em 0 ou 1; o ajuste fino faz-se com o volume de saída da placa de som, de forma a que o ALC mal se mexa |
+| 34 | nível de **saída** de áudio no ANO (pino 3) | 0 .. 9 (4) | não usado |
+| **32** | largura do filtro para funcionamento digital (SSB / FM) | OFF / filtros estreitos (**OFF**) | **OFF** para voz e RADE (os filtros são estreitos demais para voz; com um filtro ligado aparece "FSK" junto ao modo) |
+
+Outras indicações do manual para funcionamento digital: **processador de
+voz (PROC) desligado** (e para RADE também EQ de TX plano, ALC baixo),
+modos SSB / FM. O CAT do TS-570 só tem `TX;` (não há escolha da fonte de
+áudio de TX como o `TX1;` do TS-590), por isso o manual não diz se o
+microfone da frente fica ativo junto com o pino 11 quando se transmite por
+CAT; só diz que o PKS (pino 9) o silencia. **Verificar na carga fictícia:**
+transmitir por CAT com o microfone ligado e falar para ele — se se ouvir
+no monitor, desligar o microfone (ou MIC gain no mínimo) para o uso pela
+ACC2 / remoto.
+
+Resposta em graves: a entrada da ACC2 foi pensada para áudio de dados e,
+segundo o NU9N (família TS-570 / TS-870), corta as frequências baixas; aí
+descreve-se uma modificação (C131 para 4,7 µF no TS-570) para uma voz mais
+cheia pela ACC2. Não foi feita; só se a voz transmitida soar "fina".
+
 ## 6. RADE (FreeDV RADE V1)
 
 Corre no servidor; o menu RADE do cliente (RADE-M) comanda-o à distância.

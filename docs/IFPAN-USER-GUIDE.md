@@ -77,6 +77,12 @@ shifted scale.
 * A large step at 96k: the TS-570D mutes its receiver while its PLL
   relocks, so the new part of the band can "rise from the bottom" for a
   moment; lower the spectrum averaging (Display menu) to shorten it.
+* **MIDI VFO speed:** Radio menu "VFO Encoder Divisor". A high-resolution
+  encoder (e.g. 600 pulses per turn) at a 100 Hz step and divisor 1 moves
+  60 kHz per turn, faster than the TS-570 follows by CAT, and the display
+  slides in jumps; raise the divisor (the user found up to 60 fluid) or
+  lower the step until it is fluid. The divisor no longer slows the CAT
+  readings of the Kenwood (always every 50 ms).
 * The mouse wheel sends each target to the Kenwood again (up to 3 times)
   because the TS-570D drops commands that arrive while it is busy.
 * Band menu: TS-570 bands (100 kHz – 60 MHz); a band change sends the

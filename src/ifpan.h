@@ -110,4 +110,11 @@ extern void      ifpan_tx_dump(int which, double s);   // diagnostics: 0 mic in,
 extern void      ifpan_save_state(void);
 extern void      ifpan_restore_state(void);
 
+// Display while tuning with "Clicks tune the TS": shift (Hz) to draw the
+// panadapter / waterfall with until the Kenwood has caught up, and the
+// pixel samples moved by that shift (slot: 0 panadapter, 1 waterfall)
+struct _receiver;
+extern long long    ifpan_display_shift(const struct _receiver *rx);
+extern const float *ifpan_shifted_pixels(const float *in, int width, long long shift_hz, double cAp, int slot);
+
 #endif

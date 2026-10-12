@@ -416,6 +416,34 @@ shield, see 4.12) also happens with the Pi 5 as host, and measure RADE there.
   silence. Diagnostics (252743d1 + fix) log server send gaps, client
   arrival gaps and output buffer dry/overrun with timestamps (MSI 3.1.177).
 
+### 4.14 Display slides while the Kenwood follows (2026-10-12)
+
+User report: with "Clicks tune the TS", turning the wheel moved the filter
+ahead; when the wheel stopped it jumped back to the centre as the Kenwood
+followed (CAT answer, then `cat_apply` re-centres). Also, at 96k the new
+part of the band "came up from the bottom" after the re-centre at the span
+edge: the TS-570 mutes its receiver while its PLL relocks, plus the display
+averaging (lower the Display menu averaging; 384k + zoom avoids most
+re-centres).
+
+Change (display only; audio and tuning unchanged):
+- `ifpan_display_shift(rx)`: after a tuning step made here (the receiver /
+  CTUN frequency changed), with "Clicks tune the TS" on, for at most 2 s,
+  returns ctun_frequency - frequency (the part the Kenwood has not followed
+  yet); 0 otherwise. Turning the Kenwood dial with "Follow Kenwood" off
+  does not change the CTUN frequency, so its offset is not touched. Works
+  in the client too (no CAT state needed).
+- `ifpan_shifted_pixels()`: the pixel samples moved by shift * cAp pixels,
+  -200 dB in the empty strip (slot 0 panadapter, 1 waterfall).
+- `rx_panadapter.c`: centre frequency += shift, filter/cursor offset -=
+  shift (filter stays in the centre), shifted samples; the dashed Kenwood
+  line is drawn where the Kenwood really is (cBp - shift).
+- `waterfall.c`: frequency += shift (its own horizontal rotation then
+  slides the old rows at once), new rows from the shifted samples. When the
+  Kenwood confirms, frequency + 0 = the same display frequency: no jump.
+- Known limit: a click on the panadapter during the slide (< 1 s) maps
+  with the shifted axis.
+
 ## 5. Open items (2026-10-11)
 
 1. **ACC2 cable** (user is looking for the plug). Then test on a dummy load:

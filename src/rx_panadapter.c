@@ -45,6 +45,9 @@
 #include "theme.h"
 #include "transmitter.h"
 #include "vfo.h"
+#ifdef IFPAN
+  #include "ifpan.h"
+#endif
 
 /* Create a new surface of the appropriate size to store our scribbles */
 static gboolean panadapter_configure_event_cb (GtkWidget *widget, GdkEventConfigure *event, gpointer data) {
@@ -160,6 +163,16 @@ void rx_panadapter_update(RECEIVER *rx) {
     mode = vfo[0].mode;
   }
   xoffset = rx->cAp * vfo[rx->id].offset;
+#ifdef IFPAN
+  //
+  // tuning with "Clicks tune the TS": drawn as if the Kenwood were already
+  // on the new frequency (the receiver stays in the centre, see ifpan.c)
+  //
+  long long ifpan_shift = ifpan_display_shift(rx);
+  frequency += ifpan_shift;
+  xoffset -= rx->cAp * (double)ifpan_shift;
+  samples = (float *) ifpan_shifted_pixels(rx->pixel_samples, mywidth, ifpan_shift, rx->cAp, 0);
+#endif
   double rxpos = rx->cBp + xoffset;
   double filter_left  = rx->cAp * rx->filter_low  + rxpos;
   double filter_right = rx->cAp * rx->filter_high + rxpos;
@@ -386,7 +399,7 @@ void rx_panadapter_update(RECEIVER *rx) {
   // a dashed line, or with an arrow at the edge when zoomed away from it.
   //
   if (rx->id == 0) {
-    double kx = rx->cBp;
+    double kx = rx->cBp - rx->cAp * (double)ifpan_shift;   // where the Kenwood is now
     cairo_set_source_rgba(cr, COLOUR_ATTN);
     if (kx >= 0.0 && kx <= mywidth) {
       const double dash[] = { 6.0 * scalfac, 4.0 * scalfac };

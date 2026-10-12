@@ -13,6 +13,7 @@ dl1ycf/pihpsdr). Nothing of this work has been offered upstream.
 | Document | For |
 |---|---|
 | **`docs/IFPAN-USER-GUIDE.md`** | operating it: menus, toolbar, tuning, TX, RADE, client/server |
+| **`docs/IFPAN-GUIA-UTILIZADOR.md`** | the same user guide in Portuguese (guia do utilizador em português) |
 | **`docs/IFPAN-INSTALL-LINUX.md`** | Linux / Raspberry Pi 5 from scratch (packages, MSi2500 clone with SoapyMiri, RADE, build, launcher, CAT bridge service, server, troubleshooting) |
 | **`docs/IFPAN-INSTALL-WINDOWS.md`** | Windows: MSI, Zadig drivers, CAT bridge (WSL + usbipd), audio, server/client — and building the MSI |
 | `docs/RADE-IFPAN.md` | FreeDV RADE V1 inside piHPSDR-IF (maintainer reference) |

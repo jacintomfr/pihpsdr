@@ -3,6 +3,7 @@
 How to operate piHPSDR-IF with the Kenwood TS-570D. Everything not listed
 here works as in piHPSDR. Install: `docs/IFPAN-INSTALL-LINUX.md`,
 `docs/IFPAN-INSTALL-WINDOWS.md`. Overview: `docs/README-IFPAN.md`.
+Portuguese version: `docs/IFPAN-GUIA-UTILIZADOR.md`.
 
 ## 1. The idea in one paragraph
 

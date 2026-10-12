@@ -1,0 +1,9 @@
+[Unit]
+Description=TS-570D CAT bridge (TCP 127.0.0.1:7373 <-> FTDI) for piHPSDR-IF
+After=network.target
+[Service]
+ExecStart=/usr/local/bin/ts570-cat-bridge.sh
+Restart=always
+RestartSec=2
+[Install]
+WantedBy=multi-user.target

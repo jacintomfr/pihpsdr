@@ -480,7 +480,7 @@ for this way of working (Radio menu, "Kenwood / IF panadapter"):
 
 ## 5. Open items (updated 2026-10-12)
 
-1. **ACC2 cable** (user is looking for the plug). Then test on a dummy load:
+1. **ACC2 cable** (user is looking for the plug; ACC2 pin-out and menus 32 / 33 / 34 from the TS-570 manual are in the user guide, section 5.1: audio into pin 11 PKD, shield pin 12; menu 33 input level 0..2, menu 32 OFF). Then test on a dummy load:
    TUNE / TwoTone power, ALC level (set by the sound card volume), CW → USB
    switch during TUNE, FM deviation, SWR protection during TUNE, and
    **RADE TX** (TS-570D PROC off, TX EQ flat, ALC low; PTT held ~0.5–2 s

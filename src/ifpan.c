@@ -1923,13 +1923,14 @@ static gpointer cat_thread(gpointer data) {
       g_mutex_unlock(&cat_mutex);
     }
     //
-    // How fast the display follows the Kenwood dial: poll interval =
-    // ifpan.poll_ms x "VFO Encoder Divisor" (Radio menu), so 1 = 50 ms,
-    // 4 = 200 ms. A pending piHPSDR-IF -> Kenwood request ends the wait at
-    // once, so tuning with the mouse is never delayed.
+    // How fast the display follows the Kenwood: poll interval =
+    // ifpan.poll_ms (50 ms). (Until 2026-10-12 it was multiplied by the
+    // "VFO Encoder Divisor", which is now needed for a MIDI VFO encoder:
+    // a divisor of 60 made the Kenwood readings 3 s apart.) A pending
+    // piHPSDR-IF -> Kenwood request ends the wait at once, so tuning here
+    // is never delayed.
     //
-    int div = (vfo_encoder_divisor < 1) ? 1 : vfo_encoder_divisor;
-    gint64 wait_end = g_get_monotonic_time() + (gint64)ifpan_poll_ms * div * 1000;
+    gint64 wait_end = g_get_monotonic_time() + (gint64)ifpan_poll_ms * 1000;
     while (g_get_monotonic_time() < wait_end) {
       long long pending;
       int ptt_pending;

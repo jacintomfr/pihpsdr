@@ -487,6 +487,17 @@ Change (display only; audio and tuning unchanged):
   this too. The receiver stays on the target, its offset is recomputed, and
   the slide is drawn from where the Kenwood really is. The SDR is not
   retuned (IF unchanged, cached in soapy_protocol.c).
+- **And the user found the knob speed itself (2026-10-12, late):** the MIDI
+  VFO is an optical encoder with 600 pulses per turn; at a 100 Hz step and
+  "VFO Encoder Divisor" 1 one turn is 60 kHz - more than the TS-570 can
+  follow by CAT, so the slide went in jumps. With the divisor at 60 the knob
+  is slower but fluid. The morning build (1667b45b, rebuilt on the Pi as
+  ~/pihpsdr-if-manha for an A/B test) behaved exactly like the evening one:
+  the difference was how fast the knob was turned. Side problem found: since
+  ba55e0d9 (2026-10-10, before any MIDI VFO) the CAT poll interval was
+  ifpan.poll_ms x the divisor, so a divisor of 60 meant one Kenwood reading
+  every 3 s. Now the poll is always ifpan.poll_ms (50 ms) and the divisor
+  only sets the encoder speed.
 
 **Tuning from a MIDI VFO instead of the Kenwood dial (the remote setup).**
 The user tunes the Pi 5 server with a MIDI VFO knob (the Arduino Due

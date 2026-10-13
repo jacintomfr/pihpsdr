@@ -1832,8 +1832,9 @@ void SetDisplayNumAverage (int disp, int pixout, int num)
 // pixel indices), so that the average follows signals that move across the
 // display when an external receiver (whose IF is displayed) is tuned.
 //
-// The pixels freed at the edge get the noise floor of what is kept (the
-// 25th percentile of 31 samples from its inner part). They used to repeat
+// The pixels freed at the edge get the noise level of what is kept (the
+// median of 31 samples from its inner part; the 25th percentile left a
+// visible step of a few dB). They used to repeat
 // the old edge value, which lies in the filter roll-off far below the noise:
 // after a large jump (a click near the edge of the span) the new part of
 // the display stayed empty and then "rose from the bottom" for about 0.5 s.
@@ -1850,7 +1851,7 @@ static double floor_estimate (const double *s, int lo, int hi)
 		v[j] = x;
 		k++;
 	}
-	return v[7];
+	return v[15];
 }
 
 //

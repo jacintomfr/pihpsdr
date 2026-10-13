@@ -127,6 +127,7 @@ static const char *hamlib_mode_names[] = { "USB", "LSB", "CW", "CWR", "AM", "FM"
 #define CAT_MODE_EVERY 20             // read the mode every 20 polls (~1 s)
 
 #define CAT_SET_HOLD_US 400000        // ignore stale readings this long after a set
+#define TRUST_SET_US 150000           // no read-back while targets arrive faster than this
 
 static GThread *cat_thread_id = NULL;
 static GMutex   cat_mutex;
@@ -1420,7 +1421,8 @@ static gpointer cat_thread(gpointer data) {
   int sock = -1;
   long long hold_freq = 0;            // frequency just sent to the Kenwood
   gint64 hold_until = 0;              // until then, ignore other readings
-  int hold_resends = 0;               // times the target was sent again (dropped by the Kenwood)
+  int hold_resends = 0;
+  gint64 last_set_us = 0;             // when the last frequency set went out               // times the target was sent again (dropped by the Kenwood)
   int trouble = 0;                    // a CAT problem has been reported (log once)
   int mode_count = 0;                 // polls until the next mode read (0: now)
   int smeter_count = 0;               // polls until the next S-meter read
@@ -1513,7 +1515,20 @@ static gpointer cat_thread(gpointer data) {
       TUNELOG("FA set %lld\n", target);
       hold_freq = target;
       hold_resends = 0;
-      hold_until = g_get_monotonic_time() + CAT_SET_HOLD_US;
+      last_set_us = g_get_monotonic_time();
+      hold_until = last_set_us + CAT_SET_HOLD_US;
+      //
+      // Trust the set: the display centre follows it at once (the Kenwood is
+      // there a few ms later); a reading after the knob stops confirms it,
+      // and the resend logic below corrects a command the Kenwood dropped.
+      //
+      g_mutex_lock(&cat_mutex);
+      centre_pending = target;
+      if (!centre_scheduled) {
+        centre_scheduled = 1;
+        g_idle_add(centre_apply, NULL);
+      }
+      g_mutex_unlock(&cat_mutex);
     }
     //
     // piHPSDR-IF band change -> Kenwood mode (index into ifpan_mode_names[]).
@@ -1659,6 +1674,27 @@ static gpointer cat_thread(gpointer data) {
       tune_saved_mode = -1;
       tune_saved_pc = -1;
       mode_count = 0;
+    }
+    //
+    // While the knob / wheel keeps sending targets, do not read the Kenwood
+    // back after every set (each reading takes the TS-570 tens of ms and
+    // limited the sets to 7-8 a second): wait up to TRUST_SET_US after the
+    // last set for the next target (or PTT etc.) and only read once the
+    // tuning pauses.
+    //
+    if (hold_until != 0) {
+      int busy = 0;
+      while (g_get_monotonic_time() < last_set_us + TRUST_SET_US) {
+        long long pending;
+        int ptt_pending;
+        g_mutex_lock(&cat_mutex);
+        pending = cat_set_target;
+        ptt_pending = ptt_request;
+        g_mutex_unlock(&cat_mutex);
+        if (pending > 0 || ptt_pending >= 0 || cat_reconnect) { busy = 1; break; }
+        usleep(5000);
+      }
+      if (busy) { continue; }
     }
     long long f = be_get_freq(sock);
     if (f > 0) { TUNELOG("TS read %lld%s\n", f, hold_until ? " (set on its way)" : ""); }

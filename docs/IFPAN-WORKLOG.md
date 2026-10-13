@@ -247,6 +247,16 @@ radio drops CAT commands that arrive while it answers another client):
   frequency and band like a band change (vfo_vfos_changed) before
   ifpan_band_changed. Entering RADE goes straight to the band's RADE
   frequency (Quick Tune list, one per band) if the band has one.
+  Tested OK on the Pi.
+
+### Network packet loss readout (2026-10-13)
+* The server puts a sequence number in the RX audio packets (header.s2,
+  marked by header.b2 = RXAUDIO_SEQ_MARK 0xA5, PCM and Opus); the client
+  counts the gaps of RX1 over 5 s windows (client_rxaudio_seq) and shows
+  `ms  x.x%` on the status line (fixed slot "999 ms  99.9%"; the word
+  "loss" was dropped so TS MUTE still fits before the right block,
+  checked in a Windows capture, TS MUTE moved 0.8 x size1 after the slot).
+  First reading on the home LAN: 0.2 - 1.1 % (the old audio cuts).
 
 ### 4.11 Window position fix (2026-10-11)
 * `4306cb42` a minimised start made the restore "compensate" Windows'

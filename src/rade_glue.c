@@ -240,14 +240,29 @@ static void snapshot_restore(void) {
   g_idle_add(ext_vfo_update, NULL);
 }
 
+static void apply_fit_filter(void);
+static atomic_int tx_pref = 0;   /* "TX armed" as last chosen: armed again when RADE is entered */
+
+static void drive_limit(void) {
+  if (atomic_load(&tx_armed) && transmitter != NULL && transmitter->drive > RADE_DRIVE_MAX + 0.5) {
+    radio_set_drive(RADE_DRIVE_MAX);   // TX Drive (TS PWR) limit while RADE TX is armed
+  }
+}
+
 static void set_rx_enabled_int(int on, int force_mode) {
   int was_on = atomic_load(&rx_enabled) || atomic_load(&tx_armed);
   atomic_store(&rx_enabled, on ? 1 : 0);
   if (!on) { atomic_store(&tx_armed, 0); }
-  if (on && force_mode && !was_on) { snapshot_take(); }
+  int entering = on && force_mode && !was_on;
+  if (entering) {
+    snapshot_take();
+    if (atomic_load(&tx_pref) && transmitter != NULL) { atomic_store(&tx_armed, 1); }
+  }
   engine_update();
   if (on && force_mode) { ensure_digital_mode(); }
+  if (entering && atomic_load(&rx_enabled)) { apply_fit_filter(); }   /* the RADE RX filter (narrow / wide) */
   tx_chain_force(atomic_load(&tx_armed));
+  drive_limit();
   if (on && force_mode && !atomic_load(&rx_enabled)) { snapshot_restore(); }   /* the engine did not start */
   if (!on && force_mode) { snapshot_restore(); }   /* after the TX values: the mode brings its own */
   if (force_mode) { push_client(); }   /* server-made mode / TX filter changes: tell the client */
@@ -269,13 +284,13 @@ void rade_glue_set_tx_armed(int on) {
   atomic_store(&tx_armed, on ? 1 : 0);
   if (on) { atomic_store(&rx_enabled, 1); }
   if (remote_send(RADE_REMOTE_TX, on ? 1 : 0, 0, NULL)) { return; }
+  atomic_store(&tx_pref, on ? 1 : 0);
   if (on && !was_on) { snapshot_take(); }
   engine_update();
   if (on) { ensure_digital_mode(); }
+  if (on && !was_on && atomic_load(&rx_enabled)) { apply_fit_filter(); }
   tx_chain_force(atomic_load(&tx_armed));
-  if (on && transmitter != NULL && transmitter->drive > RADE_DRIVE_MAX + 0.5) {
-    radio_set_drive(RADE_DRIVE_MAX);   // TX Drive (TS PWR) limit while RADE TX is armed
-  }
+  drive_limit();
   push_client();
   t_print("%s: tx_armed=%d tx mode=%d\n", __func__, atomic_load(&tx_armed), vfo_get_tx_mode());
 }
@@ -748,6 +763,23 @@ int rade_glue_get_callsign(int idx, char call[9], float *snr_db) {
  * holds property_mutex.  Runs before receivers / VFOs / the transmitter
  * exist: nothing reachable from here may touch them. */
 
+/* startup after a program end in RADE (main thread): back to before RADE */
+static gboolean startup_restore(gpointer data) {
+  static int tries = 0;
+  (void)data;
+  if (!snap.valid) { return G_SOURCE_REMOVE; }
+  int ready = active_receiver != NULL;
+#ifdef IFPAN
+  ready = ready && ifpan_cat_connected;
+#endif
+  if (!ready && ++tries < 60) { return G_SOURCE_CONTINUE; }   /* up to 30 s */
+  if (active_receiver == NULL) { return G_SOURCE_REMOVE; }
+  t_print("%s: the program ended in RADE: back to before RADE\n", __func__);
+  snapshot_restore();
+  push_client();
+  return G_SOURCE_REMOVE;
+}
+
 void rade_glue_load_state(void) {
   int v;
   v = atomic_load(&denoiser);    GetPropI0("rade_denoiser", v);    atomic_store(&denoiser, v);
@@ -762,10 +794,16 @@ void rade_glue_load_state(void) {
     v = atomic_load(&eq_gain[i]); GetPropI0(key, v); atomic_store(&eq_gain[i], v);
   }
   GetPropS0("rade_callsign", rade_callsign);
-  v = 0;                         GetPropI0("rade_enabled", v);
+  v = atomic_load(&tx_pref);     GetPropI0("rade_tx_pref", v);     atomic_store(&tx_pref, v);
+  /*
+   * RADE is entered by opening the RADE menu and left with its Close button,
+   * so it is never switched on at startup. If the program was ended in RADE,
+   * where the operator was before (snapshot_take) is put back once the radio
+   * (and the Kenwood's CAT) is up.
+   */
+  v = 0;                         GetPropI0("rade_prev.valid", v);
   if (v) {
-    /* where the operator was before RADE (snapshot_take), for when RADE is switched off */
-    GetPropI0("rade_prev.valid", snap.valid);
+    snap.valid = 1;
     GetPropI0("rade_prev.id", snap.id);
     GetPropI0("rade_prev.band", snap.band);
     GetPropI0("rade_prev.bandstack", snap.bandstack);
@@ -777,8 +815,8 @@ void rade_glue_load_state(void) {
     GetPropI0("rade_prev.ctun_frequency", snap.ctun_frequency);
     GetPropF0("rade_prev.volume", snap.volume);
     GetPropF0("rade_prev.drive", snap.drive);
-    set_rx_enabled_int(1, 0);
-  }   /* startup: the VFO mode is not restored yet, do not touch it */
+    g_timeout_add(500, startup_restore, NULL);
+  }
 }
 
 void rade_glue_save_state(void) {
@@ -795,7 +833,8 @@ void rade_glue_save_state(void) {
     SetPropI0(key, atomic_load(&eq_gain[i]));
   }
   SetPropS0("rade_callsign",    rade_callsign);
-  int on = atomic_load(&rx_enabled) && snap.valid;
+  SetPropI0("rade_tx_pref",     atomic_load(&tx_pref));
+  int on = snap.valid;
   SetPropI0("rade_prev.valid", on);
   if (on) {
     SetPropI0("rade_prev.id", snap.id);

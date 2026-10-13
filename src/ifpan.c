@@ -492,9 +492,19 @@ void ifpan_set_follow_mode(int on) {
 // centre until it stopped, and the display / audio were off by the distance
 // the Kenwood had already travelled.
 //
+//
+// Tuning diagnostics: if a file "ifpan-tunelog" exists in the settings folder
+// at start, every tuning step made here, every FA sent to the Kenwood, every
+// Kenwood reading and every display re-centre is logged with milliseconds
+// ("tune:" lines), to see where a slide stops being fluid.
+//
+static int tunelog_on = 0;
+#define TUNELOG(...) do { if (tunelog_on) { t_print("tune: " __VA_ARGS__); } } while (0)
+
 static void centre_only(long long f) {
   if (f <= 0 || receivers < 1 || receiver[0] == NULL || !vfo[VFO_A].ctun) { return; }
   if (vfo[VFO_A].frequency == f) { return; }
+  TUNELOG("centre %lld -> %lld (receiver %lld)\n", vfo[VFO_A].frequency, f, vfo[VFO_A].ctun_frequency);
   tuning_moved(f - vfo[VFO_A].frequency);
   vfo[VFO_A].frequency = f;
   rx_frequency_changed(receiver[0]);
@@ -534,6 +544,7 @@ static gboolean cat_apply(gpointer data) {
       return G_SOURCE_REMOVE;
     }
   }
+  TUNELOG("apply %lld (centre was %lld, receiver %lld)\n", f, vfo[VFO_A].frequency, vfo[VFO_A].ctun_frequency);
   tuning_moved(f - vfo[VFO_A].frequency);
   vfo_id_set_center(VFO_A, f);
   // a re-centre caused by the Kenwood must not be sent back to it
@@ -614,6 +625,7 @@ static gboolean ui_watch(gpointer data) {
   } else if (f != ui_last_freq) {
     ui_last_freq = f;
     if (ifpan_cat_write && ifpan_cat_connected) {
+      TUNELOG("ui receiver %lld (centre %lld)\n", f, vfo[VFO_A].frequency);
       g_mutex_lock(&cat_mutex);
       cat_set_target = f;
       ui_tuned_us = g_get_monotonic_time();
@@ -1478,6 +1490,7 @@ static gpointer cat_thread(gpointer data) {
         sock = -1;
         continue;
       }
+      TUNELOG("FA set %lld\n", target);
       hold_freq = target;
       hold_resends = 0;
       hold_until = g_get_monotonic_time() + CAT_SET_HOLD_US;
@@ -1628,6 +1641,7 @@ static gpointer cat_thread(gpointer data) {
       mode_count = 0;
     }
     long long f = be_get_freq(sock);
+    if (f > 0) { TUNELOG("TS read %lld%s\n", f, hold_until ? " (set on its way)" : ""); }
     if (f == -2) {
       //
       // rigctld is there but the radio does not answer (off, wrong baud
@@ -2082,6 +2096,8 @@ void ifpan_start(void) {
   win_restore();
   ifpan_tx_out_select(ifpan_tx_out);   // processed TX audio to the Kenwood's ACC2
   txdump_on = (access("ifpan-txdump", F_OK) == 0);
+  tunelog_on = (access("ifpan-tunelog", F_OK) == 0);
+  if (tunelog_on) { t_print("%s: tuning diagnostics on (ifpan-tunelog)\n", __func__); }
   if (txdump_on) { t_print("%s: TX audio diagnostics on (ifpan-txdump)\n", __func__); }
 }
 

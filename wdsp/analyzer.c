@@ -1829,23 +1829,46 @@ void SetDisplayNumAverage (int disp, int pixout, int num)
 
 //
 // piHPSDR-IF: move the averaging history by n pixels (n > 0: towards lower
-// pixel indices; the pixels freed at the edge repeat the last old value),
-// so that the average follows signals that move across the display when
-// an external receiver (whose IF is displayed) is tuned.
+// pixel indices), so that the average follows signals that move across the
+// display when an external receiver (whose IF is displayed) is tuned.
 //
+// The pixels freed at the edge get the noise floor of what is kept (the
+// 25th percentile of 31 samples from its inner part). They used to repeat
+// the old edge value, which lies in the filter roll-off far below the noise:
+// after a large jump (a click near the edge of the span) the new part of
+// the display stayed empty and then "rose from the bottom" for about 0.5 s.
+//
+static double floor_estimate (const double *s, int lo, int hi)
+{
+	double v[31];
+	int i, j, k = 0, span = hi - lo;
+	if (span < 31) return s[lo + span / 2];
+	for (i = 0; i < 31; i++)
+	{
+		double x = s[lo + (int)((double)span * (i + 0.5) / 31.0)];
+		for (j = k; j > 0 && v[j - 1] > x; j--) v[j] = v[j - 1];
+		v[j] = x;
+		k++;
+	}
+	return v[7];
+}
+
 static void shift_pixels (double *s, int len, int n)
 {
 	int i;
+	double fill;
 	if (n > 0)
 	{
 		memmove (s, s + n, (len - n) * sizeof (double));
-		for (i = len - n; i < len; i++) s[i] = s[len - n - 1];
+		fill = floor_estimate (s, (len - n) / 10, (len - n) - (len - n) / 10);
+		for (i = len - n; i < len; i++) s[i] = fill;
 	}
 	else
 	{
 		n = -n;
 		memmove (s + n, s, (len - n) * sizeof (double));
-		for (i = 0; i < n; i++) s[i] = s[n];
+		fill = floor_estimate (s, n + (len - n) / 10, len - (len - n) / 10);
+		for (i = 0; i < n; i++) s[i] = fill;
 	}
 }
 

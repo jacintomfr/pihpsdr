@@ -1858,7 +1858,11 @@ static double floor_estimate (const double *s, int lo, int hi)
 // The old edge also carried the roll-off of the old span: moved into the
 // middle of the display it showed as a narrow gap where the old and the new
 // part meet, so the kept pixels next to the freed ones (about 4 % of the
-// width) get the noise floor as well, after a large jump (> 5 % of the width).
+// width) get the noise floor as well. This is done on every shift, also the
+// small ones of continuous tuning: the average holds frames taken with the
+// Kenwood at slightly different frequencies, and each one's edge roll-off,
+// moved by the shifts, stacked up as a saw-tooth on the side being tuned to
+// (screen capture 2026-10-13).
 //
 static void shift_pixels (double *s, int len, int n)
 {
@@ -1868,7 +1872,7 @@ static void shift_pixels (double *s, int len, int n)
 	{
 		memmove (s, s + n, (len - n) * sizeof (double));
 		fill = floor_estimate (s, (len - n) / 10, (len - n) - (len - n) / 10);
-		edge = (n > len / 20) ? len / 25 : 0;	// only after a large jump
+		edge = len / 25;
 		if (edge > len - n) edge = len - n;
 		for (i = len - n - edge; i < len; i++) s[i] = fill;
 	}
@@ -1877,7 +1881,7 @@ static void shift_pixels (double *s, int len, int n)
 		n = -n;
 		memmove (s + n, s, (len - n) * sizeof (double));
 		fill = floor_estimate (s, n + (len - n) / 10, len - (len - n) / 10);
-		edge = (n > len / 20) ? len / 25 : 0;	// only after a large jump
+		edge = len / 25;
 		if (edge > len - n) edge = len - n;
 		for (i = 0; i < n + edge; i++) s[i] = fill;
 	}

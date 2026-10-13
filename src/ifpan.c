@@ -127,7 +127,8 @@ static const char *hamlib_mode_names[] = { "USB", "LSB", "CW", "CWR", "AM", "FM"
 #define CAT_MODE_EVERY 20             // read the mode every 20 polls (~1 s)
 
 #define CAT_SET_HOLD_US 400000        // ignore stale readings this long after a set
-#define TRUST_SET_US 150000           // no read-back while targets arrive faster than this
+#define TRUST_SET_US 400000           // no read-back until the knob has paused this long (was 150 ms: a
+                                      // reading between wheel notches went unanswered, blocking 0.5 s)
 
 static GThread *cat_thread_id = NULL;
 static GMutex   cat_mutex;

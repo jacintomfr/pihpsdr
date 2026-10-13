@@ -1396,6 +1396,26 @@ static int be_set_ptt(int sock, int on) {
   return 0;
 }
 
+//
+// While a frequency set is on its way to the Kenwood: wait at most
+// ifpan.poll_ms before reading again, but go on at once when a newer target
+// is waiting. A fixed 50 ms sleep here made the CAT cycle 120-150 ms while
+// a knob or the mouse wheel was turning (ifpan-tunelog, 2026-10-13): the
+// Kenwood - and so the IF on the display - moved only 7-8 times a second,
+// in jumps of up to 2 kHz.
+//
+static void hold_wait(void) {
+  gint64 end = g_get_monotonic_time() + (gint64)ifpan_poll_ms * 1000;
+  while (g_get_monotonic_time() < end) {
+    long long pending;
+    g_mutex_lock(&cat_mutex);
+    pending = cat_set_target;
+    g_mutex_unlock(&cat_mutex);
+    if (pending > 0) { return; }
+    usleep(10000);
+  }
+}
+
 static gpointer cat_thread(gpointer data) {
   int sock = -1;
   long long hold_freq = 0;            // frequency just sent to the Kenwood
@@ -1910,7 +1930,7 @@ static gpointer cat_thread(gpointer data) {
         hold_until = 0;
         hold_resends = 0;
       } else if (g_get_monotonic_time() < hold_until) {
-        usleep(ifpan_poll_ms * 1000);
+        hold_wait();
         continue;
       } else if (hold_resends < 3) {
         //
@@ -1926,7 +1946,7 @@ static gpointer cat_thread(gpointer data) {
           continue;
         }
         hold_until = g_get_monotonic_time() + CAT_SET_HOLD_US;
-        usleep(ifpan_poll_ms * 1000);
+        hold_wait();
         continue;
       } else {
         hold_until = 0;

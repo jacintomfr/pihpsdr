@@ -12,6 +12,11 @@
 
 #include "rade_engine.h"
 
+/* piHPSDR-IF: TX Drive (= TS PWR, watts) limit while RADE TX is armed. RADE
+ * is a continuous, full-duty signal: 50 W keeps the TS-570 PA cool and more
+ * linear (like the TS limits AM / FM power itself). */
+#define RADE_DRIVE_MAX 50.0
+
 /* ---- hooks called from shared code (one line each) ---- */
 /* receiver.c: replace the 48 kHz stereo WDSP output of RX1 by decoded speech */
 void rade_glue_rx_block(int rx_id, double *stereo48, int frames);

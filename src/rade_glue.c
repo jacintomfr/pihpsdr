@@ -223,6 +223,9 @@ void rade_glue_set_tx_armed(int on) {
   engine_update();
   if (on) { ensure_digital_mode(); }
   tx_chain_force(atomic_load(&tx_armed));
+  if (on && transmitter != NULL && transmitter->drive > RADE_DRIVE_MAX + 0.5) {
+    radio_set_drive(RADE_DRIVE_MAX);   // TX Drive (TS PWR) limit while RADE TX is armed
+  }
   push_client();
   t_print("%s: tx_armed=%d tx mode=%d\n", __func__, atomic_load(&tx_armed), vfo_get_tx_mode());
 }

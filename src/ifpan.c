@@ -66,6 +66,9 @@
 #include "mode.h"
 #include "property.h"
 #include "radio.h"
+#ifdef RADE
+#include "rade_glue.h"
+#endif
 #include "receiver.h"
 #include "sliders.h"
 #include "soapy_protocol.h"
@@ -303,6 +306,12 @@ int ifpan_power_apply(gpointer data) {
   if (g_get_monotonic_time() - pc_touched < PC_HOLD_US) { return G_SOURCE_REMOVE; }
   if (transmitter->drive < 0.5) { return G_SOURCE_REMOVE; }  // zero drive (SWR protection) stays
   if (transmitter->tune || transmitter->twotone) { return G_SOURCE_REMOVE; }  // tune power
+#ifdef RADE
+  if (!radio_is_remote && rade_glue_get_tx_armed() && w > RADE_DRIVE_MAX + 0.5) {
+    radio_set_drive(RADE_DRIVE_MAX);   // PWR turned up on the TS itself: back to the RADE limit
+    return G_SOURCE_REMOVE;
+  }
+#endif
   if ((int)(transmitter->drive + 0.5) != w) {
     transmitter->drive = w;
     if (!radio_is_remote) { radio_calc_drive_level(0); }

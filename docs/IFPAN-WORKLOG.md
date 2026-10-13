@@ -218,6 +218,12 @@ radio drops CAT commands that arrive while it answers another client):
   audio very good).
 * `36421b40` phase 2: the client's RADE menu controls the server's engine
   (INFO_RADE / CMD_RADE) — confirmed.
+* 2026-10-13: TX Drive (TS PWR) limited to 50 W while RADE TX is armed
+  (`RADE_DRIVE_MAX` in `rade_glue.h`): capped in `radio_set_drive`, brought
+  down when RADE TX is armed (`rade_glue_set_tx_armed`), and a TS PWR knob
+  turned above it is set back (`ifpan_power_apply`, server). Reason: full-duty
+  signal, PA heat and IMD (ARRL TS-570D report: IMD3 ~ -30 dB PEP, IMD5
+  ~ -45 dB at 100 W). Built on the Pi; to be tested.
 
 ### 4.11 Window position fix (2026-10-11)
 * `4306cb42` a minimised start made the restore "compensate" Windows'

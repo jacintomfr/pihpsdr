@@ -253,6 +253,15 @@ SNR, callsigns decoded; signals under about +3.8 dB SNR do not decode the
 callsign). Own callsign: RADE menu "My callsign". VOX does not work with
 RADE — use PTT / MOX. Details: `docs/RADE-IFPAN.md`.
 
+**RADE power limit 50 W:** while RADE "TX armed" is on, the TX Drive slider
+(= TS PWR) cannot go above **50 W**; arming RADE TX with more brings it down
+to 50 W, and turning the PWR knob on the TS above 50 W is set back to 50 W.
+Why: RADE is a continuous, full-duty signal (average power close to peak,
+unlike SSB voice at 20 - 30 %), so 100 W heats the TS-570 PA hard, and the
+PA is more linear lower down (ARRL 1997: IMD3 about -30 dB PEP at 100 W;
+OFDM intermodulation widens the spectrum and hurts decoding). 50 W is only
+3 dB less. Set the ACC2 level (menu 33) so the ALC moves only a little.
+
 **No sound in the headphones with RADE on?** With RADE enabled only the
 decoded speech goes to the speaker: with no RADE station on the air it stays
 (almost) silent. Two options in the RADE menu decide what you hear meanwhile:

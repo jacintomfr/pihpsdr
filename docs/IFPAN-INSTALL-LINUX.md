@@ -384,6 +384,7 @@ to the internet, so set a server password.
 | Many `504 samples lost, 3072, ...` lines in the log | The clone is behind a hub or on a busy USB bus: use a direct Pi port. A few per minute are normal. |
 | `Kenwood not answering` | CAT service: `systemctl status ts570-cat`, adapter in `/dev/serial/by-id/`, radio at 57600 (menu 35). `printf 'FA;' \| socat - TCP:127.0.0.1:7373`. |
 | Client: ~0.5 s audio cuts now and then | Packet loss on the LAN. Pi: `sudo ethtool -S eth0 \| grep -E "frame_check\|symbol"` (CRC errors = cable / switch port / interference); PC: link speed (a Gigabit card at 100 Mbps = faulty cable pair). Direct cable or another switch port. UDP test below. |
+| "TX audio to TS" set to a second card, but the TX audio still plays on the speaker card (`pactl list sink-inputs`: both piHPSDR-IF streams on one sink) | PipeWire restored every stream of the application to one device (`sink-input-by-application-name`). Fixed 2026-10-13: the ACC2 stream is now named "piHPSDR-IF TX to TS". Quick fix on an older build: `pactl move-sink-input <id> <sink>`. |
 | A newly plugged USB sound card is in `cat /proc/asound/cards` but not in the program / `pactl list short sinks` | PipeWire's wireplumber did not pick it up: `systemctl --user restart wireplumber` (with piHPSDR-IF closed; seen 2026-10-13 with a Logitech H390 for the ACC2 audio). |
 | `make`: `curl: (3) URL rejected` (rnnoise) | CRLF in `rnnoise/model_version`: convert the sources (section 4a). |
 | SoapyMiri patch does not apply | CRLF in the patch file: `sed -i 's/\r$//'` it. |

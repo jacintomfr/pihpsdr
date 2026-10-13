@@ -32,6 +32,19 @@
 #include "transmitter.h"
 #include "vfo.h"
 
+#ifdef IFPAN
+//
+// PipeWire's pulse server remembers the device of a playback stream by the
+// application name, so all piHPSDR-IF streams were moved to the device of the
+// first one (the TX audio to the Kenwood's ACC2 ended up on the speaker card
+// although another card was chosen). The ACC2 output (receiver id 8, see
+// ifpan_tx_out_select) gets a name of its own.
+//
+#define OUT_APP_NAME(rx) ((rx)->id == 8 ? APP_NAME " TX to TS" : APP_NAME)
+#else
+#define OUT_APP_NAME(rx) APP_NAME
+#endif
+
 //
 // Latency management:
 // Note latency is higher than for ALSA
@@ -220,7 +233,7 @@ int audio_open_output(RECEIVER *rx) {
     return -1;
   }
   ad->pastream   = pa_simple_new(NULL, // Use the default server.
-                                 APP_NAME,           // Our application's name.
+                                 OUT_APP_NAME(rx),   // Our application's name.
                                  PA_STREAM_PLAYBACK,
                                  rx->audio_name,
                                  stream_id,          // Description of our stream.
@@ -455,7 +468,7 @@ static int do_rxtx(gpointer data) {
     attr.minreq    = (uint32_t) -1;
     attr.fragsize  = (uint32_t) -1;
     ad->pastream = pa_simple_new(NULL, // Use the default server.
-                                 APP_NAME,           // Our application's name.
+                                 OUT_APP_NAME(rx),   // Our application's name.
                                  PA_STREAM_PLAYBACK,
                                  rx->audio_name,
                                  stream_id,          // Description of our stream.
@@ -625,7 +638,7 @@ static int do_txrx(gpointer data) {
     attr.minreq    = (uint32_t) -1;
     attr.fragsize  = (uint32_t) -1;
     ad->pastream = pa_simple_new(NULL, // Use the default server.
-                                 APP_NAME,           // Our application's name.
+                                 OUT_APP_NAME(rx),   // Our application's name.
                                  PA_STREAM_PLAYBACK,
                                  rx->audio_name,
                                  stream_id,          // Description of our stream.

@@ -183,6 +183,39 @@ the selection is done inside the CPU with no separate line, fall back to a
 PTT on pin 9 from a USB-serial adapter's RTS + PC817 (a "PTT via serial
 RTS/DTR" option would then be added to piHPSDR-IF).
 
+**TS-570 TX audio selector (service manual, checked 2026-10-13):** the
+choice between microphone, ACC2 and DRU audio is made by **IC502
+BU4066BCFV** (quad analogue switch, control high = closed) on the
+microphone / DSP section, ahead of IC503 (2/2), the AK4506 AD/DA and the
+ADSP-2181 DSP (which applies the 300 - 2700 Hz TX filter). The outputs
+OUTA, OUTB and OUTD are tied together; switch C is unused.
+
+| 4066 switch | Input | Source | Control pin | Driven from |
+|---|---|---|---|---|
+| A | INA (1) -> OUTA (2) | **ANI = ACC2 pin 11** | **13** | R103 1 k <- line (3) (CPU) |
+| B | INB (4) -> OUTB (3) | **MIC** (after IC501 NJM2100) | **5** | R101 1 k <- line (1) (CPU) |
+| D | IND (11) -> OUTD (10) | DRO = DRU-3A voice recorder | 12 | R102 1 k <- line (2) (CPU) |
+| C | INC (8) / OUTC (9) | free | 6 | not connected |
+
+Expected control levels (1 = high, about VDD; to be confirmed with a meter
+on pins 13 / 5 / 12, dummy load, 5 W):
+
+| Situation | A (13) ANI | B (5) MIC | D (12) DRO | Audio to the DSP |
+|---|---|---|---|---|
+| RX (MIC on for VOX - assumption) | 0 | 1 | 0 | MIC |
+| TX by mic PTT, **CAT TX;**, or ACC2 pin 13 (SS) | 0 | 1 | 0 | **MIC** |
+| TX by **PKS** (ACC2 pin 9) | 1 | 0 | 0 | **ACC2** |
+| DRU-3A message playback | 0 | 0 | 1 | DRO |
+| **With the planned ACC2/MIC switch in "ACC2"** | **1** (pin 13 -> VDD pin 14) | **0** (pin 5 -> GND pin 7) | CPU (0) | **ACC2**, also with CAT TX; |
+
+The planned switch (DPDT, or two SPST operated together) forces only the
+audio selection: pin 13 to pin 14 (VDD) and pin 5 to pin 7 (GND); switch D
+is left alone. The 1 k resistors R103 / R101 limit the current against the
+CPU outputs (about 5 mA at 5 V). PTT stays by CAT, so the radio can never
+latch in TX (unlike feeding the REMOTE relay back to PKS). With a DRU-3A
+installed, its playback would mix with the ACC2 audio while the switch is
+in "ACC2". In "MIC" (open) everything is as from the factory.
+
 **TS-570 TX bandwidth (from the instruction manual, chapter 8 "Customising
 the transmit signal", checked 2026-10-13):** menu 13 has only two settings -
 **2.4 kHz (normal, default): 300 Hz - 2.7 kHz** and 2.0 kHz (narrow): 500 Hz -

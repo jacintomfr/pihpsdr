@@ -107,9 +107,10 @@ shifted scale.
   at once by CAT, MOX off, drive 0 (skipped while the ATU tunes; during
   TUNE after 10 s).
 * Meters: Kenwood power / SWR / ALC read by CAT on piHPSDR's TX meter.
-* **Not yet tested on air** (the ACC2 plug was missing): TUNE / TwoTone
-  power, ALC level, CW → USB during TUNE, FM deviation, SWR protection in
-  TUNE, RADE TX.
+* **Confirmed on the dummy load (2026-10-13):** TUNE at the programmed
+  power and SSB at 100 W through ACC2 (TS keyed on pin 9, see 5.1). Still
+  to test: TwoTone, ALC with speech, CW -> USB during TUNE, FM deviation,
+  SWR protection in TUNE, RADE TX.
 * TS-570D side for ACC2 audio: speech processor off, TX EQ flat, ALC low;
   set the level with the sound card output volume.
 

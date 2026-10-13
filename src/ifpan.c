@@ -1424,6 +1424,17 @@ static gpointer cat_thread(gpointer data) {
               ifpan_cat_backend == IFPAN_CAT_KENWOOD ? ifpan_kenwood_port : ifpan_rigctld_port);
     }
     if (sock < 0) {
+      //
+      // At most one connection attempt per second: when the serial adapter
+      // behind the CAT bridge drops off USB (seen 2026-10-13: the USB hub
+      // reset while transmitting), the bridge still accepts TCP connections
+      // but closes them at once, and this loop reconnected thousands of
+      // times a second (3.4 MB of log in seconds).
+      //
+      static gint64 last_connect_us = 0;
+      gint64 since = g_get_monotonic_time() - last_connect_us;
+      if (since < 1000000) { usleep((useconds_t)(1000000 - since)); }
+      last_connect_us = g_get_monotonic_time();
       sock = cat_connect();
       if (sock < 0) {
         if (!trouble) {

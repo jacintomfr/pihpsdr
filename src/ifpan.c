@@ -70,6 +70,7 @@
 #include "rade_glue.h"
 #endif
 #include "receiver.h"
+#include "rigctl.h"
 #include "sliders.h"
 #include "soapy_protocol.h"
 #include "vfo.h"
@@ -1664,6 +1665,14 @@ static gpointer cat_thread(gpointer data) {
     ptt_request = -1;
     g_mutex_unlock(&cat_mutex);
     if (ptt >= 0) {
+      //
+      // The serial PTT line (ACC2 pin 9, PKS) goes first: the TS-570 takes
+      // its TX audio from ACC2 only if PKS is active when it goes into TX
+      //
+      if (ptt) {
+        serial_ptt_now(1);
+        usleep(50000);
+      }
       if (be_set_ptt(sock, ptt) < 0) {
         if (ptt == 0) {               // RX must not get lost
           g_mutex_lock(&cat_mutex);
@@ -1679,7 +1688,10 @@ static gpointer cat_thread(gpointer data) {
       }
       ptt_keyed = ptt;
       t_print("%s: PTT %s sent to the Kenwood\n", __func__, ptt ? "TX" : "RX");
-      if (!ptt) { txlev_report(); }
+      if (!ptt) {
+        serial_ptt_now(0);
+        txlev_report();
+      }
     }
     //
     // TUNE end, once the Kenwood is back in RX: if its mode was switched,

@@ -526,30 +526,6 @@ static gboolean centre_apply(gpointer data) {
   return G_SOURCE_REMOVE;
 }
 
-//
-// Display centre after a frequency set, delayed by IFPAN_DATA_DELAY_MS: the
-// set is sent at once, but the IF data on the display only reflects the new
-// Kenwood frequency some time later (the Kenwood retunes, then the SDR
-// buffers, the display FFT and its average catch up). Moving the centre at
-// once drew the live data too far while a knob turned continuously: the
-// roll-off of the span edge appeared inside the display, as a gap and small
-// "islands" on the side being tuned to (screen capture 2026-10-13).
-//
-#define IFPAN_DATA_DELAY_MS 150
-
-static gboolean centre_delayed(gpointer data) {
-  long long *f = (long long *) data;
-  centre_only(*f);
-  g_free(f);
-  return G_SOURCE_REMOVE;
-}
-
-static gboolean centre_set_from_cat(gpointer data) {
-  // main thread: start the delay for this set
-  g_timeout_add(IFPAN_DATA_DELAY_MS, centre_delayed, data);
-  return G_SOURCE_REMOVE;
-}
-
 static gboolean cat_apply(gpointer data) {
   long long f;
   g_mutex_lock(&cat_mutex);
@@ -1548,16 +1524,17 @@ static gpointer cat_thread(gpointer data) {
       last_set_us = g_get_monotonic_time();
       hold_until = last_set_us + CAT_SET_HOLD_US;
       //
-      // Trust the set: the display centre follows it once the IF data can
-      // reflect it (IFPAN_DATA_DELAY_MS, see centre_delayed); a reading after
-      // the knob stops confirms it, and the resend logic below corrects a
-      // command the Kenwood dropped.
+      // Trust the set: the display centre follows it at once (the Kenwood is
+      // there a few ms later); a reading after the knob stops confirms it,
+      // and the resend logic below corrects a command the Kenwood dropped.
       //
-      {
-        long long *f = g_new(long long, 1);
-        *f = target;
-        g_idle_add(centre_set_from_cat, f);
+      g_mutex_lock(&cat_mutex);
+      centre_pending = target;
+      if (!centre_scheduled) {
+        centre_scheduled = 1;
+        g_idle_add(centre_apply, NULL);
       }
+      g_mutex_unlock(&cat_mutex);
     }
     //
     // piHPSDR-IF band change -> Kenwood mode (index into ifpan_mode_names[]).

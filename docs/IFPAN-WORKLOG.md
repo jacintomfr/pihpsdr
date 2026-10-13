@@ -239,6 +239,8 @@ radio drops CAT commands that arrive while it answers another client):
   (startup_restore, waits for CAT). Before, RADE stayed on with the menu
   closed, the RADE TX chain (no compressor, 700 - 2300 Hz TX filter) could
   stay forced in SSB, and the RADE filter was only set by Fit Filter.
+  **Tested OK by the user on the Pi 5 (2026-10-13)**; Windows client
+  3.1.267 installed, not tested yet.
 
 ### 4.11 Window position fix (2026-10-11)
 * `4306cb42` a minimised start made the restore "compensate" Windows'

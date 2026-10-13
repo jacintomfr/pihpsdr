@@ -599,73 +599,18 @@ long long ifpan_display_shift(const RECEIVER *rx) {
   return c - vfo[VFO_A].frequency;
 }
 
-//
-// Hold after an isolated large jump (2026-10-13): a click near the edge of
-// the span moves the Kenwood tens of kHz at once, and the TS-570 mutes its
-// receiver while its PLL locks: for 0.1-0.2 s the whole IF collapses to the
-// floor and a small step shows where the old and the new part meet. After a
-// jump larger than 5 % of the span with no other frequency change in the
-// 300 ms before (a click, a band change - never while a knob or the wheel
-// keeps turning), the last live picture is drawn, moved to the new
-// frequency, for IFPAN_JUMP_HOLD_US; then live data again. Display only.
-//
-#define IFPAN_JUMP_HOLD_US 300000
-
-const float *ifpan_shifted_pixels(int id, const float *in, int width, long long shift_hz, double cAp, int slot) {
+const float *ifpan_shifted_pixels(const float *in, int width, long long shift_hz, double cAp, int slot) {
   static float *buf[2] = { NULL, NULL };
-  static float *prev[2] = { NULL, NULL };   // last live picture
-  static float *snap[2] = { NULL, NULL };   // picture held after a jump
   static int len[2] = { 0, 0 };
-  static int prev_ok[2] = { 0, 0 };
-  static int snap_ok[2] = { 0, 0 };
-  static long long prev_centre[2] = { 0, 0 };
-  static long long snap_centre[2] = { 0, 0 };
-  static long long last_centre = -1;
-  static gint64 last_change_us = 0;
-  static gint64 hold_until = 0;
-  if (id != 0 || width <= 0 || slot < 0 || slot > 1 || cAp <= 0.0) { return in; }
+  if (shift_hz == 0 || width <= 0 || slot < 0 || slot > 1) { return in; }
   if (len[slot] < width) {
     buf[slot] = g_renew(float, buf[slot], width);
-    prev[slot] = g_renew(float, prev[slot], width);
-    snap[slot] = g_renew(float, snap[slot], width);
     len[slot] = width;
-    prev_ok[slot] = snap_ok[slot] = 0;
   }
-  gint64 now = g_get_monotonic_time();
-  long long centre = vfo[VFO_A].frequency;          // where the Kenwood (the IF) is
-  if (centre != last_centre) {
-    long long jump = llabs(centre - last_centre);
-    if (last_centre >= 0 && now - last_change_us > IFPAN_JUMP_HOLD_US &&
-        jump * cAp > width / 20.0 && jump * cAp < width) {
-      hold_until = now + IFPAN_JUMP_HOLD_US;
-      for (int s = 0; s < 2; s++) {
-        if (prev_ok[s] && len[s] > 0) {
-          memcpy(snap[s], prev[s], (size_t)len[s] * sizeof(float));
-          snap_centre[s] = prev_centre[s];
-          snap_ok[s] = 1;
-        } else {
-          snap_ok[s] = 0;
-        }
-      }
-    }
-    last_centre = centre;
-    last_change_us = now;
-  }
-  const float *src = in;
-  long long src_centre = centre;
-  if (now < hold_until && snap_ok[slot]) {
-    src = snap[slot];
-    src_centre = snap_centre[slot];
-  } else {
-    memcpy(prev[slot], in, (size_t)width * sizeof(float));
-    prev_centre[slot] = centre;
-    prev_ok[slot] = 1;
-  }
-  int sp = (int)lround((double)(centre + shift_hz - src_centre) * cAp);
-  if (sp == 0 && src == in) { return in; }
+  int sp = (int)lround((double)shift_hz * cAp);
   for (int x = 0; x < width; x++) {
     int j = x + sp;
-    buf[slot][x] = (j >= 0 && j < width) ? src[j] : -200.0F;
+    buf[slot][x] = (j >= 0 && j < width) ? in[j] : -200.0F;
   }
   return buf[slot];
 }

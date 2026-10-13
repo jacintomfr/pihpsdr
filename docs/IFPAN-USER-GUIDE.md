@@ -169,10 +169,30 @@ hand gave the programmed 10 W, once the ACC2 stream really went to the H390
 (PipeWire had put it on the speaker card; fixed in pulseaudio.c). Also: the sound card output
 must be loud enough - the Logitech H390 used for ACC2 was at 40 %
 (-24 dB) and gave nothing; at 100 % it drives the TS fully (menu 33 = 2).
-**To do:** key pin 9 from the Pi (GPIO + optocoupler, e.g. PC817 with
-~330 ohm from GPIO17; transistor collector to pin 9, emitter to pin 8) and a
-Radio-menu option "PTT via ACC2" so MOX / TUNE / TwoTone / RADE key the TS
-through PKS instead of `TX;` (CAT stays for everything else).
+**Done (2026-10-13): pin 9 keyed by a USB-serial adapter's RTS line.**
+An FTDI FT232R adapter on the Pi drives PKS (pin 9) from its RTS line; it
+uses piHPSDR's own serial PTT (Menu -> CAT, row **PTT**: port
+`/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A50285BI-if00-port0` - the
+by-id name, since ttyUSB0 / ttyUSB1 can swap with the CAT adapter - and
+"Enable (serial port for PTT in/out)"). Set it **on the server (Pi)**: the
+client's CAT menu acts on the client's own serial ports. Each install (e.g.
+a test build in another folder) has its own setting.
+
+**Timing matters: PKS must be active before the CAT `TX;`.** The TS-570
+picks its TX audio when it goes into TX: ACC2 only if PKS is already active,
+otherwise the microphone for the whole over. piHPSDR's serial PTT thread
+polls the TX state every 100 ms, so RTS came 10 - 100 ms after `TX;`: TUNE
+(RTS ~10 - 40 ms later) always gave RF, MOX (RTS ~95 ms later) gave none even
+with a whistle at the same level as the TUNE tone on the H390 output
+(checked with a recording of the sound card monitor). Fix (commit 461d683f):
+the CAT thread sets RTS itself (`serial_ptt_now()` in rigctl.c), waits
+50 ms, then sends `TX;`; after `RX;` it drops RTS at once. Confirmed by the
+user: SSB through ACC2 works every time.
+
+The program logs, for every over, the TX audio levels (`tx audio: mic ... |
+to ACC2 ...`) and every RTS / CTS change of the serial PTT, to find overs
+without modulation. Note: the serial PTT also reads CTS as a PTT input
+(DTR is set as its supply); leave CTS unconnected on the adapter.
 
 **Plan chosen by the user (2026-10-13) - works with any host, Windows too:**
 keep the PTT by CAT and add a switch inside the TS-570 that forces only the

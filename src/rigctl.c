@@ -4133,6 +4133,29 @@ static gpointer ptt_server(gpointer data) {
   return NULL;
 }
 
+#ifdef IFPAN
+//
+// piHPSDR-IF: set the serial PTT line (RTS) at once, ahead of ptt_server's
+// 100 ms poll. The TS-570 picks its TX audio when it goes into TX: ACC2 only
+// if PKS (ACC2 pin 9, keyed by this RTS line) is already active, otherwise
+// the microphone - so PKS must come before the CAT "TX;" (seen 2026-10-13:
+// RTS up to 100 ms after "TX;" gave overs without ACC2 audio).
+//
+void serial_ptt_now(int on) {
+  int id = MAX_SERIAL;
+  if (!SerialPorts[id].enable || !serial_client[id].running) { return; }
+  int status;
+  if (ioctl(serial_client[id].fd, TIOCMGET, &status) == -1) { return; }
+  if (on) {
+    status |= TIOCM_RTS;
+  } else {
+    status &= ~TIOCM_RTS;
+  }
+  int rc = ioctl(serial_client[id].fd, TIOCMSET, &status);
+  t_print("%s: RTS %s (rc=%d)\n", __func__, on ? "ON" : "OFF", rc);
+}
+#endif
+
 int launch_serial_ptt(int id) {
   int fd;
   int status;

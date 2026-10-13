@@ -50,6 +50,9 @@ extern int launch_serial_rigctl (int id);
 extern int launch_serial_ptt (int id);
 extern void disable_serial_rigctl (int id);
 extern void disable_serial_ptt (int id);
+#ifdef IFPAN
+extern void serial_ptt_now(int on);   // piHPSDR-IF: serial PTT line at once (PKS before CAT TX)
+#endif
 extern int rigctl_tcp_running(void);
 extern void  shutdown_tcp_rigctl(void);
 extern void rigctl_save_state(void);

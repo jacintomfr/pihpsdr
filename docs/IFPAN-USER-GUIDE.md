@@ -297,6 +297,12 @@ switched on.)
 * Both must run the **same build**.
 * The RX audio is UDP: a lost packet is an audible gap (~0.5 s cuts =
   packet loss on the LAN: check cables / switch, `ifpan-tools/net/`).
+* **Packet loss readout** (client, after the latency, e.g. `3 ms  0.2%`):
+  RX audio packets lost over the last 5 s (the server numbers them), like
+  the Hermes-Lite 2 "Net loss". Green 0.0 %, yellow below 1 %, red from 1 %,
+  grey `-.-%` while not known. Each loss is also logged by the client
+  (`net diag: X of Y RX audio packets lost`). On a good cable LAN it stays at
+  0.0 %; seen 2026-10-13 on the home LAN: up to 1.1 % (to be fixed).
 * Server option "Server runs protocol only if client is connected": off if
   the server's own screen is used too.
 

@@ -1068,7 +1068,7 @@ static void ifpan_layout(cairo_t *cr, const VFO_BAR_LAYOUT *src, double width,
   dst->lat_y = (int) dial->status_y;
   cairo_text_extents_t e4;
   cairo_text_extents(cr, "999 ms  99.9%", &e4);   // latency and packet loss slots
-  dial->mute_x = dst->lat_x + e4.x_advance + 1.5 * src->size1;
+  dial->mute_x = dst->lat_x + e4.x_advance + 0.8 * src->size1;   // keeps >= 12 px before the right block
 }
 #endif
 

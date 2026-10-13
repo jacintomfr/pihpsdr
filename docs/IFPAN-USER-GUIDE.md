@@ -256,7 +256,8 @@ RADE — use PTT / MOX. Details: `docs/RADE-IFPAN.md`.
 **Entering and leaving RADE:** choosing **RADE** in the menu enters RADE:
 RADE RX on, TX armed if it was armed last time, the receiver in DIGU / DIGL
 and the RADE RX filter (narrow 700 - 2300 Hz or wide 300 - 2700 Hz, "Fit
-Filter") at once. The menu's **Close** button (or the window's X) leaves
+Filter") at once. If the band has a RADE frequency (Quick Tune list: 80m 3.630,
+40m 7.180, 20m 14.236, 15m 21.180, 10m 28.330 MHz), it goes straight there. The menu's **Close** button (or the window's X) leaves
 RADE: band, band stack, frequency, CTUN, mode, filter, RX volume and TX Drive
 (TS PWR) go back to what they were before RADE, the Kenwood included,
 whatever was tuned or changed meanwhile. Unticking "Enable RADE RX" also

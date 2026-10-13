@@ -1136,6 +1136,15 @@ extern char hpsdr_pwd[HPSDR_PWD_LEN];
 extern int audio_compression;
 extern int remote_auto_reconnect;
 extern int remote_latency_ms;
+//
+// piHPSDR-IF: RX audio packets (INFO_RXAUDIO / INFO_RXAUDIO_OPUS) carry a
+// sequence number in header.s2, marked by header.b2 = RXAUDIO_SEQ_MARK, so
+// that the client can show the packet loss of the network next to the
+// latency (like the "Net loss" of the Hermes-Lite 2)
+//
+#define RXAUDIO_SEQ_MARK 0xA5
+extern int remote_loss_tenths;        // RX audio packets lost in the last 5 s, in 0.1 %; -1: not known
+extern long long remote_loss_us;      // when remote_loss_tenths was last updated (monotonic us)
 extern int cl_sock_tcp;
 
 extern void start_vfo_timer(void);

@@ -258,6 +258,17 @@ radio drops CAT commands that arrive while it answers another client):
   checked in a Windows capture, TS MUTE moved 0.8 x size1 after the slot).
   First reading on the home LAN: 0.2 - 1.1 % (the old audio cuts).
 
+### RADE V2 test branches (2026-10-13)
+* Separate branches, the normal builds stay RADE V1: `pihpsdr-if-rade2`
+  (this repo, commit 9402e6b2, docs/RADE-V2-TEST.md there) and
+  `deskhpsdr-rade2` (jacintomfr/deskhpsdr, for a colleague's HL2 on Ubuntu
+  24.04, also RADE on Linux). Same rade_c commit c394514 on both sides
+  (V2 waveform not stable upstream; on-air use not recommended by the
+  authors; tests only between the two stations). V2: no EOO callsign.
+* Pi 5: separate install `~/pihpsdr-if-rade2`, desktop shortcut
+  "piHPSDR-IF RADE V2 (test)"; only one of the two may run at a time.
+  Loopback check (tx -> rx) OK for V1 and V2.
+
 ### 4.11 Window position fix (2026-10-11)
 * `4306cb42` a minimised start made the restore "compensate" Windows'
   fictitious position and save 16030,16012: every start put the window out

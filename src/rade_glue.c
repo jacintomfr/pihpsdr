@@ -799,14 +799,26 @@ int rade_glue_get_callsign(int idx, char call[9], float *snr_db) {
 static gboolean startup_restore(gpointer data) {
   static int tries = 0;
   (void)data;
-  if (!snap.valid) { return G_SOURCE_REMOVE; }
-  int ready = active_receiver != NULL;
+  if (!snap.valid && !txs.saved) { return G_SOURCE_REMOVE; }
+  int ready = active_receiver != NULL && (transmitter != NULL || !txs.saved);
 #ifdef IFPAN
   ready = ready && ifpan_cat_connected;
 #endif
   if (!ready && ++tries < 60) { return G_SOURCE_CONTINUE; }   /* up to 30 s */
   if (active_receiver == NULL) { return G_SOURCE_REMOVE; }
   t_print("%s: the program ended in RADE: back to before RADE\n", __func__);
+  //
+  // The TX chain values RADE forced (compressor / EQ / CFC off, TX filter)
+  // were saved with the transmitter: put the operator's own back first
+  // (then the mode brings its own, as when RADE is left normally)
+  //
+  if (txs.saved && transmitter != NULL && !atomic_load(&tx_armed)) {
+    tx_restore_values(transmitter);
+    tx_set_compressor(transmitter);
+    tx_set_equalizer(transmitter);
+    tx_set_filter(transmitter);
+  }
+  txs.saved = 0;
   snapshot_restore();
   push_client();
   return G_SOURCE_REMOVE;
@@ -847,8 +859,20 @@ void rade_glue_load_state(void) {
     GetPropI0("rade_prev.ctun_frequency", snap.ctun_frequency);
     GetPropF0("rade_prev.volume", snap.volume);
     GetPropF0("rade_prev.drive", snap.drive);
-    g_timeout_add(500, startup_restore, NULL);
   }
+  /* TX chain values from before RADE (tx_chain_force), if it ended armed */
+  v = 0;                         GetPropI0("rade_txs.saved", v);
+  if (v) {
+    txs.saved = 1;
+    GetPropI0("rade_txs.compressor", txs.compressor);
+    GetPropI0("rade_txs.eq_enable", txs.eq_enable);
+    GetPropI0("rade_txs.cfc", txs.cfc);
+    GetPropI0("rade_txs.cfc_eq", txs.cfc_eq);
+    GetPropI0("rade_txs.use_rx_filter", txs.use_rx_filter);
+    GetPropI0("rade_txs.flow", txs.flow);
+    GetPropI0("rade_txs.fhigh", txs.fhigh);
+  }
+  if (snap.valid || txs.saved) { g_timeout_add(500, startup_restore, NULL); }
 }
 
 void rade_glue_save_state(void) {
@@ -880,6 +904,21 @@ void rade_glue_save_state(void) {
     SetPropI0("rade_prev.ctun_frequency", snap.ctun_frequency);
     SetPropF0("rade_prev.volume", snap.volume);
     SetPropF0("rade_prev.drive", snap.drive);
+  }
+  /*
+   * While RADE TX is armed the transmitter holds RADE's TX chain values
+   * (tx_chain_force) and saves them; keep the operator's own here so that
+   * the next start can put them back (startup_restore)
+   */
+  SetPropI0("rade_txs.saved", txs.saved);
+  if (txs.saved) {
+    SetPropI0("rade_txs.compressor", txs.compressor);
+    SetPropI0("rade_txs.eq_enable", txs.eq_enable);
+    SetPropI0("rade_txs.cfc", txs.cfc);
+    SetPropI0("rade_txs.cfc_eq", txs.cfc_eq);
+    SetPropI0("rade_txs.use_rx_filter", txs.use_rx_filter);
+    SetPropI0("rade_txs.flow", txs.flow);
+    SetPropI0("rade_txs.fhigh", txs.fhigh);
   }
 }
 

@@ -180,7 +180,7 @@ void waterfall_update(RECEIVER *rx) {
       p = pixels;
       samples = rx->pixel_samples;
 #ifdef IFPAN
-      samples = ifpan_shifted_pixels(samples, width, ifpan_shift, rx->cAp, 1);
+      samples = ifpan_shifted_pixels(rx->id, samples, width, frequency, rx->cAp, 1);
 #endif
       float wf_low, wf_high, rangei;
       int id = rx->id;

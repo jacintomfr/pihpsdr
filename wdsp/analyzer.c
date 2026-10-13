@@ -1853,22 +1853,32 @@ static double floor_estimate (const double *s, int lo, int hi)
 	return v[7];
 }
 
+//
+// The old edge also carried the roll-off of the old span: moved into the
+// middle of the display it showed as a narrow gap where the old and the new
+// part meet, so the kept pixels next to the freed ones (about 4 % of the
+// width) get the noise floor as well, after a large jump (> 5 % of the width).
+//
 static void shift_pixels (double *s, int len, int n)
 {
-	int i;
+	int i, edge;
 	double fill;
 	if (n > 0)
 	{
 		memmove (s, s + n, (len - n) * sizeof (double));
 		fill = floor_estimate (s, (len - n) / 10, (len - n) - (len - n) / 10);
-		for (i = len - n; i < len; i++) s[i] = fill;
+		edge = (n > len / 20) ? len / 25 : 0;	// only after a large jump
+		if (edge > len - n) edge = len - n;
+		for (i = len - n - edge; i < len; i++) s[i] = fill;
 	}
 	else
 	{
 		n = -n;
 		memmove (s + n, s, (len - n) * sizeof (double));
 		fill = floor_estimate (s, n + (len - n) / 10, len - (len - n) / 10);
-		for (i = 0; i < n; i++) s[i] = fill;
+		edge = (n > len / 20) ? len / 25 : 0;	// only after a large jump
+		if (edge > len - n) edge = len - n;
+		for (i = 0; i < n + edge; i++) s[i] = fill;
 	}
 }
 

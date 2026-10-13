@@ -171,7 +171,7 @@ void rx_panadapter_update(RECEIVER *rx) {
   long long ifpan_shift = ifpan_display_shift(rx);
   frequency += ifpan_shift;
   xoffset -= rx->cAp * (double)ifpan_shift;
-  samples = (float *) ifpan_shifted_pixels(rx->pixel_samples, mywidth, ifpan_shift, rx->cAp, 0);
+  samples = (float *) ifpan_shifted_pixels(rx->id, rx->pixel_samples, mywidth, ifpan_shift, rx->cAp, 0);
 #endif
   double rxpos = rx->cBp + xoffset;
   double filter_left  = rx->cAp * rx->filter_low  + rxpos;

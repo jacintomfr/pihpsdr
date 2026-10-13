@@ -231,6 +231,14 @@ radio drops CAT commands that arrive while it answers another client):
   ifpan_band_changed), also if the engine fails to start; persisted as
   rade_prev.* for a restart with RADE on. Before, only the mode came back,
   and only if it was still DIGU/DIGL. Built on the Pi; to be tested.
+* 2026-10-13: RADE menu = RADE (user's choice): opening it enters RADE
+  (RX on, TX armed per rade_tx_pref, DIGU/DIGL, apply_fit_filter at once),
+  its Close button / window X leaves it (snapshot_restore); a destroy by
+  another menu keeps RADE on. No more RADE on at startup (rade_enabled not
+  used); a program end in RADE is restored at the next start
+  (startup_restore, waits for CAT). Before, RADE stayed on with the menu
+  closed, the RADE TX chain (no compressor, 700 - 2300 Hz TX filter) could
+  stay forced in SSB, and the RADE filter was only set by Fit Filter.
 
 ### 4.11 Window position fix (2026-10-11)
 * `4306cb42` a minimised start made the restore "compensate" Windows'

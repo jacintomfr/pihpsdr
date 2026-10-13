@@ -49,7 +49,19 @@ static void cleanup(void) {
   }
 }
 
+//
+// Opening the RADE menu enters RADE, its Close button (or the window's X)
+// leaves it: band, frequency, mode, filter, volume and TX Drive go back to
+// before RADE (rade_glue snapshot). When the menu is only replaced by
+// another menu (destroy), RADE stays on; Close in the RADE menu leaves it.
+//
 static gboolean close_cb(void) {
+  if (rade_glue_get_rx_enabled() || rade_glue_get_tx_armed()) { rade_glue_set_rx_enabled(0); }
+  cleanup();
+  return TRUE;
+}
+
+static gboolean destroy_cb(void) {
   cleanup();
   return TRUE;
 }
@@ -214,7 +226,7 @@ static GtkWidget *new_dialog(GtkWidget *parent, GtkWidget **grid) {
   gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(headerbar), TRUE);
   gtk_header_bar_set_title(GTK_HEADER_BAR(headerbar), APP_NAME " - RADE");
   g_signal_connect(d, "delete_event", G_CALLBACK(close_cb), NULL);
-  g_signal_connect(d, "destroy", G_CALLBACK(close_cb), NULL);
+  g_signal_connect(d, "destroy", G_CALLBACK(destroy_cb), NULL);
   *grid = gtk_grid_new();
   gtk_grid_set_column_spacing(GTK_GRID(*grid), 10);
   gtk_grid_set_row_spacing(GTK_GRID(*grid), 6);
@@ -231,6 +243,7 @@ void rade_menu(GtkWidget *parent) {
   GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
   int row = 0;
   // (on a client, everything here acts on the server's RADE engine)
+  if (!rade_glue_get_rx_enabled()) { rade_glue_set_rx_enabled(1); }   // entering RADE
   rx_check = add_check(grid, "Enable RADE RX", rade_glue_get_rx_enabled(), G_CALLBACK(rx_cb), 1, row);
   tx_check = add_check(grid, "TX armed", rade_glue_get_tx_armed(), G_CALLBACK(tx_cb), 2, row);
   if (transmitter == NULL) { gtk_widget_set_sensitive(tx_check, FALSE); }

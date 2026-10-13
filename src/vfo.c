@@ -1067,7 +1067,7 @@ static void ifpan_layout(cairo_t *cr, const VFO_BAR_LAYOUT *src, double width,
   dst->lat_x = (int)(dial->status_x + e3.x_advance + 1.5 * src->size1);
   dst->lat_y = (int) dial->status_y;
   cairo_text_extents_t e4;
-  cairo_text_extents(cr, "999 ms  loss 99.9%", &e4);   // latency and packet loss slots
+  cairo_text_extents(cr, "999 ms  99.9%", &e4);   // latency and packet loss slots
   dial->mute_x = dst->lat_x + e4.x_advance + 1.5 * src->size1;
 }
 #endif
@@ -1879,14 +1879,14 @@ void vfo_update(void) {
     cairo_show_text(cr, temp_text);
     //
     // packet loss of the RX audio over the last 5 s (fixed slot after
-    // "999 ms"); grey "--" while not known (old server, no audio yet)
+    // "999 ms"); grey "-.-%" while not known (old server, no audio yet)
     //
     cairo_text_extents_t el;
     cairo_text_extents(cr, "999 ms  ", &el);
     int lt = remote_loss_tenths;
     if (lt < 0 || g_get_monotonic_time() - remote_loss_us > 12000000) {
       cairo_set_source_rgba(cr, COLOUR_SHADE);
-      snprintf(temp_text, sizeof(temp_text), "loss --");
+      snprintf(temp_text, sizeof(temp_text), "-.-%%");
     } else {
       if (lt == 0) {
         cairo_set_source_rgba(cr, COLOUR_OK);
@@ -1896,7 +1896,7 @@ void vfo_update(void) {
         cairo_set_source_rgba(cr, COLOUR_ALARM);
       }
       if (lt > 999) { lt = 999; }
-      snprintf(temp_text, sizeof(temp_text), "loss %d.%d%%", lt / 10, lt % 10);
+      snprintf(temp_text, sizeof(temp_text), "%d.%d%%", lt / 10, lt % 10);
     }
     cairo_move_to(cr, vfl->lat_x + el.x_advance, vfl->lat_y);
     cairo_show_text(cr, temp_text);

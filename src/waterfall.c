@@ -173,7 +173,19 @@ void waterfall_update(RECEIVER *rx) {
     // stabilised. This will not remove the artifacts in any case but is a big
     // improvement.
     //
+#ifdef IFPAN
+    //
+    // piHPSDR-IF: while tuning, the display centre follows the Kenwood about
+    // 20 times a second, so nearly every frame "rotated" and no row was drawn:
+    // the waterfall stood black while the knob / wheel turned (screen capture
+    // 2026-10-13). The IF data is already drawn where it belongs
+    // (ifpan_shifted_pixels), so a row is drawn on every frame.
+    //
+    (void) freq_changed;
+    if (1) {
+#else
     if (!freq_changed) {
+#endif
       memmove(&pixels[rowstride], pixels, (height - 1)*rowstride);
       float soffset;
       unsigned char *p;

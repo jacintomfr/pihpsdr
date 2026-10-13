@@ -174,6 +174,22 @@ must be loud enough - the Logitech H390 used for ACC2 was at 40 %
 Radio-menu option "PTT via ACC2" so MOX / TUNE / TwoTone / RADE key the TS
 through PKS instead of `TX;` (CAT stays for everything else).
 
+**Plan chosen by the user (2026-10-13) - works with any host, Windows too:**
+keep the PTT by CAT and add a switch inside the TS-570 that forces only the
+audio selection to ACC2 (the CPU output / line that drives the MIC <-> data
+audio switch, found in the service manual). Never drive PKS from a TX-active
+signal of the radio itself: PKS is a PTT and the radio would latch in TX. If
+the selection is done inside the CPU with no separate line, fall back to a
+PTT on pin 9 from a USB-serial adapter's RTS + PC817 (a "PTT via serial
+RTS/DTR" option would then be added to piHPSDR-IF).
+
+**Low frequencies through ACC2:** a clear loss of bass was noticed (the
+transformer is a wide-band IQ type, not the cause). TS-570 menus: **13** =
+TX filter width SSB / AM (default 2.4 kHz), **14** = TX equaliser (OFF, Hb
+high boost, FP, **bb bass boost**, c conventional). The user uses **bb**
+(plus the piHPSDR-IF TX equaliser) instead of changing the ACC2 coupling
+capacitor; the capacitor only if it is easy to reach while the radio is open.
+
 Low-frequency response: the ACC2 input was designed for data audio and is
 reported (NU9N, for the TS-570 / TS-870 family) to cut low frequencies;
 a modification (C131 to 4.7 µF on the TS-570) is described there for fuller

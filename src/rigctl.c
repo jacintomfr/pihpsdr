@@ -4108,6 +4108,7 @@ static gpointer ptt_server(gpointer data) {
     //
     if (pttin != new) {
       pttin = new;
+      t_print("%s: CTS %s -> PTT %s\n", __func__, pttin ? "ON" : "OFF", pttin ? "pressed" : "released");
       schedule_action(PTT, pttin ? PRESSED : RELEASED, 0);
     }
     new = radio_is_transmitting();
@@ -4121,7 +4122,11 @@ static gpointer ptt_server(gpointer data) {
       } else {
         status &= ~TIOCM_RTS;
       }
-      ioctl(client->fd, TIOCMSET, &status);
+      int rc = ioctl(client->fd, TIOCMSET, &status);
+      int now = -1;
+      if (ioctl(client->fd, TIOCMGET, &now) == -1) { now = -1; }
+      t_print("%s: RTS %s (set rc=%d, read back RTS=%d)\n", __func__, pttout ? "ON" : "OFF", rc,
+              now < 0 ? -1 : SET(now & TIOCM_RTS));
     }
   }
   t_print("%s: exiting\n", __func__);

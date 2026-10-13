@@ -2972,6 +2972,9 @@ void radio_set_drive(double value) {
   if (txmode == modeDIGU || txmode == modeDIGL) {
     if (value > drive_digi_max) { value = drive_digi_max; }
   }
+#if defined(IFPAN) && defined(RADE)
+  if (rade_glue_get_tx_armed() && value > RADE_DRIVE_MAX) { value = RADE_DRIVE_MAX; }
+#endif
   transmitter->drive = value;
   g_idle_add(sliders_drive, GINT_TO_POINTER(100 * suppress_popup_sliders));
 #ifdef IFPAN

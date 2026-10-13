@@ -108,6 +108,7 @@ extern void      ifpan_tx_dump(int which, double s);   // diagnostics: 0 mic in,
 #define IFPAN_RADIO_FMIN     100000LL
 #define IFPAN_RADIO_FMAX   60000000LL
 extern void      ifpan_save_state(void);
+extern int       ifpan_point_on_screen(int x, int y);   // a window position on a monitor?
 extern void      ifpan_restore_state(void);
 
 // Display while tuning with "Clicks tune the TS": shift (Hz) to draw the

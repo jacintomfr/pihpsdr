@@ -2129,6 +2129,8 @@ static int win_have_saved = 0;
 // off-screen (about -32000, i.e. -16000 at 200 % scaling): once saved (or
 // "compensated" in win_apply), every start put the window out of sight.
 //
+int ifpan_point_on_screen(int x, int y);
+
 static int win_on_screen(int x, int y) {
   GdkDisplay *d = gdk_display_get_default();
   if (d == NULL) { return 1; }
@@ -2139,6 +2141,11 @@ static int win_on_screen(int x, int y) {
     if (x + 50 >= r.x && x + 50 < r.x + r.width && y + 20 >= r.y && y + 20 < r.y + r.height) { return 1; }
   }
   return 0;
+}
+
+// another window's position on a monitor? (RADE window position)
+int ifpan_point_on_screen(int x, int y) {
+  return win_on_screen(x, y);
 }
 
 static int win_iconified(void) {

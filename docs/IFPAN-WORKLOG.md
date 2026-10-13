@@ -498,6 +498,11 @@ Change (display only; audio and tuning unchanged):
   ifpan.poll_ms x the divisor, so a divisor of 60 meant one Kenwood reading
   every 3 s. Now the poll is always ifpan.poll_ms (50 ms) and the divisor
   only sets the encoder speed.
+- Tried and **reverted** (2026-10-13, d604b1d4 / 5728cb01): a "sliding
+  photograph" (last picture taken while the Kenwood was settled, moved while
+  it changes frequency). With the MIDI VFO turning steadily the Kenwood is
+  almost always moving, so the picture stayed frozen for the whole turn; the
+  user wants live signals sliding, as with the Hermes-Lite 2.
 
 **Tuning from a MIDI VFO instead of the Kenwood dial (the remote setup).**
 The user tunes the Pi 5 server with a MIDI VFO knob (the Arduino Due

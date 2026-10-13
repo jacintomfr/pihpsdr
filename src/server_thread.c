@@ -102,6 +102,7 @@ static int        opus_pcm_idx[2] = {0, 0};
 
 static int rxaudio_buffer_index[2] = { 0, 0};
 static RXAUDIO_DATA rxaudio_data[2];  // for up to 2 receivers
+static uint16_t rxaudio_seq[2];       // RX audio packet sequence numbers (both formats)
 //
 // Audio
 //
@@ -423,6 +424,8 @@ void remote_rxaudio(const RECEIVER *rx, double sample) {
       SYNC(pkt.header.sync);
       pkt.header.data_type = to_16(INFO_RXAUDIO_OPUS);
       pkt.header.b1 = (uint8_t)id;
+      pkt.header.b2 = RXAUDIO_SEQ_MARK;          // sequence number: packet loss on the client
+      pkt.header.s2 = to_16(rxaudio_seq[id]++);
       int nbytes = opus_encode(opus_enc[id], opus_pcm_buf[id], OPUS_FRAME_SIZE, pkt.payload, OPUS_MAX_PACKET);
       if (nbytes > 0) {
 #ifdef IFPAN
@@ -446,6 +449,8 @@ void remote_rxaudio(const RECEIVER *rx, double sample) {
     rxaudio_data[id].header.data_type = to_16(INFO_RXAUDIO);
     rxaudio_data[id].header.b1 = id;
     rxaudio_data[id].header.s1 = to_16(AUDIO_DATA_SIZE);
+    rxaudio_data[id].header.b2 = RXAUDIO_SEQ_MARK;
+    rxaudio_data[id].header.s2 = to_16(rxaudio_seq[id]++);
 #ifdef IFPAN
     rxaudio_gap_check();
 #endif

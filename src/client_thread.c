@@ -75,6 +75,8 @@ extern int clock_nanosleep(clockid_t __clock_id, int __flags,
 int cl_sock_tcp = -1;
 int remote_auto_reconnect = 0;
 int remote_latency_ms = 0;
+int remote_loss_tenths = -1;
+long long remote_loss_us = 0;
 int remote_started = 0;
 
 static GMutex accumulated_mutex;
@@ -803,6 +805,42 @@ static void client_rxaudio_gap_check(void) {
 #endif
 
 //
+// Packet loss of the RX audio stream of RX1 (the sequence number the server
+// puts in header.s2), over 5 s windows, for the readout next to the latency.
+// Duplicates and late (reordered) packets are not counted; a jump of more
+// than 1000 is a new stream (server restart), not a loss.
+//
+static void client_rxaudio_seq(const HEADER *h) {
+  static int have = 0, got = 0, lost = 0;
+  static uint16_t last = 0;
+  static gint64 t0 = 0;
+  if (h->b1 != 0 || h->b2 != RXAUDIO_SEQ_MARK) { return; }
+  uint16_t seq = from_16(h->s2);
+  gint64 now = g_get_monotonic_time();
+  if (have) {
+    uint16_t d = (uint16_t)(seq - last);
+    if (d == 0 || d > 0x8000) { return; }
+    if (d > 1000) { d = 1; }
+    lost += d - 1;
+  }
+  have = 1;
+  last = seq;
+  got++;
+  if (t0 == 0) { t0 = now; }
+  if (now - t0 >= 5000000) {
+    int total = got + lost;
+    remote_loss_tenths = (total > 0) ? (int)((1000LL * lost + total / 2) / total) : 0;
+    remote_loss_us = now;
+    if (lost) {
+      t_print("net diag: %d of %d RX audio packets lost in %.1f s\n", lost, total, (now - t0) / 1e6);
+    }
+    got = 0;
+    lost = 0;
+    t0 = now;
+  }
+}
+
+//
 // client_tcp_thread and client_udp_thread are running on the "remote"
 // computer (which communicates with the server on the "local" computer)
 //
@@ -864,6 +902,7 @@ gpointer client_udp_thread(gpointer arg) {
 #ifdef IFPAN
       client_rxaudio_gap_check();
 #endif
+      client_rxaudio_seq((const HEADER *)buffer);
       const RXAUDIO_DATA *rxdata = (RXAUDIO_DATA *)buffer;
       RECEIVER *rx = receiver[rxdata->header.b1];
       int numsamples = from_16(rxdata->header.s1);
@@ -898,6 +937,7 @@ gpointer client_udp_thread(gpointer arg) {
 #ifdef IFPAN
       client_rxaudio_gap_check();
 #endif
+      client_rxaudio_seq((const HEADER *)buffer);
       // Opus-encoded RX audio from server — decode and play
       const OPUS_AUDIO_DATA *pkt = (const OPUS_AUDIO_DATA *)buffer;
       int id = pkt->header.b1;

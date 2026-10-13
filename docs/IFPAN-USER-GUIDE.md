@@ -163,7 +163,9 @@ keyed by CAT (`TX;`, which has no audio-source parameter) or by pin 13 / the
 mic PTT it transmits the **front microphone** and ignores pin 11 (confirmed
 by TS-570 users on the WSJT-X / Hamlib lists, and in a French note: there is
 no CAT command for PKS on the TS-570 / 870 / 2000). Grounding pin 9 (to pin 8)
-with a 1 kHz tone on the sound card gave RF. Also: the sound card output
+with a 1 kHz tone on the sound card gave RF. TUNE from piHPSDR-IF with pin 9 grounded by
+hand gave the programmed 10 W, once the ACC2 stream really went to the H390
+(PipeWire had put it on the speaker card; fixed in pulseaudio.c). Also: the sound card output
 must be loud enough - the Logitech H390 used for ACC2 was at 40 %
 (-24 dB) and gave nothing; at 100 % it drives the TS fully (menu 33 = 2).
 **To do:** key pin 9 from the Pi (GPIO + optocoupler, e.g. PC817 with

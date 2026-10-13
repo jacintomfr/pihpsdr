@@ -615,7 +615,7 @@ const float *ifpan_shifted_pixels(const float *in, int width, long long shift_hz
 }
 
 //
-// Main loop, every 50 ms: if the receiver was tuned in piHPSDR-IF, ask the
+// Main loop, every 25 ms: if the receiver was tuned in piHPSDR-IF, ask the
 // CAT thread to move the Kenwood there (only the latest target is kept).
 //
 static gboolean ui_watch(gpointer data) {
@@ -2148,7 +2148,7 @@ void ifpan_start(void) {
   radio->frequency_min = IFPAN_RADIO_FMIN;
   radio->frequency_max = IFPAN_RADIO_FMAX;
   cat_thread_id = g_thread_new("ifpan_cat", cat_thread, NULL);
-  g_timeout_add(50, ui_watch, NULL);
+  g_timeout_add(25, ui_watch, NULL);   // 40 tuning steps a second to the Kenwood (2026-10-13; was 50 ms)
   win_restore();
   ifpan_tx_out_select(ifpan_tx_out);   // processed TX audio to the Kenwood's ACC2
   txdump_on = (access("ifpan-txdump", F_OK) == 0);

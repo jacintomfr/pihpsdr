@@ -37,8 +37,60 @@ static GtkWidget *rx_check, *tx_check, *status_label, *level_bar, *calls_label, 
 static GtkWidget *opt_check[6];   // denoiser leveler compressor EQ mute squelch
 static GtkWidget *eq_scale[4];
 
+//
+// The RADE window opens where it was last (on the client and on the server,
+// in a small file next to the settings, like ifpan-window.txt)
+//
+#define RADE_WINDOW_POS_FILE "rade-window.txt"
+static int pos_x = 0, pos_y = 0, pos_have = -1;   // -1: file not read yet
+
+static void pos_save(void) {
+  FILE *fp = fopen(RADE_WINDOW_POS_FILE, "w");
+  if (fp) {
+    fprintf(fp, "%d %d\n", pos_x, pos_y);
+    fclose(fp);
+  }
+}
+
+static void pos_load(void) {
+  if (pos_have >= 0) { return; }
+  pos_have = 0;
+  FILE *fp = fopen(RADE_WINDOW_POS_FILE, "r");
+  if (fp) {
+    if (fscanf(fp, "%d %d", &pos_x, &pos_y) == 2) { pos_have = 1; }
+    fclose(fp);
+  }
+}
+
+static int pos_ok(int x, int y) {
+#ifdef IFPAN
+  return ifpan_point_on_screen(x, y);
+#else
+  return x > -10000 && y > -10000;
+#endif
+}
+
+// moves by the user (and the window manager's own placement)
+static gboolean configure_cb(GtkWidget *widget, GdkEvent *event, gpointer data) {
+  int x, y;
+  gtk_window_get_position(GTK_WINDOW(widget), &x, &y);
+  if ((x != 0 || y != 0) && pos_ok(x, y)) {
+    pos_x = x;
+    pos_y = y;
+    pos_have = 1;
+  }
+  return FALSE;
+}
+
+// once more shortly after mapping: some window managers place it themselves
+static gboolean pos_apply(gpointer data) {
+  if (dialog != NULL && pos_have == 1) { gtk_window_move(GTK_WINDOW(dialog), pos_x, pos_y); }
+  return G_SOURCE_REMOVE;
+}
+
 static void cleanup(void) {
   if (timer_id) { g_source_remove(timer_id); timer_id = 0; }
+  if (dialog != NULL && pos_have == 1) { pos_save(); }
   if (dialog != NULL) {
     GtkWidget *tmp = dialog;
     dialog = NULL;
@@ -312,7 +364,17 @@ void rade_menu(GtkWidget *parent) {
   gtk_grid_attach(GTK_GRID(grid), qt_box, 1, row, 2, 1);
   gtk_container_add(GTK_CONTAINER(content), grid);
   sub_menu = dialog;
+  pos_load();
+  int have = (pos_have == 1 && pos_ok(pos_x, pos_y));
+  int want_x = pos_x, want_y = pos_y;
+  if (have) { gtk_window_move(GTK_WINDOW(dialog), want_x, want_y); }
   gtk_widget_show_all(dialog);
+  if (have) {
+    pos_x = want_x;   // (mapping may report the default place first)
+    pos_y = want_y;
+    g_timeout_add(150, pos_apply, NULL);
+  }
+  g_signal_connect(dialog, "configure-event", G_CALLBACK(configure_cb), NULL);
   status_timer(NULL);
   timer_id = g_timeout_add(200, status_timer, NULL);
 }

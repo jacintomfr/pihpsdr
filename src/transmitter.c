@@ -58,6 +58,12 @@
 #include "vfo.h"
 #ifdef RADE
   #include "rade_glue.h"
+//
+// RADE TX: WDSP only sees the modem audio, so the TX meter's "Mic" reading
+// is taken from the microphone ahead of the RADE encoder (peak since the
+// last meter update)
+//
+static double rade_mic_peak = 0.0;
 #endif
 #include "waterfall.h"
 #ifdef IFPAN
@@ -1868,7 +1874,11 @@ void tx_add_mic_sample(TRANSMITTER *tx, double mic_sample) {
   // RADE TX armed: the (cleaned) microphone - local, or the remote client's -
   // is replaced by the RADE modem audio, before capture / VOX / the TX chain
   //
-  if (rade_glue_tx_active()) { mic_sample = rade_glue_tx_sample(mic_sample); }
+  if (rade_glue_tx_active()) {
+    double a = fabs(mic_sample);
+    if (a > rade_mic_peak) { rade_mic_peak = a; }
+    mic_sample = rade_glue_tx_sample(mic_sample);
+  }
 #endif
   // If there is captured data to transmit, replace incoming
   // mic samples by captured data.
@@ -2282,6 +2292,12 @@ void tx_get_meter(TRANSMITTER *tx) {
   }
   tx->alc = alc;
   tx->micpeak = GetTXAMeter(tx->id, TXA_MIC_PK);
+#ifdef RADE
+  if (rade_glue_tx_active()) {
+    tx->micpeak = 20.0 * log10(rade_mic_peak + 1.0e-10);   // the real microphone, not the modem
+    rade_mic_peak = 0.0;
+  }
+#endif
   tx->outavg  = GetTXAMeter(tx->id, TXA_OUT_AV);
 }
 

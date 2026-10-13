@@ -115,6 +115,6 @@ extern void      ifpan_restore_state(void);
 // pixel samples moved by that shift (slot: 0 panadapter, 1 waterfall)
 struct _receiver;
 extern long long    ifpan_display_shift(const struct _receiver *rx);
-extern const float *ifpan_shifted_pixels(const float *in, int width, long long shift_hz, double cAp, int slot);
+extern const float *ifpan_shifted_pixels(int id, const float *in, int width, long long shift_hz, double cAp, int slot);
 
 #endif

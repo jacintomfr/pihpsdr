@@ -258,6 +258,21 @@ radio drops CAT commands that arrive while it answers another client):
   checked in a Windows capture, TS MUTE moved 0.8 x size1 after the slot).
   First reading on the home LAN: 0.2 - 1.1 % (the old audio cuts).
 
+### ACC2 PTT on pin 9 by USB-serial RTS (2026-10-13)
+* FTDI FT232R on the Pi keys PKS (ACC2 pin 9) from RTS, through piHPSDR's
+  serial PTT (Menu -> CAT, row PTT, by-id port name, Enable; on the server).
+* TUNE always gave RF, MOX none: the serial PTT thread polls every 100 ms,
+  so RTS came after the CAT TX; and the TS-570 then keeps the microphone
+  for the whole over. Proven with a recording of the H390 monitor: a
+  whistle at the TUNE tone level (-3 dBFS rms, 1.2 kHz) gave no RF.
+* Fix 461d683f: serial_ptt_now() sets RTS from the CAT thread, 50 ms before
+  TX; and drops it right after RX;. Diagnostics added: per-over TX
+  audio levels (mic / to ACC2) and RTS / CTS changes in the log.
+  **Confirmed by the user: SSB through ACC2 works every time.**
+* Also fixed: the TX chain values RADE forces were saved when the program
+  ended with RADE TX armed (TX filter 700 - 2300, compressor / CFC off) and
+  stayed after restart; now kept as rade_txs.* and put back (9d3196ea).
+
 ### RADE V2 test branches (2026-10-13)
 * Separate branches, the normal builds stay RADE V1: `pihpsdr-if-rade2`
   (this repo, commit 9402e6b2, docs/RADE-V2-TEST.md there) and

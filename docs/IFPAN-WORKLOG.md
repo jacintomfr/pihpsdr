@@ -498,17 +498,6 @@ Change (display only; audio and tuning unchanged):
   ifpan.poll_ms x the divisor, so a divisor of 60 meant one Kenwood reading
   every 3 s. Now the poll is always ifpan.poll_ms (50 ms) and the divisor
   only sets the encoder speed.
-- **"Sliding photograph" (2026-10-13):** with the divisor at 30 the slide was
-  much better but not fluid, and worse with 500 Hz / 1 kHz steps: above the
-  rate the TS-570 can follow by CAT the live IF data is unusable for a smooth
-  picture (CAT-sized jumps, PLL mute dips, data arriving later than the CAT
-  readings). Now `ifpan_shifted_pixels(id, in, width, disp_centre, cAp, slot)`
-  shows the live data only while the Kenwood frequency (display centre) has
-  been unchanged for 250 ms (IFPAN_SETTLE_US) and keeps that picture; while
-  the Kenwood moves, the kept picture is drawn moved to the displayed
-  centre, so it slides smoothly at any speed (empty strip on the side being
-  tuned to); a jump larger than the span shows live data. Also smooths
-  turning the Kenwood's own dial. Only RX1, display only.
 
 **Tuning from a MIDI VFO instead of the Kenwood dial (the remote setup).**
 The user tunes the Pi 5 server with a MIDI VFO knob (the Arduino Due

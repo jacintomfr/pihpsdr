@@ -157,6 +157,20 @@ it. **Check on the dummy load:** key by CAT with the microphone plugged in
 and speak into it — if it is heard on the monitor, unplug the microphone
 (or turn MIC gain to minimum) for ACC2 / remote operation.
 
+**Verified on the radio (2026-10-13): PTT must come in on pin 9.** The TS-570
+uses the ACC2 audio (pin 11) **only when it is keyed through PKS (pin 9)**;
+keyed by CAT (`TX;`, which has no audio-source parameter) or by pin 13 / the
+mic PTT it transmits the **front microphone** and ignores pin 11 (confirmed
+by TS-570 users on the WSJT-X / Hamlib lists, and in a French note: there is
+no CAT command for PKS on the TS-570 / 870 / 2000). Grounding pin 9 (to pin 8)
+with a 1 kHz tone on the sound card gave RF. Also: the sound card output
+must be loud enough - the Logitech H390 used for ACC2 was at 40 %
+(-24 dB) and gave nothing; at 100 % it drives the TS fully (menu 33 = 2).
+**To do:** key pin 9 from the Pi (GPIO + optocoupler, e.g. PC817 with
+~330 ohm from GPIO17; transistor collector to pin 9, emitter to pin 8) and a
+Radio-menu option "PTT via ACC2" so MOX / TUNE / TwoTone / RADE key the TS
+through PKS instead of `TX;` (CAT stays for everything else).
+
 Low-frequency response: the ACC2 input was designed for data audio and is
 reported (NU9N, for the TS-570 / TS-870 family) to cut low frequencies;
 a modification (C131 to 4.7 µF on the TS-570) is described there for fuller

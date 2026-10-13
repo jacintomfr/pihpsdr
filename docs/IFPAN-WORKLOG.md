@@ -524,6 +524,7 @@ for this way of working (Radio menu, "Kenwood / IF panadapter"):
 
 ## 5. Open items (updated 2026-10-12)
 
+0. **ACC2 PTT via PKS (pin 9)** (2026-10-13): cable made, Logitech H390 as the ACC2 sound card (needed `systemctl --user restart wireplumber`). TX by CAT `TX;` uses the front mic - the TS-570 takes ACC2 audio only when keyed on pin 9 (verified: pin 9 to ground + 1 kHz tone at H390 100 % = RF; at 40 % nothing). Next: GPIO17 + PC817 optocoupler to pin 9/8 and a Radio-menu option "PTT via ACC2" (user guide 5.1).
 1. **ACC2 cable** (user is looking for the plug; ACC2 pin-out and menus 32 / 33 / 34 from the TS-570 manual are in the user guide, section 5.1: audio into pin 11 PKD, shield pin 12; menu 33 input level 0..2, menu 32 OFF). Then test on a dummy load:
    TUNE / TwoTone power, ALC level (set by the sound card volume), CW → USB
    switch during TUNE, FM deviation, SWR protection during TUNE, and

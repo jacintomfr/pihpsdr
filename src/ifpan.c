@@ -624,6 +624,11 @@ static gboolean ui_watch(gpointer data) {
   if (ui_last_freq < 0) {
     ui_last_freq = f;
   } else if (f != ui_last_freq) {
+    if (ifpan_cat_write && !ifpan_cat_connected) {
+      // CAT link down for a moment: keep the step (ui_last_freq unchanged)
+      // and send it once the Kenwood answers again, instead of losing it
+      return G_SOURCE_CONTINUE;
+    }
     ui_last_freq = f;
     if (ifpan_cat_write && ifpan_cat_connected) {
       TUNELOG("ui receiver %lld (centre %lld)\n", f, vfo[VFO_A].frequency);
@@ -1703,7 +1708,15 @@ static gpointer cat_thread(gpointer data) {
       // rigctld is there but the radio does not answer (off, wrong baud
       // rate, cable): say so once, grey out "TS", and try again calmly.
       //
-      if (!trouble) {
+      //
+      // Right after a burst of frequency sets (knob, mouse wheel) the TS-570
+      // sometimes leaves one reading unanswered: only two in a row mean
+      // "not answering" (before, one missed reading greyed out "TS", stopped
+      // the tuning steps and paused 0.5 s: ~1 s of stalled tuning).
+      //
+      ++silent_polls;
+      TUNELOG("TS no answer (%d in a row)\n", silent_polls);
+      if (silent_polls >= 2 && !trouble) {
         t_print("%s: Kenwood not answering (radio off, wrong baud rate or cable?)\n", __func__);
         trouble = 1;
         ifpan_cat_connected = 0;
@@ -1715,13 +1728,24 @@ static gpointer cat_thread(gpointer data) {
       // came back keeps the old, dead device open per connection; a new
       // connection makes it open the adapter again.
       //
-      if (ifpan_cat_backend == IFPAN_CAT_KENWOOD && ++silent_polls >= 6) {
+      if (ifpan_cat_backend == IFPAN_CAT_KENWOOD && silent_polls >= 6) {
         t_print("%s: no answer for 3 s, reconnecting\n", __func__);
         silent_polls = 0;
         close(sock);
         sock = -1;
       }
-      usleep(500000);
+      // pause before asking again, but not while tuning steps are waiting
+      {
+        gint64 end = g_get_monotonic_time() + 500000;
+        while (g_get_monotonic_time() < end) {
+          long long pending;
+          g_mutex_lock(&cat_mutex);
+          pending = cat_set_target;
+          g_mutex_unlock(&cat_mutex);
+          if (pending > 0) { break; }
+          usleep(10000);
+        }
+      }
       continue;
     }
     silent_polls = 0;

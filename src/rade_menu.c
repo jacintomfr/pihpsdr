@@ -118,7 +118,7 @@ static void eq_gain_cb(GtkRange *range, gpointer data) {
 
 static void update_fit_label(void) {
   gtk_label_set_text(GTK_LABEL(fit_label), rade_glue_get_filter_wide()
-                     ? "RX filter: 300-2700 Hz (wide)" : "RX filter: 700-2300 Hz (narrow)");
+                     ? RADE_FIT_LABEL_WIDE : RADE_FIT_LABEL_NARROW);
 }
 
 // the Var1 filter is set by rade_glue (on the server, also from a client)

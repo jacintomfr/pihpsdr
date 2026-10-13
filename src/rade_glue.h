@@ -10,6 +10,32 @@
 
 #ifdef RADE
 
+/*
+ * TX filter and RX "Fit Filter" passbands. RADE V1 fills about 700 - 2300 Hz;
+ * RADE V2 (measured from the library, 2026-10-13: peak 1450 Hz, 99 % of the
+ * power in 1080 - 1900 Hz, 820 Hz) is narrower, so its filters are too, with
+ * some room for a mistuned station on receive.
+ */
+#ifdef RADE_V2
+#define RADE_TX_LOW        1000
+#define RADE_TX_HIGH       2000
+#define RADE_RX_NARROW_LOW  950
+#define RADE_RX_NARROW_HIGH 2050
+#define RADE_RX_WIDE_LOW    800
+#define RADE_RX_WIDE_HIGH  2200
+#define RADE_FIT_LABEL_WIDE   "RX filter: 800-2200 Hz (wide)"
+#define RADE_FIT_LABEL_NARROW "RX filter: 950-2050 Hz (narrow)"
+#else
+#define RADE_TX_LOW  700
+#define RADE_TX_HIGH 2300
+#define RADE_RX_NARROW_LOW  700
+#define RADE_RX_NARROW_HIGH 2300
+#define RADE_RX_WIDE_LOW    300
+#define RADE_RX_WIDE_HIGH  2700
+#define RADE_FIT_LABEL_WIDE   "RX filter: 300-2700 Hz (wide)"
+#define RADE_FIT_LABEL_NARROW "RX filter: 700-2300 Hz (narrow)"
+#endif
+
 #include "rade_engine.h"
 
 /* piHPSDR-IF: TX Drive (= TS PWR, watts) limit while RADE TX is armed. RADE

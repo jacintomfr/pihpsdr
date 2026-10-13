@@ -126,8 +126,6 @@ static void engine_update(void) {
  * and the setters store the values in the TX mode's profile, so forced
  * values sit in the DIGU/DIGL profile only while armed.
  */
-#define RADE_TX_LOW  700
-#define RADE_TX_HIGH 2300
 static struct {
   int saved, compressor, eq_enable, cfc, cfc_eq, use_rx_filter, flow, fhigh;
 } txs;
@@ -593,8 +591,8 @@ static void apply_fit_filter(void) {
   int id = active_receiver->id;
   int mode = vfo[id].mode;
   if (!mode_is_digital(mode)) { return; }
-  int low = atomic_load(&filter_wide) ? 300 : 700;
-  int high = atomic_load(&filter_wide) ? 2700 : 2300;
+  int low = atomic_load(&filter_wide) ? RADE_RX_WIDE_LOW : RADE_RX_NARROW_LOW;
+  int high = atomic_load(&filter_wide) ? RADE_RX_WIDE_HIGH : RADE_RX_NARROW_HIGH;
   FILTER *f = &filters[mode][filterVar1];
   if (mode == modeDIGL) {
     f->low = -high;

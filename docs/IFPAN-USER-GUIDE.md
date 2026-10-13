@@ -183,6 +183,21 @@ the selection is done inside the CPU with no separate line, fall back to a
 PTT on pin 9 from a USB-serial adapter's RTS + PC817 (a "PTT via serial
 RTS/DTR" option would then be added to piHPSDR-IF).
 
+**TS-570 TX bandwidth (from the instruction manual, chapter 8 "Customising
+the transmit signal", checked 2026-10-13):** menu 13 has only two settings -
+**2.4 kHz (normal, default): 300 Hz - 2.7 kHz** and 2.0 kHz (narrow): 500 Hz -
+2.5 kHz. The "2.7" in the manual's table is the upper cut-off of the normal
+setting, not a third option. The TS-570 never transmits below 300 Hz, which
+explains part of the thin bass through ACC2; the TX equaliser **bb** (menu 14)
+helps within that limit only. The optional crystal-filter slot (menu 46,
+FILTER key FIL-WID / FIL-NAR) is for **narrower** filters (SSB 1.8 kHz, CW
+500 / 270 Hz); even a 2.8 kHz filter (Inrad #88, 8830 kHz) in place of the
+stock wide one would very likely not widen TX, since the DSP limits it to
+300 - 2700 Hz, and it changes nothing for piHPSDR-IF reception (the SDR taps
+the 73.05 MHz first IF, ahead of the 8.83 MHz filters). Decision: no filter
+purchase; use menu 13 = 2.4 kHz, menu 14 = bb, the piHPSDR-IF TX filter at
+about 250 - 2800 Hz and its TX equaliser lifting slightly near 300 Hz.
+
 **Low frequencies through ACC2:** a clear loss of bass was noticed (the
 transformer is a wide-band IQ type, not the cause). TS-570 menus: **13** =
 TX filter width SSB / AM (default 2.4 kHz), **14** = TX equaliser (OFF, Hb

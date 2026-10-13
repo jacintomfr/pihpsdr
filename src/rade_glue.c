@@ -168,40 +168,88 @@ static int mode_is_digital(int m) { return m == modeDIGU || m == modeDIGL; }
  * it in e.g. USB where RADE RX is silent and TX would send the plain voice.
  * piHPSDR-IF sends DIGU / DIGL to the Kenwood as USB / LSB ("Sync mode with
  * TS"), the modem audio going in through ACC2. */
-static int prev_mode = -1;   /* mode before RADE moved the VFO to DIGU/DIGL (-1: none) */
-static int prev_id = 0;
-static int rade_mode = -1;   /* the digital mode RADE switched to */
+/*
+ * Where the operator was before RADE (piHPSDR-IF): switching RADE on takes a
+ * snapshot of VFO A's band, band stack, frequency, CTUN, mode, filter and
+ * deviation, the RX volume and the TX Drive (TS PWR, limited while RADE TX is
+ * armed); switching RADE off puts all of it back, the Kenwood included,
+ * whatever was tuned or changed meanwhile. Saved in the props file, so that
+ * it also works after a restart with RADE on.
+ */
+static struct {
+  int valid, id, band, bandstack, mode, filter, deviation, ctun;
+  long long frequency, ctun_frequency;
+  double volume, drive;
+} snap;
 
+static void snapshot_take(void) {
+  if (active_receiver == NULL) { return; }
+  int id = active_receiver->id;
+  snap.valid = 1;
+  snap.id = id;
+  snap.band = vfo[id].band;
+  snap.bandstack = vfo[id].bandstack;
+  snap.mode = vfo[id].mode;
+  snap.filter = vfo[id].filter;
+  snap.deviation = vfo[id].deviation;
+  snap.ctun = vfo[id].ctun;
+  snap.frequency = vfo[id].frequency;
+  snap.ctun_frequency = vfo[id].ctun_frequency;
+  snap.volume = receiver[id]->volume;
+  snap.drive = transmitter != NULL ? transmitter->drive : -1.0;
+  t_print("%s: VFO %d band %d %lld Hz (ctun %d %lld) mode %d filter %d\n", __func__, id,
+          snap.band, snap.frequency, snap.ctun, snap.ctun_frequency, snap.mode, snap.filter);
+}
+
+/* RADE only works in DIGU/DIGL (the RX tap and the TX source are gated on it).
+ * When the user switches RADE on or arms TX from the menu, move the VFO to the
+ * digital mode of the band (DIGL below 10 MHz, DIGU above) instead of leaving
+ * it in e.g. USB where RADE RX is silent and TX would send the plain voice.
+ * piHPSDR-IF sends DIGU / DIGL to the Kenwood as USB / LSB ("Sync mode with
+ * TS"), the modem audio going in through ACC2. */
 static void ensure_digital_mode(void) {
   if (active_receiver == NULL) { return; }
   int id = active_receiver->id;
   if (mode_is_digital(vfo[id].mode)) { return; }
   int m = (vfo[id].frequency < 10000000LL) ? modeDIGL : modeDIGU;
   t_print("%s: VFO %d was in mode %d, switching to %d for RADE\n", __func__, id, vfo[id].mode, m);
-  prev_mode = vfo[id].mode;
-  prev_id = id;
-  rade_mode = m;
   vfo_id_mode_changed(id, m);
 }
 
-/* RADE switched off: give the VFO back its previous mode, so that the mode's own
- * settings come back with it.  Only if the user did not choose another mode meanwhile. */
-static void restore_previous_mode(void) {
-  if (prev_mode < 0 || active_receiver == NULL) { return; }
-  if (vfo[prev_id].mode == rade_mode) {
-    t_print("%s: VFO %d back to mode %d\n", __func__, prev_id, prev_mode);
-    vfo_id_mode_changed(prev_id, prev_mode);
-  }
-  prev_mode = -1;
+/* RADE switched off: everything back as it was before RADE (snapshot_take) */
+static void snapshot_restore(void) {
+  if (!snap.valid || active_receiver == NULL) { return; }
+  snap.valid = 0;
+  int id = snap.id;
+  t_print("%s: VFO %d back to band %d %lld Hz (ctun %d %lld) mode %d filter %d\n", __func__, id,
+          snap.band, snap.frequency, snap.ctun, snap.ctun_frequency, snap.mode, snap.filter);
+  if (vfo[id].band != snap.band) { vfo_id_band_changed(id, snap.band); }
+  vfo[id].bandstack = snap.bandstack;
+  vfo[id].frequency = snap.frequency;
+  vfo[id].ctun_frequency = snap.ctun_frequency;
+  vfo[id].ctun = snap.ctun;
+  vfo[id].deviation = snap.deviation;
+  vfo_id_mode_changed(id, snap.mode);      /* loads the mode's profile */
+  vfo_id_filter_changed(id, snap.filter);
+  vfo_vfos_changed();
+#ifdef IFPAN
+  if (id == VFO_A) { ifpan_band_changed(snap.ctun ? snap.ctun_frequency : snap.frequency, snap.mode); }
+#endif
+  if (id < receivers) { radio_set_af_gain(id, snap.volume); }
+  if (snap.drive >= 0.0) { radio_set_drive(snap.drive); }   /* TX is no longer armed: no RADE limit */
+  g_idle_add(ext_vfo_update, NULL);
 }
 
 static void set_rx_enabled_int(int on, int force_mode) {
+  int was_on = atomic_load(&rx_enabled) || atomic_load(&tx_armed);
   atomic_store(&rx_enabled, on ? 1 : 0);
   if (!on) { atomic_store(&tx_armed, 0); }
+  if (on && force_mode && !was_on) { snapshot_take(); }
   engine_update();
   if (on && force_mode) { ensure_digital_mode(); }
   tx_chain_force(atomic_load(&tx_armed));
-  if (!on && force_mode) { restore_previous_mode(); }   /* after the TX values: the mode brings its own */
+  if (on && force_mode && !atomic_load(&rx_enabled)) { snapshot_restore(); }   /* the engine did not start */
+  if (!on && force_mode) { snapshot_restore(); }   /* after the TX values: the mode brings its own */
   if (force_mode) { push_client(); }   /* server-made mode / TX filter changes: tell the client */
   /* active_receiver is still NULL while the properties are restored at startup */
   t_print("%s: rx_enabled=%d tx_armed=%d\n", __func__, atomic_load(&rx_enabled), atomic_load(&tx_armed));
@@ -217,9 +265,11 @@ void rade_glue_set_rx_enabled(int on) {
 }
 int  rade_glue_get_rx_enabled(void) { return atomic_load(&rx_enabled); }
 void rade_glue_set_tx_armed(int on) {
+  int was_on = atomic_load(&rx_enabled) || atomic_load(&tx_armed);
   atomic_store(&tx_armed, on ? 1 : 0);
   if (on) { atomic_store(&rx_enabled, 1); }
   if (remote_send(RADE_REMOTE_TX, on ? 1 : 0, 0, NULL)) { return; }
+  if (on && !was_on) { snapshot_take(); }
   engine_update();
   if (on) { ensure_digital_mode(); }
   tx_chain_force(atomic_load(&tx_armed));
@@ -713,7 +763,22 @@ void rade_glue_load_state(void) {
   }
   GetPropS0("rade_callsign", rade_callsign);
   v = 0;                         GetPropI0("rade_enabled", v);
-  if (v) { set_rx_enabled_int(1, 0); }   /* startup: the VFO mode is not restored yet, do not touch it */
+  if (v) {
+    /* where the operator was before RADE (snapshot_take), for when RADE is switched off */
+    GetPropI0("rade_prev.valid", snap.valid);
+    GetPropI0("rade_prev.id", snap.id);
+    GetPropI0("rade_prev.band", snap.band);
+    GetPropI0("rade_prev.bandstack", snap.bandstack);
+    GetPropI0("rade_prev.mode", snap.mode);
+    GetPropI0("rade_prev.filter", snap.filter);
+    GetPropI0("rade_prev.deviation", snap.deviation);
+    GetPropI0("rade_prev.ctun", snap.ctun);
+    GetPropI0("rade_prev.frequency", snap.frequency);
+    GetPropI0("rade_prev.ctun_frequency", snap.ctun_frequency);
+    GetPropF0("rade_prev.volume", snap.volume);
+    GetPropF0("rade_prev.drive", snap.drive);
+    set_rx_enabled_int(1, 0);
+  }   /* startup: the VFO mode is not restored yet, do not touch it */
 }
 
 void rade_glue_save_state(void) {
@@ -730,6 +795,21 @@ void rade_glue_save_state(void) {
     SetPropI0(key, atomic_load(&eq_gain[i]));
   }
   SetPropS0("rade_callsign",    rade_callsign);
+  int on = atomic_load(&rx_enabled) && snap.valid;
+  SetPropI0("rade_prev.valid", on);
+  if (on) {
+    SetPropI0("rade_prev.id", snap.id);
+    SetPropI0("rade_prev.band", snap.band);
+    SetPropI0("rade_prev.bandstack", snap.bandstack);
+    SetPropI0("rade_prev.mode", snap.mode);
+    SetPropI0("rade_prev.filter", snap.filter);
+    SetPropI0("rade_prev.deviation", snap.deviation);
+    SetPropI0("rade_prev.ctun", snap.ctun);
+    SetPropI0("rade_prev.frequency", snap.frequency);
+    SetPropI0("rade_prev.ctun_frequency", snap.ctun_frequency);
+    SetPropF0("rade_prev.volume", snap.volume);
+    SetPropF0("rade_prev.drive", snap.drive);
+  }
 }
 
 #endif /* RADE */

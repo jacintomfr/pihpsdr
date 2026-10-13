@@ -586,60 +586,18 @@ long long ifpan_display_shift(const RECEIVER *rx) {
   return c - vfo[VFO_A].frequency;
 }
 
-//
-// "Sliding photograph" (2026-10-13): while the Kenwood is changing frequency
-// (its frequency, the display centre, changed less than IFPAN_SETTLE_US ago)
-// the live IF data is not usable for a smooth picture: the Kenwood moves in
-// CAT-sized jumps, mutes its receiver while its PLL locks, and the data
-// reaches the display a little later than the CAT readings. Then the last
-// picture taken while the Kenwood was settled is shown instead, moved to the
-// frequency now displayed: it slides smoothly at any knob speed, with an
-// empty strip on the side being tuned to. Once the Kenwood has settled the
-// live data comes back. Also smooths turning the Kenwood's own dial. A jump
-// larger than the span (band change, ...) shows the live data.
-//
-// disp_centre: frequency at the centre of the drawn picture (receiver
-// frequency while sliding); slot 0 panadapter, 1 waterfall; only RX1.
-//
-#define IFPAN_SETTLE_US 250000
-
-const float *ifpan_shifted_pixels(int id, const float *in, int width, long long disp_centre, double cAp, int slot) {
+const float *ifpan_shifted_pixels(const float *in, int width, long long shift_hz, double cAp, int slot) {
   static float *buf[2] = { NULL, NULL };
-  static float *snap[2] = { NULL, NULL };
   static int len[2] = { 0, 0 };
-  static int snap_ok[2] = { 0, 0 };
-  static long long snap_centre[2] = { 0, 0 };
-  static long long last_centre = -1;
-  static gint64 changed_us = 0;
-  if (id != 0 || width <= 0 || slot < 0 || slot > 1 || cAp <= 0.0) { return in; }
+  if (shift_hz == 0 || width <= 0 || slot < 0 || slot > 1) { return in; }
   if (len[slot] < width) {
     buf[slot] = g_renew(float, buf[slot], width);
-    snap[slot] = g_renew(float, snap[slot], width);
     len[slot] = width;
-    snap_ok[0] = snap_ok[1] = 0;
   }
-  gint64 now = g_get_monotonic_time();
-  long long centre = vfo[VFO_A].frequency;          // where the Kenwood (the IF) is
-  if (centre != last_centre) {
-    last_centre = centre;
-    changed_us = now;
-  }
-  const float *src = in;
-  long long src_centre = centre;
-  if (now - changed_us >= IFPAN_SETTLE_US) {
-    // Kenwood settled: live data, and keep it as the photograph
-    memcpy(snap[slot], in, (size_t)width * sizeof(float));
-    snap_centre[slot] = centre;
-    snap_ok[slot] = 1;
-  } else if (snap_ok[slot] && llabs(disp_centre - snap_centre[slot]) * cAp < width) {
-    src = snap[slot];
-    src_centre = snap_centre[slot];
-  }
-  int sp = (int)lround((double)(disp_centre - src_centre) * cAp);
-  if (sp == 0 && src == in) { return in; }
+  int sp = (int)lround((double)shift_hz * cAp);
   for (int x = 0; x < width; x++) {
     int j = x + sp;
-    buf[slot][x] = (j >= 0 && j < width) ? src[j] : -200.0F;
+    buf[slot][x] = (j >= 0 && j < width) ? in[j] : -200.0F;
   }
   return buf[slot];
 }

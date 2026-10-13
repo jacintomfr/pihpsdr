@@ -786,7 +786,34 @@ static int    txdump_on = 0;
 static FILE  *txdump_fp[2] = { NULL, NULL };
 static long   txdump_n[2] = { 0, 0 };
 
+//
+// TX audio levels of every over (diagnostics, always on): the microphone
+// reaching the TX chain (from the client on a server) and the processed
+// audio written to the ACC2 sound card; logged when the Kenwood goes back
+// to RX (txlev_report), to find overs without modulation.
+//
+static double txlev_peak[2], txlev_sum[2];
+static long   txlev_n[2];
+
+static void txlev_report(void) {
+  double rms[2], pk[2];
+  for (int i = 0; i < 2; i++) {
+    rms[i] = txlev_n[i] > 0 ? 10.0 * log10(txlev_sum[i] / txlev_n[i] + 1e-20) : -200.0;
+    pk[i] = 20.0 * log10(txlev_peak[i] + 1e-10);
+  }
+  t_print("tx audio: mic %.1f s rms %.1f peak %.1f dBFS | to ACC2 %.1f s rms %.1f peak %.1f dBFS%s\n",
+          txlev_n[0] / 48000.0, rms[0], pk[0], txlev_n[1] / 48000.0, rms[1], pk[1],
+          txout_rx.audio_handle == NULL ? " | ACC2 sound card NOT OPEN" : "");
+  for (int i = 0; i < 2; i++) { txlev_peak[i] = 0.0; txlev_sum[i] = 0.0; txlev_n[i] = 0; }
+}
+
 void ifpan_tx_dump(int which, double s) {
+  if (which >= 0 && which <= 1 && radio_is_transmitting()) {
+    double a = fabs(s);
+    if (a > txlev_peak[which]) { txlev_peak[which] = a; }
+    txlev_sum[which] += s * s;
+    txlev_n[which]++;
+  }
   if (!txdump_on || !radio_is_transmitting() || which < 0 || which > 1) { return; }
   if (txdump_n[which] >= TXDUMP_MAX) { return; }
   if (txdump_fp[which] == NULL) {
@@ -1652,6 +1679,7 @@ static gpointer cat_thread(gpointer data) {
       }
       ptt_keyed = ptt;
       t_print("%s: PTT %s sent to the Kenwood\n", __func__, ptt ? "TX" : "RX");
+      if (!ptt) { txlev_report(); }
     }
     //
     // TUNE end, once the Kenwood is back in RX: if its mode was switched,

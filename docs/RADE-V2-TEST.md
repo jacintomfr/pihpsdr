@@ -28,9 +28,15 @@ The normal piHPSDR-IF (branch `cu2ed` / `windows-port`) stays RADE V1.
   touched. Sizes are taken from the library (V2: 144 features / 320 modem
   samples per 40 ms frame, EOO 960 samples, nin max 200).
 * `src/rade_menu.c`: the RADE menu title says "RADE V2 (experimental)".
-* Everything else (RADE menu enter / leave, 50 W limit, filters, TX chain)
-  is as in V1. The piHPSDR-IF TX filter 700 - 2300 Hz and the RX "Fit
-  Filter" are wider than the V2 signal, which is fine.
+* Filters (`src/rade_glue.h`): the V2 signal measured from the library
+  (8 s of transmit output, real part as sent through SSB): peak 1450 Hz,
+  99 % of the power in **1080 - 1900 Hz (820 Hz)**, -20 dB at 1100 - 1900 Hz
+  (V1: 99 % in 130 - 3240 Hz, -6 dB at 730 - 2220 Hz). V2 TX filter
+  **1000 - 2000 Hz**; RX "Fit Filter" narrow **950 - 2050 Hz**, wide
+  **800 - 2200 Hz** (room for a mistuned station). V1 builds keep 700 - 2300
+  (TX), 700 - 2300 / 300 - 2700 (RX).
+* Everything else (RADE menu enter / leave, 50 W limit, TX chain) is as in
+  V1.
 
 ## rade_c version (must match the other station)
 

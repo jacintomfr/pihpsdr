@@ -25,6 +25,8 @@
 #include "vfo.h"
 #include "mode.h"
 #include "filter.h"
+#include "band.h"
+#include "bandstack.h"
 #include "ext.h"
 #include "property.h"
 #include "message.h"
@@ -241,6 +243,7 @@ static void snapshot_restore(void) {
 }
 
 static void apply_fit_filter(void);
+static void tune_band_rade_frequency(void);
 static atomic_int tx_pref = 0;   /* "TX armed" as last chosen: armed again when RADE is entered */
 
 static void drive_limit(void) {
@@ -259,6 +262,7 @@ static void set_rx_enabled_int(int on, int force_mode) {
     if (atomic_load(&tx_pref) && transmitter != NULL) { atomic_store(&tx_armed, 1); }
   }
   engine_update();
+  if (entering && atomic_load(&rx_enabled)) { tune_band_rade_frequency(); }
   if (on && force_mode) { ensure_digital_mode(); }
   if (entering && atomic_load(&rx_enabled)) { apply_fit_filter(); }   /* the RADE RX filter (narrow / wide) */
   tx_chain_force(atomic_load(&tx_armed));
@@ -287,6 +291,7 @@ void rade_glue_set_tx_armed(int on) {
   atomic_store(&tx_pref, on ? 1 : 0);
   if (on && !was_on) { snapshot_take(); }
   engine_update();
+  if (on && !was_on && atomic_load(&rx_enabled)) { tune_band_rade_frequency(); }
   if (on) { ensure_digital_mode(); }
   if (on && !was_on && atomic_load(&rx_enabled)) { apply_fit_filter(); }
   tx_chain_force(atomic_load(&tx_armed));
@@ -611,23 +616,52 @@ void rade_glue_fit_filter(void) {
   apply_fit_filter();
 }
 
-void rade_glue_quick_tune(int i) {
-  if (i < 0 || i >= N_QUICK_TUNE) { return; }
-  if (remote_send(RADE_REMOTE_QUICK_TUNE, i, 0, NULL)) { return; }
-  if (active_receiver == NULL) { return; }
-  long long hz = quick_tune[i].hz;
-  int id = active_receiver->id;
+/* receiver, VFO and Kenwood to a RADE frequency, in DIGL below 10 MHz, DIGU above */
+static void rade_tune(int id, long long hz) {
   // lower sideband below 10 MHz (digi_mode_for_band of the Rust app)
   int mode = (hz < 10000000LL) ? modeDIGL : modeDIGU;
   if (vfo[id].mode != mode) {
     vfo_id_mode_changed(id, mode);
   }
 #ifdef IFPAN
-  // the Kenwood is tuned (frequency and USB / LSB) and the display follows it
+  //
+  // The receiver (CTUN) goes there at once, as with a band change: the
+  // Kenwood moving alone would leave the receiver where it was whenever the
+  // new frequency is still inside the span (14.210 -> 14.236 at 96 kHz).
+  // Then the Kenwood is tuned (frequency and USB / LSB), the display follows.
+  //
+  int b = get_band_from_frequency(hz);
+  if (b >= 0 && b != vfo[id].band) {
+    vfo[id].band = b;
+    vfo[id].bandstack = bandstack_get_bandstack(b)->current_entry;
+  }
+  vfo[id].frequency = hz;
+  vfo[id].ctun_frequency = hz;
+  vfo_vfos_changed();
   ifpan_band_changed(hz, mode);
 #else
   vfo_id_set_frequency(id, hz);
 #endif
+}
+
+/* entering RADE: straight to the band's RADE frequency, if the band has one */
+static void tune_band_rade_frequency(void) {
+  if (active_receiver == NULL) { return; }
+  int id = active_receiver->id;
+  for (int i = 0; i < N_QUICK_TUNE; i++) {
+    if (get_band_from_frequency(quick_tune[i].hz) == vfo[id].band) {
+      t_print("%s: band %d: RADE frequency %lld Hz\n", __func__, vfo[id].band, quick_tune[i].hz);
+      rade_tune(id, quick_tune[i].hz);
+      return;
+    }
+  }
+}
+
+void rade_glue_quick_tune(int i) {
+  if (i < 0 || i >= N_QUICK_TUNE) { return; }
+  if (remote_send(RADE_REMOTE_QUICK_TUNE, i, 0, NULL)) { return; }
+  if (active_receiver == NULL) { return; }
+  rade_tune(active_receiver->id, quick_tune[i].hz);
   if (fit_applied) { apply_fit_filter(); }   // keep the fitted width, sign follows the mode
   push_client();
   g_idle_add(ext_vfo_update, NULL);

@@ -241,6 +241,12 @@ radio drops CAT commands that arrive while it answers another client):
   stay forced in SSB, and the RADE filter was only set by Fit Filter.
   **Tested OK by the user on the Pi 5 (2026-10-13)**; Windows client
   3.1.267 installed, not tested yet.
+* 2026-10-13: Quick Tune inside the span did nothing (14.210 -> 20m 14.236:
+  only the Kenwood moved, the CTUN receiver stayed as it was still in the
+  span; from 40m it worked). rade_tune() now sets VFO frequency, CTUN
+  frequency and band like a band change (vfo_vfos_changed) before
+  ifpan_band_changed. Entering RADE goes straight to the band's RADE
+  frequency (Quick Tune list, one per band) if the band has one.
 
 ### 4.11 Window position fix (2026-10-11)
 * `4306cb42` a minimised start made the restore "compensate" Windows'

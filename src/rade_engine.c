@@ -37,6 +37,24 @@
 #define MAX_RX_LOG   50
 #define EOO_FLOATS   RADE_TEXT_EOO_FLOATS
 
+/*
+ * RADE V2 (experimental, branch builds with -DRADE_V2 only): the rade_c
+ * library runs its V2 waveform (~860 Hz wide, no pilots, ~3 dB more
+ * sensitive). V2 is still under development upstream ("on-air use is not
+ * recommended"; waveform and weights may change without notice), so both
+ * stations must run builds from the same rade_c commit. V2 has no
+ * End-of-Over callsign bits (rade_n_eoo_bits() is 0): the EOO frame still
+ * ends the over, but no callsign is sent or decoded. The library's TX
+ * bandpass filter is V1 only.
+ */
+#ifdef RADE_V2
+#define RADE_OPEN_MODE RADE_MODE_V2
+#define RADE_HAS_EOO_TEXT 0
+#else
+#define RADE_OPEN_MODE 0
+#define RADE_HAS_EOO_TEXT 1
+#endif
+
 /* ---------------------------------------------------------------- ring -- */
 
 typedef struct {
@@ -297,8 +315,8 @@ static void set_tx(engine_t *e, int on) {
       if (got < 0) { fprintf(stderr, "[rade] rade_tx failed flushing the over\n"); }
       else { e->iq_n = got; emit_tx_iq(e, 3000); }
     }
-    /* current callsign goes into the frame about to be sent */
-    rade_tx_set_eoo_bits(e->rade, e->eoo_tx);
+    /* current callsign goes into the frame about to be sent (V1 only) */
+    if (RADE_HAS_EOO_TEXT) { rade_tx_set_eoo_bits(e->rade, e->eoo_tx); }
     int got = rade_tx_eoo(e->rade, e->iq);
     if (got < 0) { fprintf(stderr, "[rade] rade_tx_eoo failed\n"); got = 0; }
     e->iq_n = got;
@@ -405,7 +423,9 @@ static void handle_eoo(engine_t *e) {
   atomic_store(&e->squelch_gate, 0);
   atomic_fetch_add(&e->eoo_count, 1);
   char call[9];
-  if (rade_text_decode(e->eoo_rx, call)) {
+  if (!RADE_HAS_EOO_TEXT) {
+    fprintf(stderr, "[rade] End-of-Over (V2: no callsign) (snr_db=%.1f)\n", e->last_sync_snr);
+  } else if (rade_text_decode(e->eoo_rx, call)) {
     fprintf(stderr, "[rade] End-of-Over callsign %s (snr_db=%.1f)\n", call, e->last_sync_snr);
     g_mutex_lock(&e->log_lock);
     if (e->log_n >= MAX_RX_LOG) {
@@ -442,7 +462,7 @@ static void service_rx(engine_t *e) {
 
     int has_eoo = 0;
     memset(e->features.p, 0, (size_t)e->n_features * sizeof(float));
-    int n = rade_rx(e->rade, e->features.p, &has_eoo, e->eoo_rx, e->iq);
+    int n = rade_rx(e->rade, e->features.p, &has_eoo, RADE_HAS_EOO_TEXT ? e->eoo_rx : NULL, e->iq);
     if (n < 0) { fprintf(stderr, "[rade] rade_rx failed (%d)\n", n); continue; }
     /* before EOO handling, so a frame still in sync refreshes the SNR */
     publish_rx_state(e);
@@ -464,7 +484,7 @@ static void apply_ctl(engine_t *e, ctl_msg *m) {
   case CTL_SET_TX:   set_tx(e, m->val); break;
   case CTL_SET_CALL: rade_text_encode(m->call, e->eoo_tx); break;
   case CTL_RESET:    reset_rx(e); break;
-  case CTL_SET_BPF:  rade_set_tx_bpf(e->rade, m->val); break;
+  case CTL_SET_BPF:  if (RADE_HAS_EOO_TEXT) { rade_set_tx_bpf(e->rade, m->val); } break;   /* V1 only */
   default: break;
   }
 }
@@ -522,7 +542,7 @@ int rade_engine_start(void) {
   static int initialised = 0;
   if (!initialised) { rade_initialize(); initialised = 1; }
   char model[1] = { 0 };
-  e->rade = rade_open(model, RADE_VERBOSE_0);   /* never the verbose flags */
+  e->rade = rade_open(model, RADE_VERBOSE_0 | RADE_OPEN_MODE);   /* never the verbose flags */
   if (!e->rade) { fprintf(stderr, "[rade] rade_open failed\n"); goto fail; }
   e->n_features = rade_n_features_in_out(e->rade);
   e->n_tx_out = rade_n_tx_out(e->rade);
@@ -531,7 +551,10 @@ int rade_engine_start(void) {
   e->n_eoo_bits = rade_n_eoo_bits(e->rade);
   e->voc_frame = sdrx_voc_frame_size();
   e->voc_nfeat = sdrx_voc_n_features();
-  if (e->n_eoo_bits != EOO_FLOATS) {
+  fprintf(stderr, "[rade] RADE %s: %d features, %d tx samples, %d eoo samples, nin max %d, %d eoo bits\n",
+          RADE_OPEN_MODE ? "V2 (experimental)" : "V1", e->n_features, e->n_tx_out, e->n_tx_eoo_out,
+          e->nin_max, e->n_eoo_bits);
+  if (RADE_HAS_EOO_TEXT && e->n_eoo_bits != EOO_FLOATS) {
     fprintf(stderr, "[rade] unexpected eoo bits %d\n", e->n_eoo_bits);
     goto fail;
   }
@@ -557,7 +580,7 @@ int rade_engine_start(void) {
   e->pcm_cap = (e->n_features / e->voc_nfeat + 2) * e->voc_frame;
   if (e->pcm_cap < e->voc_frame) { e->pcm_cap = e->voc_frame; }
   e->pcm = calloc((size_t)e->pcm_cap, sizeof(short));
-  e->eoo_rx = calloc((size_t)e->n_eoo_bits, sizeof(float));
+  e->eoo_rx = calloc((size_t)(e->n_eoo_bits > 0 ? e->n_eoo_bits : 1), sizeof(float));
   fvec_reserve(&e->features, (size_t)e->n_features);
   e->features.n = (size_t)e->n_features;
   if (!e->iq || !e->pcm || !e->eoo_rx || !e->features.p) { goto fail; }

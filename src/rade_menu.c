@@ -224,7 +224,11 @@ static GtkWidget *new_dialog(GtkWidget *parent, GtkWidget **grid) {
   GtkWidget *headerbar = gtk_header_bar_new();
   gtk_window_set_titlebar(GTK_WINDOW(d), headerbar);
   gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(headerbar), TRUE);
+#ifdef RADE_V2
+  gtk_header_bar_set_title(GTK_HEADER_BAR(headerbar), APP_NAME " - RADE V2 (experimental)");
+#else
   gtk_header_bar_set_title(GTK_HEADER_BAR(headerbar), APP_NAME " - RADE");
+#endif
   g_signal_connect(d, "delete_event", G_CALLBACK(close_cb), NULL);
   g_signal_connect(d, "destroy", G_CALLBACK(destroy_cb), NULL);
   *grid = gtk_grid_new();

@@ -437,7 +437,12 @@ RADE?=ON
 endif
 endif
 ifeq ($(RADE),ON)
+# RADE V2 (experimental) in the pihpsdr-if-rade2 branch: RADE_V2=OFF for V1
+RADE_V2?=ON
 RADE_OPTIONS=-D RADE -I./rade-libs/include
+ifeq ($(RADE_V2),ON)
+RADE_OPTIONS+=-D RADE_V2
+endif
 RADE_OBJS=src/rade_glue.o src/rade_engine.o src/rade_text.o src/rade_mic_agc.o \
 	src/rade_denoiser.o src/rade_resample.o src/rade_shim.o src/rade_menu.o
 RADE_LIBS=rade-libs/lib/librade_static.a rade-libs/lib/libopus.a -lspeexdsp

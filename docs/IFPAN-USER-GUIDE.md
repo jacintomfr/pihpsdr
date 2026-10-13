@@ -253,6 +253,12 @@ SNR, callsigns decoded; signals under about +3.8 dB SNR do not decode the
 callsign). Own callsign: RADE menu "My callsign". VOX does not work with
 RADE — use PTT / MOX. Details: `docs/RADE-IFPAN.md`.
 
+**Leaving RADE puts everything back:** switching RADE on (RX or TX armed)
+remembers the band, band stack, frequency, CTUN, mode, filter, RX volume and
+TX Drive (TS PWR); switching RADE off returns to all of it, the Kenwood
+included, whatever was tuned or changed while in RADE. This also works after
+a restart with RADE on (kept in the props file as rade_prev.*).
+
 **RADE power limit 50 W:** while RADE "TX armed" is on, the TX Drive slider
 (= TS PWR) cannot go above **50 W**; arming RADE TX with more brings it down
 to 50 W, and turning the PWR knob on the TS above 50 W is set back to 50 W.

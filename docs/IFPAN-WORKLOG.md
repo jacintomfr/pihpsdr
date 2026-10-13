@@ -224,6 +224,13 @@ radio drops CAT commands that arrive while it answers another client):
   turned above it is set back (`ifpan_power_apply`, server). Reason: full-duty
   signal, PA heat and IMD (ARRL TS-570D report: IMD3 ~ -30 dB PEP, IMD5
   ~ -45 dB at 100 W). Built on the Pi; to be tested.
+* 2026-10-13: leaving RADE restores where the operator was: snapshot of
+  VFO A band, band stack, frequency, CTUN, mode, filter, deviation, RX volume
+  and TX Drive when RADE goes on (snapshot_take, rx or TX armed, from off),
+  restored when RADE goes off (snapshot_restore, Kenwood too via
+  ifpan_band_changed), also if the engine fails to start; persisted as
+  rade_prev.* for a restart with RADE on. Before, only the mode came back,
+  and only if it was still DIGU/DIGL. Built on the Pi; to be tested.
 
 ### 4.11 Window position fix (2026-10-11)
 * `4306cb42` a minimised start made the restore "compensate" Windows'

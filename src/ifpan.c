@@ -1045,6 +1045,28 @@ static int kw_read_frame(int sock, char *frame, size_t size) {
 // Other frames (auto-information, late answers) are skipped; "?" means
 // the radio rejected the command. Returns 0, -1 (connection), -2 (no answer).
 //
+//
+// The Kenwood answers "?;" to a set it does not execute "due to the current
+// status of the transceiver" (manual) - e.g. mode, NB, PRE, ATT while its
+// MENU is open (2026-10-14). Sets get no answer otherwise, so the "?;" shows
+// up at the next query: remember it for the alert in the panadapter.
+//
+int ifpan_ts_refused = 0;
+static gint64 ts_refused_until = 0;
+
+static void ts_refused_seen(void) {
+  gint64 now = g_get_monotonic_time();
+  if (now >= ts_refused_until) {
+    t_print("%s: the Kenwood refused a command (\"?;\") - its MENU open?\n", __func__);
+  }
+  ts_refused_until = now + 8000000;   // alert shown for 8 s after the last refusal
+}
+
+int ifpan_ts_refused_active(void) {
+  if (radio_is_remote) { return ifpan_ts_refused; }
+  return g_get_monotonic_time() < ts_refused_until;
+}
+
 static int kw_query(int sock, const char *cmd, const char *prefix, char *frame, size_t size) {
   int len = strlen(cmd);
   size_t plen = strlen(prefix);
@@ -1052,7 +1074,10 @@ static int kw_query(int sock, const char *cmd, const char *prefix, char *frame, 
   for (int i = 0; i < 8; i++) {
     int rc = kw_read_frame(sock, frame, size);
     if (rc < 0) { return rc; }
-    if (strcmp(frame, "?") == 0) { return -2; }
+    if (strcmp(frame, "?") == 0) {
+      ts_refused_seen();
+      return -2;
+    }
     if (strncmp(frame, prefix, plen) == 0) { return 0; }
   }
   return -2;

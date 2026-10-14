@@ -287,15 +287,20 @@ re-plugged:
 ```sh
 #!/bin/sh
 # TS-570D CAT bridge: TCP 127.0.0.1:7373 <-> FTDI USB-RS232 (57600 8N1)
+#
+# Only the CAT adapter, by its serial number. Never a pattern like *FTDI*.
+#
+DEV=/dev/serial/by-id/usb-FTDI_usb_serial_converter_FTCSEGX1-if00-port0
 while true; do
-  DEV=$(ls /dev/serial/by-id/*FTDI* 2>/dev/null | head -1)
-  if [ -n "$DEV" ]; then
+  if [ -e "$DEV" ]; then
     stty -F "$DEV" 57600 raw -echo 2>/dev/null
     socat TCP-LISTEN:7373,bind=127.0.0.1,reuseaddr,fork FILE:"$DEV",b57600,raw,echo=0
   fi
   sleep 2
 done
 ```
+
+Put **your** CAT adapter's name in `DEV` (`ls -l /dev/serial/by-id/`).
 
 `/etc/systemd/system/ts570-cat.service`:
 
@@ -317,9 +322,14 @@ sudo systemctl daemon-reload && sudo systemctl enable --now ts570-cat.service
 printf 'FA;' | timeout 2 socat - TCP:127.0.0.1:7373; echo     # -> FA00014162000;
 ```
 
-(The device is found by its `/dev/serial/by-id/*FTDI*` name, so other
-serial devices — e.g. an Arduino MIDI controller — do not get in the way.
-`bind=127.0.0.1` keeps the radio's CAT off the network.)
+(The device is given by its exact `/dev/serial/by-id/` name, so other
+serial devices — an Arduino MIDI controller, **the USB-serial adapter that
+keys PTT on ACC2 pin 9** — never get in the way. **Never use a pattern such
+as `*FTDI*`:** on 2026-10-14 the Pi booted with the PTT adapter (FTDI
+FT232R) also plugged in, the pattern picked it, and opening a serial port
+raises RTS - the TS-570 went into TX and stayed there, while the CAT had no
+radio. `ttyUSB0` / `ttyUSB1` can swap at every boot, the by-id names do
+not. `bind=127.0.0.1` keeps the radio's CAT off the network.)
 
 In piHPSDR-IF: Menu → Radio → "CAT" = **Kenwood TCP**, address
 **127.0.0.1:7373**. Alternatives: Hamlib `rigctld -m 2004 -r /dev/ttyUSB0 -s

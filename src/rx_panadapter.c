@@ -872,10 +872,12 @@ void display_panadapter_messages(cairo_t *cr, int width, unsigned int fps) {
     //
     // piHPSDR-IF: the Kenwood refused a CAT command (mode, PRE, ATT, ...),
     // most likely because its MENU is open (shown for 8 s after the last
-    // refusal, also on the client)
+    // refusal, also on the client). Top line, between the frequency
+    // labels and the first dBm line (the "TX Inhibit" line, which a
+    // TS-570 never uses), where it does not cover the signals.
     //
     if (ifpan_ts_refused_active()) {
-      cairo_move_to(cr, 100.0 * scalfac, 150.0 * scalfac);
+      cairo_move_to(cr, 100.0 * scalfac, 30.0 * scalfac);
       cairo_show_text(cr, "TS refused a command - MENU open on the radio?");
     }
 #endif

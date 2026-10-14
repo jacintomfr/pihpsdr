@@ -289,7 +289,14 @@
 `  hardware timer on the pin 9 circuit would cover it); at program start the
 `  PTT port open raises RTS for a few ms.
 `
-`### RADE V2 test branches (2026-10-13)
+`### First RADE DX test (2026-10-14)
+* TS-570D in RADE (V1) through ACC2 + serial PTT, about 45 W (under the 50 W
+  RADE limit), 20 m 14.236 MHz: received ~1500 km away on the SDRPT WebSDR
+  (Santarém, Portugal) and decoded with the RADE-PT browser page: SYNC,
+  SNR -2 dB, offset +0.6 Hz, 8.6 s of speech. Clean block on the waterfall,
+  no splatter beside it.
+
+### RADE V2 test branches (2026-10-13)
 `* Separate branches, the normal builds stay RADE V1: `pihpsdr-if-rade2`
 `  (this repo, commit 9402e6b2, docs/RADE-V2-TEST.md there) and
 `  `deskhpsdr-rade2` (jacintomfr/deskhpsdr, for a colleague's HL2 on Ubuntu

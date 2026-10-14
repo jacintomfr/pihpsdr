@@ -54,6 +54,8 @@ extern volatile long ifpan_diag_heartbeats;   // TX chain heartbeats from the SD
 extern int       ifpan_kenwood_pwr;   // raw TX meters, -1: not read yet
 extern int       ifpan_kenwood_swr;
 extern int       ifpan_kenwood_alc;
+extern int       ifpan_acc2_peak_db;  // TX audio to the ACC2 sound card: peak of the last 100 ms (dBFS, -99 .. 0)
+extern int       ifpan_acc2_clip;     // 1: samples beyond full scale in the last 2 s (clipped)
 
 extern void      ifpan_set_follow(int on);
 extern void      ifpan_set_follow_mode(int on);

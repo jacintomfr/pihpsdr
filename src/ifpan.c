@@ -836,8 +836,37 @@ void ifpan_tx_dump(int which, double s) {
 }
 
 // one 48 kHz sample of processed TX audio (TX thread)
+//
+// Level of the TX audio sent to the ACC2 sound card, for the TX meter (TX
+// thread; read by the main thread and sent to the client). Peaks at 0 dBFS
+// are the WDSP ALC / leveler limiting at full scale; only samples beyond
+// full scale are clipped by the sound card (shown as CLIP for 2 s).
+//
+int ifpan_acc2_peak_db = -99;
+int ifpan_acc2_clip = 0;
+static double acc2_peak = 0.0;
+static int    acc2_n = 0, acc2_over = 0;
+static gint64 acc2_clip_until = 0;
+
+static void acc2_level(double s) {
+  double a = fabs(s);
+  if (a > acc2_peak) { acc2_peak = a; }
+  if (a > 1.0) { acc2_over = 1; }
+  if (++acc2_n >= 4800) {             // 100 ms at 48 kHz
+    int db = (int) floor(20.0 * log10(acc2_peak + 1.0e-9) + 0.5);
+    ifpan_acc2_peak_db = (db < -99) ? -99 : (db > 0) ? 0 : db;
+    gint64 now = g_get_monotonic_time();
+    if (acc2_over) { acc2_clip_until = now + 2000000; }
+    ifpan_acc2_clip = now < acc2_clip_until;
+    acc2_peak = 0.0;
+    acc2_n = 0;
+    acc2_over = 0;
+  }
+}
+
 void ifpan_tx_audio_sample(double s) {
   ifpan_tx_dump(1, s);
+  if (radio_is_transmitting()) { acc2_level(s); }
   if (txout_rx.audio_handle == NULL) { return; }
   audio_write(&txout_rx, s, s);
 }

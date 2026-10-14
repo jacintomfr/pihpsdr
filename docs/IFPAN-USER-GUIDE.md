@@ -229,6 +229,31 @@ the selection is done inside the CPU with no separate line, fall back to a
 PTT on pin 9 from a USB-serial adapter's RTS + PC817 (a "PTT via serial
 RTS/DTR" option would then be added to piHPSDR-IF).
 
+**TS-570 menus by CAT: the EX command (manual appendix, checked
+2026-10-14).** Set: `EX` + menu number (3 digits, 000 - 051) + selection
+(4 digits) + `;`, e.g. `EX0000004;` = menu 00 to d1. Read: `EX;` only (no
+menu number) - it answers the menu shown on the radio, e.g. `EX0000000;`;
+a single menu cannot be read. Accepted also while the radio's MENU is open.
+There is **no CAT command to leave the MENU**: while it is open the radio
+answers `?;` ("not executed due to the current status") to key functions
+- mode (MD), noise blanker (NB), preamp (PA), attenuator (RA) - while FA /
+AG / PC / AC still work. Leave the menu with MENU or CLR on the radio; set
+menu items by CAT instead of leaving the radio in the menu.
+
+| Menu | Item | Selections (0000, 0001, ...) |
+|---|---|---|
+| 00 | Display brightness | OFF, d4, d3, d2, d1 |
+| 01 | Beep output level | OFF, 1 ... 9 |
+| 13 | TX filter (SSB/AM) | 2.4, 2.0 |
+| 14 | TX equalizer | OFF, H, B, FP, BB, C |
+| 32 | Digital operation filter | OFF, 1200, 300, PSK |
+| 33 | AF input level (ACC2, MCP/TNC TX) | 0, 1, 2 |
+| 34 | AF output level (ACC2, MCP/TNC RX) | 0 ... 9 |
+| 35 | COM parameters | 12-1, 24-1, 48-1, 48-2, 96-1, 192-1, 384-1, 576-1 |
+| 38 | TX inhibit | OFF, ON |
+| 39 | Linear amplifier relay | OFF, ON |
+| 46 | IF filter | OFF, 1800, 500, 270 |
+
 **TS-570 TX audio selector (service manual, checked 2026-10-13):** the
 choice between microphone, ACC2 and DRU audio is made by **IC502
 BU4066BCFV** (quad analogue switch, control high = closed) on the

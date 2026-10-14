@@ -804,29 +804,16 @@ void rxmeter_update(int fps, double rxlvl, double peak, double gain, double out)
     if (ifpan_kenwood_tx && ifpan_cat_connected) {
       //
       // The Kenwood transmits (PWR and SWR are on the main meter, see
-      // ifpan_txmeter; the VFO dial is red): the peak of the audio sent to
-      // ACC2 (green with room, yellow within 3 dB of full scale - the WDSP
-      // ALC limits there -, red CLIP if the sound card clipped) and the
-      // Kenwood's ALC (raw bar dots), in red.
+      // ifpan_txmeter): "TS TX" and the ALC (raw bar dots), in red.
       //
-      if (ifpan_acc2_clip) {
-        cairo_set_source_rgba(cr, COLOUR_ALARM);
-        snprintf(sf, sizeof(sf), "CLIP");
-      } else if (ifpan_acc2_peak_db > -3) {
-        cairo_set_source_rgba(cr, COLOUR_ATTN);
-        snprintf(sf, sizeof(sf), "%d", ifpan_acc2_peak_db);
-      } else {
-        cairo_set_source_rgba(cr, COLOUR_OK);
-        snprintf(sf, sizeof(sf), "%d", ifpan_acc2_peak_db);
-      }
-      cairo_move_to(cr, 5, Y1);
-      cairo_show_text(cr, "ACC2");
-      cairo_text_extents(cr, sf, &extents);
-      cairo_move_to(cr, ADD_METER_WIDTH - extents.width - 2.0, Y1);
-      cairo_show_text(cr, sf);
       cairo_set_source_rgba(cr, COLOUR_ALARM);
+      cairo_move_to(cr, 5, Y1);
+      cairo_show_text(cr, "TS");
       cairo_move_to(cr, 5, Y2);
       cairo_show_text(cr, "ALC");
+      cairo_text_extents(cr, "TX", &extents);
+      cairo_move_to(cr, ADD_METER_WIDTH - extents.width - 2.0, Y1);
+      cairo_show_text(cr, "TX");
       if (ifpan_kenwood_alc < 0) { snprintf(sf, sizeof(sf), "--"); }
       else { snprintf(sf, sizeof(sf), "%d", ifpan_kenwood_alc); }
       cairo_text_extents(cr, sf, &extents);
@@ -1193,7 +1180,11 @@ void txmeter_update(int fps, double pwr, double alc, double swr, double mic, dou
     snprintf(sf, sizeof(sf), "Alc");
     cairo_move_to(cr, 5, Y1);
     cairo_show_text(cr, sf);
+#ifdef IFPAN
+    snprintf(sf, sizeof(sf), "ACC2");
+#else
     snprintf(sf, sizeof(sf), "Out");
+#endif
     cairo_move_to(cr, 5, Y2);
     cairo_show_text(cr, sf);
     //
@@ -1205,7 +1196,26 @@ void txmeter_update(int fps, double pwr, double alc, double swr, double mic, dou
     cairo_text_extents(cr, sf, &extents);
     cairo_move_to(cr, ADD_METER_WIDTH - extents.width - 2.0, Y1);
     cairo_show_text(cr, sf);
+#ifdef IFPAN
+    //
+    // piHPSDR-IF: peak of the audio sent to the ACC2 sound card (last
+    // 100 ms): yellow within 3 dB of full scale (the WDSP ALC limits
+    // there), red CLIP when samples beyond full scale were cut (2 s hold)
+    //
+    if (ifpan_acc2_clip) {
+      cairo_set_source_rgba(cr, COLOUR_ALARM);
+      snprintf(sf, sizeof(sf), "CLIP");
+    } else if (ifpan_acc2_peak_db > -3) {
+      cairo_set_source_rgba(cr, COLOUR_ATTN);
+      snprintf(sf, sizeof(sf), "%d", ifpan_acc2_peak_db);
+    } else {
+      cairo_set_source_rgba(cr, COLOUR_OK);
+      snprintf(sf, sizeof(sf), "%d", ifpan_acc2_peak_db);
+    }
+    (void) max_out;
+#else
     snprintf(sf, sizeof(sf), "%0.0f", max_out);
+#endif
     cairo_text_extents(cr, sf, &extents);
     cairo_move_to(cr, ADD_METER_WIDTH - extents.width - 2.0, Y2);
     cairo_show_text(cr, sf);
@@ -1214,8 +1224,9 @@ void txmeter_update(int fps, double pwr, double alc, double swr, double mic, dou
 #ifdef IFPAN
   //
   // IF panadapter: the Kenwood transmits; the main meter shows its power
-  // and SWR (read by CAT). The small box above keeps the WDSP Mic / ALC /
-  // Out levels of the TX audio chain (for setting the mic gain and drive).
+  // and SWR (read by CAT). The small box above keeps the WDSP Mic / ALC
+  // levels of the TX audio chain and the peak sent to ACC2 (for setting
+  // the mic gain and drive).
   //
   (void) band;
   ifpan_txmeter(cr, fps);

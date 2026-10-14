@@ -1056,8 +1056,16 @@ static int kw_read_frame(int sock, char *frame, size_t size) {
 int ifpan_ts_refused = 0;
 static gint64 ts_refused_until = 0;
 
+//
+// With PTT on ACC2 pin 9 (PKS, serial RTS / GPIO), the TS-570 is already in
+// TX when the CAT "TX;" arrives 50 ms later (and back in RX before "RX;"),
+// so it answers "?;" to it: expected, not an alert (2026-10-14).
+//
+static gint64 ptt_cmd_us = 0;
+
 static void ts_refused_seen(void) {
   gint64 now = g_get_monotonic_time();
+  if (now - ptt_cmd_us < 500000) { return; }   // the "?;" to our own TX; / RX;
   if (now >= ts_refused_until) {
     t_print("%s: the Kenwood refused a command (\"?;\") - its MENU open?\n", __func__);
   }
@@ -1810,6 +1818,7 @@ static gpointer cat_thread(gpointer data) {
         continue;
       }
       ptt_keyed = ptt;
+      ptt_cmd_us = g_get_monotonic_time();
       t_print("%s: PTT %s sent to the Kenwood\n", __func__, ptt ? "TX" : "RX");
       if (!ptt) { txlev_report(); }
     }

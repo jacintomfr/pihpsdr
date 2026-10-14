@@ -868,6 +868,17 @@ void display_panadapter_messages(cairo_t *cr, int width, unsigned int fps) {
       tx_fifo_overrun = 0;
       tx_fifo_count = 0;
     }
+#ifdef IFPAN
+    //
+    // piHPSDR-IF: the Kenwood refused a CAT command (mode, PRE, ATT, ...),
+    // most likely because its MENU is open (shown for 8 s after the last
+    // refusal, also on the client)
+    //
+    if (ifpan_ts_refused_active()) {
+      cairo_move_to(cr, 100.0 * scalfac, 150.0 * scalfac);
+      cairo_show_text(cr, "TS refused a command - MENU open on the radio?");
+    }
+#endif
   }
   if (TxInhibit) {
     cairo_set_source_rgba(cr, COLOUR_ALARM);

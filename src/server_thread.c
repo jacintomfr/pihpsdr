@@ -1523,6 +1523,10 @@ static int server_command(gpointer data) {
     int index = header->b1;
     int id = active_receiver->id;
     recall_memory_slot(index);
+#ifdef IFPAN
+    send_radio_data(remoteclient.sock_tcp);   // a memory may switch split on / off
+    send_vfo_data(remoteclient.sock_tcp, VFO_B);
+#endif
     send_vfo_data(remoteclient.sock_tcp, id);
     send_rx_data(remoteclient.sock_tcp, id);
     send_tx_data(remoteclient.sock_tcp);

@@ -77,6 +77,7 @@
 #include "sliders.h"
 #include "soapy_protocol.h"
 #include "vfo.h"
+#include "transmitter.h"
 
 long long ifpan_if_freq = IFPAN_DEFAULT_IF_FREQ;
 long long ifpan_lo_offset = 50000;
@@ -1579,6 +1580,150 @@ static void hold_wait(void) {
   }
 }
 
+//
+// Split, VFO B and subtone, both ways (Kenwood TCP only; TS-570 manual):
+//   piHPSDR split   <-> FT0 / FT1 (TX on VFO A / B; the TS always receives
+//                       on VFO A, which is the display centre)
+//   piHPSDR VFO B   <-> FB (11 digits)
+//   piHPSDR CTCSS   <-> TO0 / TO1 (subtone off / on) and TN01..TN38: the
+//                       same tone list and order as ctcss_frequencies[]
+//                       (TN39 = 1750 Hz, not in piHPSDR's list)
+// The TS generates the subtone itself: one made in the TX audio would be cut
+// by its 300 Hz TX filter (in IFPAN, WDSP TX runs DSB, so its CTCSS, part of
+// the FM modulator, is never active). Turning split on also puts VFO B in
+// VFO B's mode (FR1 MDx FR0: CTCSS needs FM on both VFOs; "FR always
+// places the transceiver in simplex", so FT1 comes last).
+// The TS state is read after (re)connecting and every ~1 s: a change made
+// on the radio is taken over by piHPSDR-IF; a change made in piHPSDR-IF
+// (SPLIT, VFO menu, TX menu CTCSS, memory recall) is sent to the TS. Never
+// while transmitting or while the VFO is being tuned.
+//
+typedef struct {
+  int split, tone, tn;
+  long long fb;
+} TS_SYNC;
+
+static int       ts_sync_init = 0;            // 0: read the TS first (new connection)
+static int       ts_sync_count = 0;           // polls until the next read
+static volatile int ts_sync_pending = 0;      // TS state posted, not applied in piHPSDR yet
+static TS_SYNC   ts_sent = { -1, -1, -1, -1 };  // what the TS has (read or sent)
+
+static long long vfo_b_freq(void) {
+  return vfo[VFO_B].ctun ? vfo[VFO_B].ctun_frequency : vfo[VFO_B].frequency;
+}
+
+// main thread: the TS state -> piHPSDR (split, VFO B, CTCSS), then the client
+static gboolean ts_sync_apply(gpointer data) {
+  TS_SYNC *t = (TS_SYNC *) data;
+  if (t->fb > 0 && t->fb != vfo_b_freq()) { vfo_id_set_frequency(VFO_B, t->fb); }
+  if (t->split >= 0 && t->split != split) { radio_set_split(t->split); }
+  if (transmitter != NULL && t->tone >= 0) {
+    int idx = (t->tn >= 1 && t->tn <= CTCSS_FREQUENCIES) ? t->tn - 1 : transmitter->ctcss;
+    if (t->tone != transmitter->ctcss_enabled || idx != transmitter->ctcss) {
+      transmitter->ctcss_enabled = t->tone;
+      transmitter->ctcss = idx;
+      tx_set_ctcss(transmitter);
+    }
+  }
+  g_free(t);
+  ts_sync_pending = 0;
+  if (remoteclient.running) { send_radio_data(remoteclient.sock_tcp); }   // split
+  ifpan_push_vfo_to_client();                                             // VFO B, CTCSS
+  g_idle_add(ext_vfo_update, NULL);
+  return G_SOURCE_REMOVE;
+}
+
+static int kw_send(int sock, const char *cmd) {
+  int len = strlen(cmd);
+  int rc = (send(sock, cmd, len, MSG_NOSIGNAL) == len) ? 0 : -1;
+  usleep(50000);                      // the TS-570 drops commands sent closer together
+  return rc;
+}
+
+// a Kenwood read "XXn..." -> the number after the 2-letter prefix; -1 link lost, -2 no answer / "?;"
+static long long kw_read_num(int sock, const char *cmd, const char *prefix) {
+  char frame[64];
+  int rc = kw_query(sock, cmd, prefix, frame, sizeof(frame));
+  if (rc < 0) { return rc; }
+  if (strlen(frame) < 3) { return -2; }
+  return atoll(frame + 2);
+}
+
+// CAT thread; returns -1 if the link was lost
+static int ts_sync(int sock, int busy) {
+  if (ifpan_cat_backend != IFPAN_CAT_KENWOOD || busy || ts_sync_pending) { return 0; }
+  if (ptt_keyed || ifpan_kenwood_tx || radio_is_transmitting()) { return 0; }
+  if (!ts_sync_init || ts_sync_count-- <= 0) {
+    ts_sync_count = CAT_MODE_EVERY;
+    long long ft = kw_read_num(sock, "FT;", "FT");
+    if (ft == -1) { return -1; }
+    long long to = kw_read_num(sock, "TO;", "TO");
+    if (to == -1) { return -1; }
+    long long tn = kw_read_num(sock, "TN;", "TN");
+    if (tn == -1) { return -1; }
+    long long fb = kw_read_num(sock, "FB;", "FB");
+    if (fb == -1) { return -1; }
+    if (ft < 0 || to < 0 || tn < 0 || fb <= 0) { return 0; }   // refused (MENU open?): next time
+    TS_SYNC r = { ft == 1, to == 1, (int) tn, fb };
+    if (!ts_sync_init || r.split != ts_sent.split || r.tone != ts_sent.tone || r.tn != ts_sent.tn
+        || r.fb != ts_sent.fb) {
+      // first reading, or changed on the radio: piHPSDR-IF takes it over
+      t_print("%s: TS split %d VFO B %lld subtone %d (No. %d)%s\n", __func__, r.split, r.fb, r.tone, r.tn,
+              ts_sync_init ? " changed on the radio" : "");
+      ts_sent = r;
+      ts_sync_init = 1;
+      ts_sync_pending = 1;
+      TS_SYNC *t = g_new(TS_SYNC, 1);
+      *t = r;
+      g_idle_add(ts_sync_apply, t);
+      return 0;
+    }
+  }
+  //
+  // piHPSDR-IF -> TS
+  //
+  char cmd[32];
+  long long want_fb = vfo_b_freq();
+  int want_split = split ? 1 : 0;
+  int want_tone = transmitter != NULL ? (transmitter->ctcss_enabled ? 1 : 0) : ts_sent.tone;
+  int want_tn = transmitter != NULL ? transmitter->ctcss + 1 : ts_sent.tn;
+  if (want_fb > 0 && want_fb != ts_sent.fb) {
+    snprintf(cmd, sizeof(cmd), "FB%011lld;", want_fb);
+    if (kw_send(sock, cmd) < 0) { return -1; }
+    ts_sent.fb = want_fb;
+    t_print("%s: VFO B %lld sent to the Kenwood\n", __func__, want_fb);
+  }
+  if (want_split != ts_sent.split) {
+    if (want_split) {
+      int m = kenwood_mode_index(vfo[VFO_B].mode);
+      if (m >= 0) {
+        if (kw_send(sock, "FR1;") < 0) { return -1; }
+        if (be_set_mode(sock, m) < 0) { return -1; }
+        usleep(50000);
+        if (kw_send(sock, "FR0;") < 0) { return -1; }
+      }
+      if (kw_send(sock, "FT1;") < 0) { return -1; }
+    } else {
+      if (kw_send(sock, "FT0;") < 0) { return -1; }
+    }
+    ts_sent.split = want_split;
+    t_print("%s: split %s sent to the Kenwood\n", __func__, want_split ? "ON (TX on VFO B)" : "OFF");
+  }
+  if (want_tn >= 1 && want_tn <= CTCSS_FREQUENCIES && want_tn != ts_sent.tn) {
+    snprintf(cmd, sizeof(cmd), "TN%02d;", want_tn);
+    if (kw_send(sock, cmd) < 0) { return -1; }
+    ts_sent.tn = want_tn;
+    t_print("%s: subtone No. %d sent to the Kenwood\n", __func__, want_tn);
+  }
+  if (want_tone != ts_sent.tone) {
+    snprintf(cmd, sizeof(cmd), "TO%d;", want_tone);
+    if (kw_send(sock, cmd) < 0) { return -1; }
+    ts_sent.tone = want_tone;
+    t_print("%s: subtone %s sent to the Kenwood\n", __func__, want_tone ? "ON" : "OFF");
+  }
+  return 0;
+}
+
 static gpointer cat_thread(gpointer data) {
   int sock = -1;
   long long hold_freq = 0;            // frequency just sent to the Kenwood
@@ -1656,6 +1801,8 @@ static gpointer cat_thread(gpointer data) {
         continue;
       }
       t_print("%s: connected (%s)\n", __func__, cat_name());
+      ts_sync_init = 0;               // read split / VFO B / subtone from the TS first
+      ts_sync_count = 0;
     }
     //
     // piHPSDR-IF -> Kenwood: send the latest requested frequency, if any
@@ -2032,6 +2179,12 @@ static gpointer cat_thread(gpointer data) {
         continue;
       }
       mode_count = 0;
+    }
+    // split / VFO B / subtone, both ways (not while the VFO is being tuned)
+    if (ts_sync(sock, hold_until != 0 || cat_set_target > 0) < 0) {
+      close(sock);
+      sock = -1;
+      continue;
     }
     //
     // toolbar PRE -> Kenwood preamp, read back at once

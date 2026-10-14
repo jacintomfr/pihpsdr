@@ -245,8 +245,8 @@ void send_memory_data(int sock, int index) {
   //
   data.frequency          = to_64(mem[index].frequency);
   data.ctun_frequency     = to_64(mem[index].ctun_frequency);
-  data.alt_frequency      = to_64(mem[index].frequency);
-  data.alt_ctun_frequency = to_64(mem[index].ctun_frequency);
+  data.alt_frequency      = to_64(mem[index].alt_frequency);
+  data.alt_ctun_frequency = to_64(mem[index].alt_ctun_frequency);
   send_tcp(sock, (char *)&data, sizeof(MEMORY_DATA));
 }
 

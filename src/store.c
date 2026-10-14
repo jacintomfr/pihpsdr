@@ -143,6 +143,28 @@ void recall_memory_slot(int index) {
     vfo[id].filter         = mem[index].filter;
     vfo[id].deviation      = mem[index].deviation;
     vfo[id].lo             = band->frequencyLO + band->errorLO;
+#ifdef IFPAN
+    //
+    // piHPSDR-IF: a memory stored with split on brings back VFO B and the
+    // split (the TS follows by CAT); one stored without split switches
+    // split off, so that a repeater's TX frequency is never kept by mistake
+    //
+    if (mem[index].split) {
+      b = mem[index].alt_bd;
+      band = band_get_band(b);
+      bandstack = bandstack_get_bandstack(b);
+      vfo[VFO_B].mode           = mem[index].alt_mode;
+      vfo[VFO_B].band           = b;
+      vfo[VFO_B].bandstack      = bandstack->current_entry;
+      vfo[VFO_B].frequency      = mem[index].alt_frequency;
+      vfo[VFO_B].ctun_frequency = mem[index].alt_ctun_frequency;
+      vfo[VFO_B].ctun           = mem[index].alt_ctun;
+      vfo[VFO_B].filter         = mem[index].alt_filter;
+      vfo[VFO_B].deviation      = mem[index].alt_deviation;
+      vfo[VFO_B].lo             = band->frequencyLO + band->errorLO;
+    }
+    radio_set_split(mem[index].split);
+#endif
   } else {
     int b                  = mem[index].bd;
     int oldmode            = vfo[VFO_A].mode;
@@ -207,6 +229,20 @@ void store_memory_slot(int index) {
     mem[index].filter             = vfo[id].filter;
     mem[index].deviation          = vfo[id].deviation;
     mem[index].bd                 = vfo[id].band;
+#ifdef IFPAN
+    //
+    // piHPSDR-IF: a memory stored with split on also keeps VFO B (the TX
+    // frequency, e.g. a 10 m repeater input), so that recalling it sets up
+    // the repeater in one go (in piHPSDR only SAT/RSAT slots keep VFO B)
+    //
+    mem[index].alt_frequency      = vfo[VFO_B].frequency;
+    mem[index].alt_ctun_frequency = vfo[VFO_B].ctun_frequency;
+    mem[index].alt_ctun           = vfo[VFO_B].ctun;
+    mem[index].alt_mode           = vfo[VFO_B].mode;
+    mem[index].alt_filter         = vfo[VFO_B].filter;
+    mem[index].alt_deviation      = vfo[VFO_B].deviation;
+    mem[index].alt_bd             = vfo[VFO_B].band;
+#endif
   } else {
     mem[index].frequency          = vfo[VFO_A].frequency;
     mem[index].ctun_frequency     = vfo[VFO_A].ctun_frequency;

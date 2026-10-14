@@ -71,6 +71,9 @@
 #endif
 #include "receiver.h"
 #include "rigctl.h"
+#ifdef GPIO
+#include "gpio.h"
+#endif
 #include "sliders.h"
 #include "soapy_protocol.h"
 #include "vfo.h"
@@ -1736,6 +1739,9 @@ static gpointer cat_thread(gpointer data) {
       //
       if (ptt) {
         serial_ptt_now(1);
+#ifdef GPIO
+        gpio_set_ptt(1);              // GPIO PTT out (opto to ACC2 pin 9), also before TX;
+#endif
         usleep(50000);
       }
       if (be_set_ptt(sock, ptt) < 0) {
@@ -1755,6 +1761,9 @@ static gpointer cat_thread(gpointer data) {
       t_print("%s: PTT %s sent to the Kenwood\n", __func__, ptt ? "TX" : "RX");
       if (!ptt) {
         serial_ptt_now(0);
+#ifdef GPIO
+        gpio_set_ptt(0);
+#endif
         txlev_report();
       }
     }

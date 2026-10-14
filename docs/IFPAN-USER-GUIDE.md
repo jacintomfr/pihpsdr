@@ -190,6 +190,31 @@ the CAT thread sets RTS itself (`serial_ptt_now()` in rigctl.c), waits
 50 ms, then sends `TX;`; after `RX;` it drops RTS at once. Confirmed by the
 user: SSB through ACC2 works every time.
 
+**Alternative: PTT from a Pi 5 GPIO through an optocoupler (no USB).**
+piHPSDR's own GPIO support ("No Controller" layout, the default) drives
+**GPIO22 (header pin 15) active low** as PTT out: high in RX (from the
+program start), low in TX. piHPSDR-IF also sets it 50 ms before the CAT
+`TX;`, like the serial PTT. Build on the Pi with `GPIO=ON` in
+`make.config.pihpsdr` (libgpiod-dev). The same layout reads GPIO 5 / 6 / 12
+(CW) and 16 (PTT in) as inputs with pull-ups and drives GPIO23 (CW out):
+leave them unconnected.
+
+| PC817 (or similar) | Connect to |
+|---|---|
+| pin 1 (anode) | Pi 3.3 V (header pin 1) through **330 ohm** |
+| pin 2 (cathode) | **GPIO22** (header pin 15) |
+| pin 4 (collector) | TS-570 **ACC2 pin 9** (PKS) |
+| pin 3 (emitter) | TS-570 **ACC2 pin 8** (ground) |
+
+About 6 mA through the LED while the Pi sinks it; the radio side only sees
+the opto transistor, no connection to the Pi. When no program drives
+GPIO22 it is an input with the Pi's default pull-down: only ~40 uA through
+the LED (not enough to key PKS); `gpio=22=op,dh` in
+`/boot/firmware/config.txt` would hold it high from boot. Note: full
+isolation also needs the CAT (FTDI USB-RS232 ties the grounds; a WiFi CAT
+bridge or an isolated RS-232 avoids it) and the ACC2 audio (USB sound card;
+an audio transformer avoids it). Built 2026-10-14, not yet wired.
+
 The program logs, for every over, the TX audio levels (`tx audio: mic ... |
 to ACC2 ...`) and every RTS / CTS change of the serial PTT, to find overs
 without modulation. Note: the serial PTT also reads CTS as a PTT input

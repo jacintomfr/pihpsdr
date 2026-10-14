@@ -877,7 +877,7 @@ void display_panadapter_messages(cairo_t *cr, int width, unsigned int fps) {
     // signals.
     //
     {
-      const char *al[6];
+      const char *al[8];
       int n = 0;
       int bits = ifpan_alerts_active();
       if (!ifpan_cat_connected) {
@@ -885,6 +885,21 @@ void display_panadapter_messages(cairo_t *cr, int width, unsigned int fps) {
       }
       if (ifpan_ts_refused_active()) {
         al[n++] = "TS refused a command - MENU open on the radio?";
+      }
+      //
+      // split with the TX frequency (VFO B) more than 1 MHz from the receive
+      // frequency (VFO A): most likely VFO B left on another band (seen
+      // 2026-10-14: SPLIT on with VFO B still on 14.000, RX on 28.630)
+      //
+      if (split && transmitter != NULL) {
+        long long rf = vfo[VFO_A].ctun ? vfo[VFO_A].ctun_frequency : vfo[VFO_A].frequency;
+        long long tf = vfo[VFO_B].ctun ? vfo[VFO_B].ctun_frequency : vfo[VFO_B].frequency;
+        if (llabs(tf - rf) > 1000000LL) {
+          static char spl[64];
+          snprintf(spl, sizeof(spl), "SPLIT: TX on %lld.%03lld MHz - %s!", tf / 1000000LL, (tf / 1000LL) % 1000LL,
+                   vfo[VFO_B].band != vfo[VFO_A].band ? "other band" : "far from RX");
+          al[n++] = spl;
+        }
       }
       if (bits & IFPAN_ALERT_PTT_FOREIGN) {
         al[n++] = "PTT line changed by another program!";

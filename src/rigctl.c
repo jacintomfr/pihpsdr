@@ -4127,6 +4127,21 @@ static gpointer ptt_server(gpointer data) {
       if (ioctl(client->fd, TIOCMGET, &now) == -1) { now = -1; }
       t_print("%s: RTS %s (set rc=%d, read back RTS=%d)\n", __func__, pttout ? "ON" : "OFF", rc,
               now < 0 ? -1 : SET(now & TIOCM_RTS));
+    } else if (SET(status & TIOCM_RTS) != pttout) {
+      //
+      // Safety: RTS changed behind our back (another program opened the
+      // same port - opening a serial port raises RTS -, seen 2026-10-14
+      // with the CAT bridge on the PTT adapter: the TS-570 stayed in TX).
+      // Put it back to the TX state within one poll.
+      //
+      if (pttout) {
+        status |= TIOCM_RTS;
+      } else {
+        status &= ~TIOCM_RTS;
+      }
+      ioctl(client->fd, TIOCMSET, &status);
+      t_print("%s: WARNING: RTS was %s outside piHPSDR, set back %s (is another program using %s?)\n",
+              __func__, pttout ? "OFF" : "ON", pttout ? "ON" : "OFF", SerialPorts[MAX_SERIAL].port);
     }
   }
   t_print("%s: exiting\n", __func__);

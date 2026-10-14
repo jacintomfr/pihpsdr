@@ -325,7 +325,7 @@ on the client.
 | Alert | When |
 |---|---|
 | TS not answering on CAT (radio off, cable?) | while the Kenwood does not answer CAT |
-| TS refused a command - MENU open on the radio? | 8 s after the TS answered "?;" (mode, NB, PRE, ATT refused while its MENU is open) |
+| TS refused a command - MENU open on the radio? | 8 s after the TS answered "?;" (mode, NB, PRE, ATT refused while its MENU is open). Not for the "?;" the TS gives to the CAT `TX;` / `RX;` when PKS (pin 9) has already switched it - that one is expected. |
 | PTT line changed by another program! | 10 s after the serial PTT line (RTS) was found changed outside piHPSDR-IF (set back at once) |
 | TX time-out: back to RX | 15 s after the TX time-out ended an over |
 | ACC2 audio clipped - lower Mic / compressor | while transmitting, samples beyond full scale on the ACC2 sound card (2 s hold) |

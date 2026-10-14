@@ -1608,6 +1608,7 @@ static int       ts_sync_init = 0;            // 0: read the TS first (new conne
 static int       ts_sync_count = 0;           // polls until the next read
 static volatile int ts_sync_pending = 0;      // TS state posted, not applied in piHPSDR yet
 static TS_SYNC   ts_sent = { -1, -1, -1, -1 };  // what the TS has (read or sent)
+static int       ts_bmode_sent = -1;          // mode put on the TS VFO B (ifpan_mode_names index), -1 unknown
 
 static long long vfo_b_freq(void) {
   return vfo[VFO_B].ctun ? vfo[VFO_B].ctun_frequency : vfo[VFO_B].frequency;
@@ -1704,15 +1705,27 @@ static int ts_sync(int sock, int busy) {
     ts_sent.fb = want_fb;
     t_print("%s: VFO B %lld sent to the Kenwood\n", __func__, want_fb);
   }
+  //
+  // In split the TS VFO B takes VFO A's mode (the TS refuses the subtone
+  // unless both VFOs are FM - "?;" to TO1 seen 2026-10-14, with split
+  // already on from the radio and VFO B in another mode). The VFO B mode
+  // cannot be read without switching to it, so it is set once per
+  // connection and again when VFO A's mode changes: FR1 MDx FR0 FT1 ("FR
+  // always places the transceiver in simplex", so FT1 last).
+  //
+  int want_bmode = kenwood_mode_index(vfo[VFO_A].mode);
+  if (want_split && want_bmode >= 0 && (want_bmode != ts_bmode_sent || want_split != ts_sent.split)) {
+    if (kw_send(sock, "FR1;") < 0) { return -1; }
+    if (be_set_mode(sock, want_bmode) < 0) { return -1; }
+    usleep(50000);
+    if (kw_send(sock, "FR0;") < 0) { return -1; }
+    if (kw_send(sock, "FT1;") < 0) { return -1; }
+    ts_bmode_sent = want_bmode;
+    ts_sent.split = 1;
+    t_print("%s: split ON, VFO B in %s sent to the Kenwood\n", __func__, ifpan_mode_names[want_bmode]);
+  }
   if (want_split != ts_sent.split) {
     if (want_split) {
-      int m = kenwood_mode_index(vfo[VFO_B].mode);
-      if (m >= 0) {
-        if (kw_send(sock, "FR1;") < 0) { return -1; }
-        if (be_set_mode(sock, m) < 0) { return -1; }
-        usleep(50000);
-        if (kw_send(sock, "FR0;") < 0) { return -1; }
-      }
       if (kw_send(sock, "FT1;") < 0) { return -1; }
     } else {
       if (kw_send(sock, "FT0;") < 0) { return -1; }
@@ -1814,6 +1827,7 @@ static gpointer cat_thread(gpointer data) {
       t_print("%s: connected (%s)\n", __func__, cat_name());
       ts_sync_init = 0;               // read split / VFO B / subtone from the TS first
       ts_sync_count = 0;
+      ts_bmode_sent = -1;             // VFO B mode not known (it cannot be read without FR1)
     }
     //
     // piHPSDR-IF -> Kenwood: send the latest requested frequency, if any

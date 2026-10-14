@@ -1743,7 +1743,7 @@ void vfo_update(void) {
       // the dial shows the receive frequency (VFO A)
       //
       long long tf = vfo[VFO_B].ctun ? vfo[VFO_B].ctun_frequency : vfo[VFO_B].frequency;
-      const char *tm = mode_string[vfo[VFO_B].mode];
+      const char *tm = mode_string[vfo[VFO_A].mode];   // the TS VFO B takes VFO A's mode (ifpan.c ts_sync)
       if (radio_is_transmitting()) { cairo_set_source_rgba(cr, COLOUR_ALARM); }
       snprintf(temp_text, sizeof(temp_text), "TX %lld.%03lld.%02lld %s", tf / 1000000LL,
                (tf / 1000LL) % 1000LL, (tf / 10LL) % 100LL, tm);

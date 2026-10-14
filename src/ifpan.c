@@ -1632,6 +1632,7 @@ static int       ts_sync_count = 0;           // polls until the next read
 static volatile int ts_sync_pending = 0;      // TS state posted, not applied in piHPSDR yet
 static TS_SYNC   ts_sent = { -1, -1, -1, -1 };  // what the TS has (read or sent)
 static int       ts_bmode_sent = -1;          // mode put on the TS VFO B (ifpan_mode_names index), -1 unknown
+static gint64    ts_last_set_us = 0;          // last split / VFO B / subtone command sent
 
 static long long vfo_b_freq(void) {
   return vfo[VFO_B].ctun ? vfo[VFO_B].ctun_frequency : vfo[VFO_B].frequency;
@@ -1701,8 +1702,22 @@ static int ts_sync(int sock, int busy) {
     if (vfo[VFO_A].mode != modeFMN) {
       r.tone = ts_sent.tone >= 0 ? ts_sent.tone : r.tone;
     }
-    if (!ts_sync_init || r.split != ts_sent.split || r.tone != ts_sent.tone || r.tn != ts_sent.tn
-        || r.fb != ts_sent.fb) {
+    int differs = (r.split != ts_sent.split || r.tone != ts_sent.tone || r.tn != ts_sent.tn
+                   || r.fb != ts_sent.fb);
+    if (ts_sync_init && differs && g_get_monotonic_time() - ts_last_set_us < 3000000) {
+      //
+      // Different from what was sent less than 3 s ago: the TS did not take
+      // it (refused while its MENU was open, ...), not a change made on the
+      // radio. Keep piHPSDR-IF's settings and send them again (seen
+      // 2026-10-14: a refused FT1 after FR1 FR0 left the TS in simplex and
+      // was taken over as "split off" - the next over went out on the
+      // repeater output frequency).
+      //
+      t_print("%s: the TS did not take it (split %d VFO B %lld subtone %d No. %d) - sent again\n", __func__,
+              r.split, r.fb, r.tone, r.tn);
+      ts_sent = r;
+      ts_bmode_sent = -1;
+    } else if (!ts_sync_init || differs) {
       // first reading, or changed on the radio: piHPSDR-IF takes it over
       t_print("%s: TS split %d VFO B %lld subtone %d (No. %d)%s\n", __func__, r.split, r.fb, r.tone, r.tn,
               ts_sync_init ? " changed on the radio" : "");
@@ -1738,6 +1753,13 @@ static int ts_sync(int sock, int busy) {
   // always places the transceiver in simplex", so FT1 last).
   //
   int want_bmode = kenwood_mode_index(vfo[VFO_A].mode);
+  int want_tn_chk = transmitter != NULL ? transmitter->ctcss + 1 : ts_sent.tn;
+  int want_tone_chk = transmitter != NULL ? (transmitter->ctcss_enabled ? 1 : 0) : ts_sent.tone;
+  if ((want_fb > 0 && want_fb != ts_sent.fb) || want_split != ts_sent.split
+      || (want_split && want_bmode >= 0 && want_bmode != ts_bmode_sent)
+      || want_tn_chk != ts_sent.tn || (want_tone_chk != ts_sent.tone && vfo[VFO_A].mode == modeFMN)) {
+    ts_last_set_us = g_get_monotonic_time();
+  }
   if (want_split && want_bmode >= 0 && (want_bmode != ts_bmode_sent || want_split != ts_sent.split)) {
     if (kw_send(sock, "FR1;") < 0) { return -1; }
     if (be_set_mode(sock, want_bmode) < 0) { return -1; }

@@ -4090,6 +4090,17 @@ static gpointer serial_server(gpointer data) {
   return NULL;
 }
 
+#ifdef IFPAN
+//
+// piHPSDR-IF: the RTS state the CAT thread commanded (serial_ptt_now), -1
+// before the first over. The PTT thread follows it rather than
+// radio_is_transmitting(): the CAT thread drops RTS right at the Kenwood's
+// RX;, while e.g. RADE still counts as transmitting for some ms - the RTS
+// guard below then "restored" RTS for ~100 ms after the over (2026-10-14).
+//
+static volatile int serial_rts_wanted = -1;
+#endif
+
 static gpointer ptt_server(gpointer data) {
   CLIENT *client = (CLIENT *)data;
   int status;
@@ -4115,6 +4126,11 @@ static gpointer ptt_server(gpointer data) {
       schedule_action(PTT, pttin ? PRESSED : RELEASED, 0);
     }
     new = radio_is_transmitting();
+#ifdef IFPAN
+    // RTS only while both say TX: the CAT thread's command and the TX state
+    // (MOX released or TX time-out also drop it if the CAT link is down)
+    if (serial_rts_wanted >= 0) { new = new && serial_rts_wanted; }
+#endif
     //
     // Set RTS to the transmitting state (if changed)
     //
@@ -4164,6 +4180,7 @@ static gpointer ptt_server(gpointer data) {
 //
 void serial_ptt_now(int on) {
   int id = MAX_SERIAL;
+  serial_rts_wanted = on ? 1 : 0;
   if (!SerialPorts[id].enable || !serial_client[id].running) { return; }
   int status;
   if (ioctl(serial_client[id].fd, TIOCMGET, &status) == -1) { return; }

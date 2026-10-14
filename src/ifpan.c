@@ -1786,6 +1786,15 @@ static gpointer cat_thread(gpointer data) {
         gpio_set_ptt(1);              // GPIO PTT out (opto to ACC2 pin 9), also before TX;
 #endif
         usleep(50000);
+      } else {
+        //
+        // End of an over: the PTT lines drop first, so that PKS can never
+        // stay keyed (not even if the CAT link fails right now)
+        //
+        serial_ptt_now(0);
+#ifdef GPIO
+        gpio_set_ptt(0);
+#endif
       }
       if (be_set_ptt(sock, ptt) < 0) {
         if (ptt == 0) {               // RX must not get lost
@@ -1802,13 +1811,7 @@ static gpointer cat_thread(gpointer data) {
       }
       ptt_keyed = ptt;
       t_print("%s: PTT %s sent to the Kenwood\n", __func__, ptt ? "TX" : "RX");
-      if (!ptt) {
-        serial_ptt_now(0);
-#ifdef GPIO
-        gpio_set_ptt(0);
-#endif
-        txlev_report();
-      }
+      if (!ptt) { txlev_report(); }
     }
     //
     // TUNE end, once the Kenwood is back in RX: if its mode was switched,

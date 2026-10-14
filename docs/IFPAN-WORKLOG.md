@@ -289,7 +289,23 @@
 `  hardware timer on the pin 9 circuit would cover it); at program start the
 `  PTT port open raises RTS for a few ms.
 `
-`### First RADE DX test (2026-10-14)
+`### TS-570 refuses key functions while its MENU is open (2026-10-14)
+* Toolbar PRE / ATT "stopped working": the log showed PA1; / RA01; sent and
+  the read-back unchanged. Direct test (pihpsdr-if stopped, socat alone):
+  reads all answer (PA0, RA00, MD2, NB0, LK0, FR0, IF ...), sets of
+  FA / AG / PC / AC are accepted, but **MD, NB, PA and RA sets answer "?;"**
+  (also PA0 / RA00 = the current state). Cause: the user had left the TS-570
+  inside its MENU (display dimmer); the radio refuses key functions then.
+  Leave the menu (MENU / CLR) and they work again (they had worked before).
+* No CAT command found to leave the menu: MN; and EX reads (EX001;, EX01;,
+  EX00100;) answer "?;". **EX0010000; got no answer - it may have been taken
+  as a SET of menu 01**: check menu 01 on the radio. Kenwood's ARCP-570 does
+  change menu items, so the EX syntax exists; not probed further.
+* Code kept: PRE / ATT presses, the command sent and the read-back (100 ms
+  later) are now logged. Not done (user: record only): an on-screen hint
+  when the TS refuses a set with "?;".
+
+### First RADE DX test (2026-10-14)
 * TS-570D in RADE (V1) through ACC2 + serial PTT, about 45 W (under the 50 W
   RADE limit), 20 m 14.236 MHz: received ~1500 km away on the SDRPT WebSDR
   (Santarém, Portugal) and decoded with the RADE-PT browser page: SYNC,

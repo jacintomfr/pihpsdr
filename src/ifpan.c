@@ -1995,6 +1995,18 @@ static gpointer cat_thread(gpointer data) {
         sock = -1;
         continue;
       }
+      //
+      // The TS-570 drops a set that is followed too closely by the next
+      // command (as with FA steps under 50 ms): let it switch, then read
+      // it back at once (like the antenna tuner)
+      //
+      usleep(100000);
+      int rb = be_get_preamp(sock);
+      t_print("%s: TS preamp read back %d after PRE %d\n", __func__, rb, pre);
+      if (rb >= 0 && rb != ifpan_kenwood_preamp) {
+        ifpan_kenwood_preamp = rb;
+        g_idle_add(ext_vfo_update, NULL);
+      }
       mode_count = 0;
     }
     // toolbar TS MUTE -> Kenwood AF gain to 0, or back to its saved level
@@ -2038,6 +2050,13 @@ static gpointer cat_thread(gpointer data) {
         close(sock);
         sock = -1;
         continue;
+      }
+      usleep(100000);                 // (see PRE above)
+      int rb = be_get_att(sock);
+      t_print("%s: TS attenuator read back %d after ATT %d\n", __func__, rb, att);
+      if (rb >= 0 && rb != ifpan_kenwood_att) {
+        ifpan_kenwood_att = rb;
+        g_idle_add(ext_vfo_update, NULL);
       }
       mode_count = 0;
     }

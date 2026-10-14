@@ -289,7 +289,15 @@
 `  hardware timer on the pin 9 circuit would cover it); at program start the
 `  PTT port open raises RTS for a few ms.
 `
-`### TS-570 refuses key functions while its MENU is open (2026-10-14)
+`### Server leaves full screen while a client is connected (2026-10-14)
+* Not a bug: piHPSDR's server_thread.c switches the server display to the
+  "custom" size of the client's screen while a client is connected (the
+  server computes the spectrum / waterfall pixels at the client's width),
+  so the Pi's 1024x600 window leaves full screen; it comes back when the
+  client disconnects. Decision (user): leave it as in piHPSDR (option 1);
+  a separate spectrum width from the window width was judged too invasive.
+
+### TS-570 refuses key functions while its MENU is open (2026-10-14)
 * Toolbar PRE / ATT "stopped working": the log showed PA1; / RA01; sent and
   the read-back unchanged. Direct test (pihpsdr-if stopped, socat alone):
   reads all answer (PA0, RA00, MD2, NB0, LK0, FR0, IF ...), sets of

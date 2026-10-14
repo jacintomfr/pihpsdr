@@ -1996,11 +1996,12 @@ static gpointer cat_thread(gpointer data) {
         continue;
       }
       //
-      // The TS-570 drops a set that is followed too closely by the next
-      // command (as with FA steps under 50 ms): let it switch, then read
-      // it back at once (like the antenna tuner)
+      // Let the radio switch (50 ms, like the antenna tuner and the FA
+      // steps), then read it back at once: the PRE button shows the real
+      // state, and the log tells whether the TS took it (it answers "?;"
+      // while its MENU is open)
       //
-      usleep(100000);
+      usleep(50000);
       int rb = be_get_preamp(sock);
       t_print("%s: TS preamp read back %d after PRE %d\n", __func__, rb, pre);
       if (rb >= 0 && rb != ifpan_kenwood_preamp) {
@@ -2051,7 +2052,7 @@ static gpointer cat_thread(gpointer data) {
         sock = -1;
         continue;
       }
-      usleep(100000);                 // (see PRE above)
+      usleep(50000);                  // (see PRE above)
       int rb = be_get_att(sock);
       t_print("%s: TS attenuator read back %d after ATT %d\n", __func__, rb, att);
       if (rb >= 0 && rb != ifpan_kenwood_att) {

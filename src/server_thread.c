@@ -202,6 +202,7 @@ static int send_periodic_data(gpointer arg) {
   ifpan_data.lo_khz = (ifpan_lo_offset < 0) ? 0 : (ifpan_lo_offset > 250000) ? 250 : (uint8_t)(ifpan_lo_offset / 1000);
   ifpan_data.sdr_lna_off = ifpan_sdr_lna_off;
   ifpan_data.ts_muted = ifpan_ts_muted;
+  ifpan_data.tx_timeout = (uint8_t) ifpan_tx_timeout;
   if (sendto(remoteclient.sock_udp, &ifpan_data, sizeof(IFPAN_DATA), 0,
              (struct sockaddr *)&remoteclient.address, sizeof(remoteclient.address))  < 0) {
     perror("IFPANDAT:UDP:SEND");

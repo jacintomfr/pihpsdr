@@ -173,6 +173,10 @@ static void lo_offset_cb(GtkWidget *widget, gpointer data) {
 }
 
 // SDR front-end LNA kept off (strong IF buffer input)
+static void tx_timeout_cb(GtkWidget *widget, gpointer data) {
+  ifpan_set_tx_timeout(gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(widget)));
+}
+
 static void lna_off_cb(GtkWidget *widget, gpointer data) {
   ifpan_set_sdr_lna_off(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)));
 }
@@ -984,6 +988,16 @@ void radio_menu(GtkWidget *parent) {
       gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (Btn), ifpan_sdr_lna_off);
       gtk_grid_attach(GTK_GRID(grid), Btn, 0, r, 2, 1);
       g_signal_connect(Btn, "toggled", G_CALLBACK(lna_off_cb), NULL);
+      // TX time-out: back to RX after this many minutes in TX (0: off)
+      label = gtk_label_new("TX time-out (min)");
+      gtk_widget_set_name(label, "boldlabel");
+      gtk_widget_set_halign(label, GTK_ALIGN_END);
+      gtk_grid_attach(GTK_GRID(grid), label, 2, r, 1, 1);
+      GtkWidget *tot_spin = gtk_spin_button_new_with_range(0.0, 60.0, 1.0);
+      gtk_spin_button_set_value(GTK_SPIN_BUTTON(tot_spin), (double) ifpan_tx_timeout);
+      gtk_widget_set_tooltip_text(tot_spin, "Back to RX after this many minutes in TX (0: off)");
+      gtk_grid_attach(GTK_GRID(grid), tot_spin, 3, r, 1, 1);
+      g_signal_connect(tot_spin, "value_changed", G_CALLBACK(tx_timeout_cb), NULL);
       r++;
       // SDR LO offset from the IF: the SDR's DC spike (and the Mirics'
       // mirror) appear this far from the VFO; above half the span they are

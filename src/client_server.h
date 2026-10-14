@@ -842,6 +842,7 @@ typedef struct __attribute__((__packed__)) _ifpan_data {
   uint8_t lo_khz;            // SDR LO offset from the IF (kHz, 0 .. 250)
   uint8_t sdr_lna_off;       // SDR front-end LNA kept off
   uint8_t ts_muted;          // TS MUTE on
+  uint8_t tx_timeout;        // TX time-out (minutes, 0: off)
 } IFPAN_DATA;
 
 // CMD_IFPAN: b1 = what, b2 = value
@@ -860,6 +861,7 @@ enum {
   IFPAN_REMOTE_LO_OFFSET,    // b2: SDR LO offset in kHz
   IFPAN_REMOTE_LNA_OFF,      // b2: SDR LNA kept off
   IFPAN_REMOTE_TS_MUTE,      // toggle the Kenwood speaker mute
+  IFPAN_REMOTE_TX_TIMEOUT,   // b2: TX time-out in minutes (0: off)
 };
 
 //

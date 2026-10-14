@@ -1303,7 +1303,12 @@ void vfo_update(void) {
     cairo_move_to(cr, vfl->vfo_a_l, dial.base);
     cairo_show_text(cr, vfo[0].entered_frequency);
   } else {
-    cairo_set_source_rgba(cr, COLOUR_OK);
+    // red while transmitting: piHPSDR-IF's TX, or the Kenwood keyed by itself
+    if (radio_is_transmitting() || (ifpan_cat_connected && ifpan_kenwood_tx)) {
+      cairo_set_source_rgba(cr, COLOUR_ALARM);
+    } else {
+      cairo_set_source_rgba(cr, COLOUR_OK);
+    }
     f_m = af / 1000000LL;
     f_k = (af - 1000000LL * f_m) / 1000;
     f_h = (af - 1000000LL * f_m - 1000 * f_k);

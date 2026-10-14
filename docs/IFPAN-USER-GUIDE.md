@@ -315,6 +315,24 @@ a modification (C131 to 4.7 µF on the TS-570) is described there for fuller
 voice through ACC2. Not done here; only if the transmitted voice sounds
 thin.
 
+### 5.2 Alerts in the panadapter
+
+Like piHPSDR's own warnings, piHPSDR-IF alerts are written in red inside
+the panadapter, from the top line down (between the frequency labels and
+the first dBm lines), one under the other when several are active; also
+on the client.
+
+| Alert | When |
+|---|---|
+| TS not answering on CAT (radio off, cable?) | while the Kenwood does not answer CAT |
+| TS refused a command - MENU open on the radio? | 8 s after the TS answered "?;" (mode, NB, PRE, ATT refused while its MENU is open) |
+| PTT line changed by another program! | 10 s after the serial PTT line (RTS) was found changed outside piHPSDR-IF (set back at once) |
+| TX time-out: back to RX | 15 s after the TX time-out ended an over |
+| ACC2 audio clipped - lower Mic / compressor | while transmitting, samples beyond full scale on the ACC2 sound card (2 s hold) |
+| Network: x.x % packets lost | client only, RX audio packet loss of 1 % or more over the last 5 s |
+
+Display menu "Display warnings" switches them off on that computer.
+
 ## 6. RADE (FreeDV RADE V1)
 
 Runs on the server; the client's RADE menu (RADE-M) remote-controls it.

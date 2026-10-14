@@ -57,7 +57,13 @@ extern int       ifpan_kenwood_alc;
 extern int       ifpan_acc2_peak_db;  // TX audio to the ACC2 sound card: peak of the last 100 ms (dBFS, -99 .. 0)
 extern int       ifpan_acc2_clip;
 extern int       ifpan_ts_refused;    // client: the server saw the Kenwood refuse a command ("?;") lately
-extern int       ifpan_ts_refused_active(void);   // alert in the panadapter: TS refused a CAT command     // 1: samples beyond full scale in the last 2 s (clipped)
+extern int       ifpan_ts_refused_active(void);   // alert in the panadapter: TS refused a CAT command
+// more panadapter alerts (server events, held a few seconds, also sent to the client)
+#define IFPAN_ALERT_TX_TIMEOUT  0x01  // the TX time-out sent the radio back to RX
+#define IFPAN_ALERT_PTT_FOREIGN 0x02  // the serial PTT line was changed outside piHPSDR-IF
+extern int       ifpan_alerts;        // client: IFPAN_ALERT_* bits from the server
+extern int       ifpan_alerts_active(void);
+extern void      ifpan_alert_ptt_foreign(void);   // rigctl.c: RTS changed behind our back     // 1: samples beyond full scale in the last 2 s (clipped)
 
 extern void      ifpan_set_follow(int on);
 extern void      ifpan_set_follow_mode(int on);

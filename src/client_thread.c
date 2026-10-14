@@ -628,6 +628,7 @@ static int client_info_ifpan(gpointer ptr) {
   ifpan_acc2_peak_db = -(int)data->acc2_peak;
   ifpan_acc2_clip = data->acc2_clip;
   ifpan_ts_refused = data->ts_refused;
+  ifpan_alerts = data->alerts;
   ifpan_kenwood_pc = (int)data->ts_power - 1;
   if (ifpan_kenwood_pc >= 0 && transmitter != NULL && ifpan_kenwood_pc != (int)(transmitter->drive + 0.5)) {
     ifpan_power_apply(GINT_TO_POINTER(ifpan_kenwood_pc));

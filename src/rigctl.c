@@ -60,6 +60,9 @@
 #include "radio.h"
 #include "receiver.h"
 #include "rigctl.h"
+#ifdef IFPAN
+  #include "ifpan.h"
+#endif
 #include "sliders.h"
 #include "store.h"
 #include "toolbar.h"
@@ -4140,6 +4143,9 @@ static gpointer ptt_server(gpointer data) {
         status &= ~TIOCM_RTS;
       }
       ioctl(client->fd, TIOCMSET, &status);
+#ifdef IFPAN
+      ifpan_alert_ptt_foreign();
+#endif
       t_print("%s: WARNING: RTS was %s outside piHPSDR, set back %s (is another program using %s?)\n",
               __func__, pttout ? "OFF" : "ON", pttout ? "ON" : "OFF", SerialPorts[MAX_SERIAL].port);
     }

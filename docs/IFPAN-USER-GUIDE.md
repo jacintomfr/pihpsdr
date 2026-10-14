@@ -27,6 +27,7 @@ Turning the TS dial always slides the spectrum; no setting can stop that.
 | **Clicks tune the TS** | On: every tuning step made in piHPSDR-IF (mouse wheel, clicks, MIDI VFO, keypad) is sent to the Kenwood; the display slides at once (section 4). Off: the spectrum stays still and only the receiver moves inside the span; the Kenwood stays where it is ("TS here" brings it over). |
 | **Sync mode with TS** | Mode kept the same both ways (Kenwood ↔ piHPSDR-IF). DIGU / DIGL (RADE, FT8...) go to the Kenwood as USB / LSB (ACC2 audio). |
 | **Mute when TS in TX** | RX audio muted while the Kenwood transmits. |
+| **TX time-out (min)** | Safety: after this many minutes in TX (MOX, PTT, TUNE, TwoTone, RADE) piHPSDR-IF goes back to RX by itself - the Kenwood gets `RX;` and the ACC2 PTT line drops. Default 3, 0 = off. Enforced by the server; logged as `TX time-out`. |
 | **SDR LNA off** | Keeps the SDR's front-end LNA off (MSi001: +24 dB, switched in by libmirisdr above about RF 80). The IF buffer signal is strong; with the LNA the clone overloads. The RF slider then works on the other stages. |
 | **SDR LO offs. (kHz)** | 0..250 kHz. Tunes the SDR away from the IF so its DC spike and mirror land outside the display. MSi2500 clone: **250 kHz at 384k span** puts both out of sight (at 768k they come back weaker). |
 | **IF offs. \<mode\> (Hz)** | Per Kenwood mode (shown for the current mode): the TS-570D moves its carrier inside the IF with the mode. Set once per mode with a known station. Found: **LSB = −3000 Hz**, USB 0. CW / CW-R / AM / FM still to check. |

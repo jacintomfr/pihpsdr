@@ -95,6 +95,7 @@ int       ifpan_kenwood_smeter = -999;
 // reports them (-1: not read yet); meter.c turns them into W / SWR.
 //
 int       ifpan_tx_mute = 1;
+int       ifpan_tx_timeout = 3;       // minutes in TX before piHPSDR-IF goes back to RX (0: off)
 int       ifpan_follow_mode = 1;      // receiver mode follows the Kenwood mode
 int       ifpan_sdr_lna_off = 0;      // SDR front-end LNA kept off (strong IF input; Radio menu)
 volatile long ifpan_diag_heartbeats = 0;   // TX chain heartbeats from the SDR (diagnostics)
@@ -376,6 +377,7 @@ void ifpan_save_state(void) {
   SetPropS0("ifpan.kenwood_host",  ifpan_kenwood_host);
   SetPropI0("ifpan.kenwood_port",  ifpan_kenwood_port);
   SetPropI0("ifpan.tx_mute",       ifpan_tx_mute);
+  SetPropI0("ifpan.tx_timeout",    ifpan_tx_timeout);
   SetPropI0("ifpan.follow_mode",   ifpan_follow_mode);
   SetPropI0("ifpan.sdr_lna_off",   ifpan_sdr_lna_off);
   SetPropS0("ifpan.tx_out",        ifpan_tx_out);
@@ -395,6 +397,7 @@ void ifpan_restore_state(void) {
   GetPropS0("ifpan.kenwood_host",  ifpan_kenwood_host);
   GetPropI0("ifpan.kenwood_port",  ifpan_kenwood_port);
   GetPropI0("ifpan.tx_mute",       ifpan_tx_mute);
+  GetPropI0("ifpan.tx_timeout",    ifpan_tx_timeout);
   GetPropI0("ifpan.follow_mode",   ifpan_follow_mode);
   GetPropI0("ifpan.sdr_lna_off",   ifpan_sdr_lna_off);
   GetPropS0("ifpan.tx_out",        ifpan_tx_out);
@@ -849,6 +852,38 @@ void ifpan_set_cat_write(int on) {
   if (radio_is_remote) { send_ifpan(cl_sock_tcp, IFPAN_REMOTE_CAT_WRITE, on); }
 }
 
+void ifpan_set_tx_timeout(int minutes) {
+  ifpan_tx_timeout = (minutes < 0) ? 0 : (minutes > 60) ? 60 : minutes;
+  if (radio_is_remote) { send_ifpan(cl_sock_tcp, IFPAN_REMOTE_TX_TIMEOUT, ifpan_tx_timeout); }
+}
+
+//
+// TX time-out (server, main thread, twice a second): after ifpan_tx_timeout
+// minutes in TX - MOX, PTT, TUNE, TwoTone, RADE, VOX - piHPSDR-IF goes back
+// to RX by itself (the Kenwood gets RX; and the ACC2 PTT line drops). A
+// safety net for a stuck PTT, a lost remote client, a forgotten TUNE.
+//
+static gint64 tx_since_us = 0;
+
+static gboolean tx_timeout_check(gpointer data) {
+  if (radio_is_remote) { return G_SOURCE_REMOVE; }
+  if (!radio_is_transmitting()) {
+    tx_since_us = 0;
+    return G_SOURCE_CONTINUE;
+  }
+  gint64 now = g_get_monotonic_time();
+  if (tx_since_us == 0) { tx_since_us = now; }
+  if (ifpan_tx_timeout > 0 && now - tx_since_us > (gint64) ifpan_tx_timeout * 60000000LL) {
+    t_print("%s: WARNING: %d min in TX, TX time-out: back to RX\n", __func__, ifpan_tx_timeout);
+    tx_since_us = 0;
+    if (transmitter != NULL && transmitter->tune) { radio_set_tune(0); }
+    if (transmitter != NULL && transmitter->twotone) { radio_set_twotone(transmitter, 0); }
+    radio_set_mox(0);
+    ifpan_ptt(0);
+  }
+  return G_SOURCE_CONTINUE;
+}
+
 void ifpan_set_tx_mute(int on) {
   ifpan_tx_mute = on;
   if (radio_is_remote) { send_ifpan(cl_sock_tcp, IFPAN_REMOTE_TX_MUTE, on); }
@@ -898,6 +933,7 @@ void ifpan_remote_command(int what, int value) {
   case IFPAN_REMOTE_FOLLOW_VFO:  ifpan_set_follow(value); break;
   case IFPAN_REMOTE_CAT_WRITE:   ifpan_set_cat_write(value); break;
   case IFPAN_REMOTE_TX_MUTE:     ifpan_set_tx_mute(value); break;
+  case IFPAN_REMOTE_TX_TIMEOUT:  ifpan_set_tx_timeout(value); break;
   case IFPAN_REMOTE_FOLLOW_MODE: ifpan_set_follow_mode(value); break;
   case IFPAN_REMOTE_ATU:         ifpan_atu_toggle(); break;
   case IFPAN_REMOTE_ATU_TUNE:    ifpan_atu_tune(); break;
@@ -2229,6 +2265,7 @@ void ifpan_start(void) {
   radio->frequency_min = IFPAN_RADIO_FMIN;
   radio->frequency_max = IFPAN_RADIO_FMAX;
   cat_thread_id = g_thread_new("ifpan_cat", cat_thread, NULL);
+  g_timeout_add(500, tx_timeout_check, NULL);
   g_timeout_add(50, ui_watch, NULL);   // 20 tuning steps a second: the most the TS-570 takes (25 ms = ~38/s made it
                                        // drop commands and go silent for seconds, ifpan-tunelog 2026-10-13)
   win_restore();

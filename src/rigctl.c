@@ -4127,7 +4127,7 @@ static gpointer ptt_server(gpointer data) {
       if (ioctl(client->fd, TIOCMGET, &now) == -1) { now = -1; }
       t_print("%s: RTS %s (set rc=%d, read back RTS=%d)\n", __func__, pttout ? "ON" : "OFF", rc,
               now < 0 ? -1 : SET(now & TIOCM_RTS));
-    } else if (SET(status & TIOCM_RTS) != pttout) {
+    } else if (((status & TIOCM_RTS) != 0) != pttout) {   // (not SET(): it has no outer brackets)
       //
       // Safety: RTS changed behind our back (another program opened the
       // same port - opening a serial port raises RTS -, seen 2026-10-14

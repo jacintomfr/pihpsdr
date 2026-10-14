@@ -150,6 +150,7 @@ int              ifpan_kenwood_preamp = -1;   // TS preamp read by CAT: 0 / 1, -
 // toolbar PRE (main thread): toggle the Kenwood preamp
 void ifpan_preamp_toggle(void) {
   if (radio_is_remote) { send_ifpan(cl_sock_tcp, IFPAN_REMOTE_PREAMP, 0); return; }
+  t_print("%s: PRE pressed (TS preamp %d, CAT %d)\n", __func__, ifpan_kenwood_preamp, ifpan_cat_connected);
   if (!ifpan_cat_connected) { return; }
   g_mutex_lock(&cat_mutex);
   preamp_request = (ifpan_kenwood_preamp == 1) ? 0 : 1;
@@ -180,6 +181,7 @@ int              ifpan_kenwood_att = -1;      // TS attenuator read by CAT: 0 / 
 // toolbar ATT (main thread): toggle the Kenwood attenuator
 void ifpan_att_toggle(void) {
   if (radio_is_remote) { send_ifpan(cl_sock_tcp, IFPAN_REMOTE_ATT, 0); return; }
+  t_print("%s: ATT pressed (TS attenuator %d, CAT %d)\n", __func__, ifpan_kenwood_att, ifpan_cat_connected);
   if (!ifpan_cat_connected) { return; }
   g_mutex_lock(&cat_mutex);
   att_request = (ifpan_kenwood_att == 1) ? 0 : 1;
@@ -1920,6 +1922,7 @@ static gpointer cat_thread(gpointer data) {
       }
       if (p < 0) { p = -1; }
       if (p != ifpan_kenwood_preamp) {
+        t_print("%s: TS preamp read %d (was %d)\n", __func__, p, ifpan_kenwood_preamp);
         ifpan_kenwood_preamp = p;
         g_idle_add(ext_vfo_update, NULL);
       }
@@ -1932,6 +1935,7 @@ static gpointer cat_thread(gpointer data) {
       }
       if (p < 0) { p = -1; }
       if (p != ifpan_kenwood_att) {
+        t_print("%s: TS attenuator read %d (was %d)\n", __func__, p, ifpan_kenwood_att);
         ifpan_kenwood_att = p;
         g_idle_add(ext_vfo_update, NULL);
       }
@@ -1985,6 +1989,7 @@ static gpointer cat_thread(gpointer data) {
     preamp_request = -1;
     g_mutex_unlock(&cat_mutex);
     if (pre >= 0) {
+      t_print("%s: PRE %d sent to the Kenwood\n", __func__, pre);
       if (be_set_preamp(sock, pre) < 0) {
         close(sock);
         sock = -1;
@@ -2028,6 +2033,7 @@ static gpointer cat_thread(gpointer data) {
     att_request = -1;
     g_mutex_unlock(&cat_mutex);
     if (att >= 0) {
+      t_print("%s: ATT %d sent to the Kenwood\n", __func__, att);
       if (be_set_att(sock, att) < 0) {
         close(sock);
         sock = -1;

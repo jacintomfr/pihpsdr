@@ -870,15 +870,42 @@ void display_panadapter_messages(cairo_t *cr, int width, unsigned int fps) {
     }
 #ifdef IFPAN
     //
-    // piHPSDR-IF: the Kenwood refused a CAT command (mode, PRE, ATT, ...),
-    // most likely because its MENU is open (shown for 8 s after the last
-    // refusal, also on the client). Top line, between the frequency
-    // labels and the first dBm line (the "TX Inhibit" line, which a
-    // TS-570 never uses), where it does not cover the signals.
+    // piHPSDR-IF alerts, also on the client: one line each, only those
+    // active, from the top line down (the "TX Inhibit" line, which a TS-570
+    // never uses; the "Sequence Error" line below is HPSDR only). They sit
+    // between the frequency labels and the first dBm lines, above the
+    // signals.
     //
-    if (ifpan_ts_refused_active()) {
-      cairo_move_to(cr, 100.0 * scalfac, 30.0 * scalfac);
-      cairo_show_text(cr, "TS refused a command - MENU open on the radio?");
+    {
+      const char *al[6];
+      int n = 0;
+      int bits = ifpan_alerts_active();
+      if (!ifpan_cat_connected) {
+        al[n++] = "TS not answering on CAT (radio off, cable?)";
+      }
+      if (ifpan_ts_refused_active()) {
+        al[n++] = "TS refused a command - MENU open on the radio?";
+      }
+      if (bits & IFPAN_ALERT_PTT_FOREIGN) {
+        al[n++] = "PTT line changed by another program!";
+      }
+      if (bits & IFPAN_ALERT_TX_TIMEOUT) {
+        al[n++] = "TX time-out: back to RX";
+      }
+      if (ifpan_acc2_clip && radio_is_transmitting()) {
+        al[n++] = "ACC2 audio clipped - lower Mic / compressor";
+      }
+      if (radio_is_remote && remote_loss_tenths >= 10
+          && g_get_monotonic_time() - remote_loss_us < 12000000) {
+        static char loss[48];
+        snprintf(loss, sizeof(loss), "Network: %d.%d %% packets lost", remote_loss_tenths / 10,
+                 remote_loss_tenths % 10);
+        al[n++] = loss;
+      }
+      for (int i = 0; i < n; i++) {
+        cairo_move_to(cr, 100.0 * scalfac, (30.0 + 20.0 * i) * scalfac);
+        cairo_show_text(cr, al[i]);
+      }
     }
 #endif
   }

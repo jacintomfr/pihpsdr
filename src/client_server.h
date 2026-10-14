@@ -846,6 +846,7 @@ typedef struct __attribute__((__packed__)) _ifpan_data {
   uint8_t acc2_peak;         // TX audio to ACC2: -peak dBFS (0 .. 99)
   uint8_t acc2_clip;         // clipped in the last 2 s
   uint8_t ts_refused;        // the Kenwood refused a CAT command ("?;") lately
+  uint8_t alerts;            // IFPAN_ALERT_* bits (panadapter alerts)
 } IFPAN_DATA;
 
 // CMD_IFPAN: b1 = what, b2 = value

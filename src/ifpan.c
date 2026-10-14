@@ -898,6 +898,7 @@ void ifpan_set_tx_timeout(int minutes) {
 // safety net for a stuck PTT, a lost remote client, a forgotten TUNE.
 //
 static gint64 tx_since_us = 0;
+static gint64 alert_tx_timeout_until;   // (panadapter alert, see ifpan_alerts_active)
 
 static gboolean tx_timeout_check(gpointer data) {
   if (radio_is_remote) { return G_SOURCE_REMOVE; }
@@ -909,6 +910,7 @@ static gboolean tx_timeout_check(gpointer data) {
   if (tx_since_us == 0) { tx_since_us = now; }
   if (ifpan_tx_timeout > 0 && now - tx_since_us > (gint64) ifpan_tx_timeout * 60000000LL) {
     t_print("%s: WARNING: %d min in TX, TX time-out: back to RX\n", __func__, ifpan_tx_timeout);
+    alert_tx_timeout_until = now + 15000000;   // panadapter alert for 15 s
     tx_since_us = 0;
     if (transmitter != NULL && transmitter->tune) { radio_set_tune(0); }
     if (transmitter != NULL && transmitter->twotone) { radio_set_twotone(transmitter, 0); }
@@ -1060,6 +1062,20 @@ static void ts_refused_seen(void) {
     t_print("%s: the Kenwood refused a command (\"?;\") - its MENU open?\n", __func__);
   }
   ts_refused_until = now + 8000000;   // alert shown for 8 s after the last refusal
+}
+
+int ifpan_alerts = 0;
+static gint64 alert_tx_timeout_until = 0, alert_ptt_foreign_until = 0;
+
+void ifpan_alert_ptt_foreign(void) {
+  alert_ptt_foreign_until = g_get_monotonic_time() + 10000000;
+}
+
+int ifpan_alerts_active(void) {
+  if (radio_is_remote) { return ifpan_alerts; }
+  gint64 now = g_get_monotonic_time();
+  return (now < alert_tx_timeout_until ? IFPAN_ALERT_TX_TIMEOUT : 0)
+         | (now < alert_ptt_foreign_until ? IFPAN_ALERT_PTT_FOREIGN : 0);
 }
 
 int ifpan_ts_refused_active(void) {

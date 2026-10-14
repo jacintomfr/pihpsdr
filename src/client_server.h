@@ -843,6 +843,8 @@ typedef struct __attribute__((__packed__)) _ifpan_data {
   uint8_t sdr_lna_off;       // SDR front-end LNA kept off
   uint8_t ts_muted;          // TS MUTE on
   uint8_t tx_timeout;        // TX time-out (minutes, 0: off)
+  uint8_t acc2_peak;         // TX audio to ACC2: -peak dBFS (0 .. 99)
+  uint8_t acc2_clip;         // clipped in the last 2 s
 } IFPAN_DATA;
 
 // CMD_IFPAN: b1 = what, b2 = value

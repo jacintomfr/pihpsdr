@@ -305,6 +305,23 @@
   (check when merging new piHPSDR versions). Built on the Pi, not yet
   tested on the radio.
 
+### 10 m repeater test (2026-10-14)
+* S. Miguel 10 m repeater: RX 29.630 FM, TX 29.530 (-100 kHz), 88.5 Hz.
+  Split + VFO B FM + subtone ON confirmed in the log (11:05:08), a 12 s
+  voice over at 11:05:33 went out on 29.530 with tone and full deviation:
+  no answer -> repeater most likely down (or changed tone / shift).
+* Fixes on the way: tone sync only after piHPSDR's radio is up (a default
+  TN01 had overwritten the TS's 08), subtone in FM only, VFO B forced to
+  VFO A's mode in split (TO1 was refused otherwise), a refused set is sent
+  again instead of being taken as "changed on the radio" (split had been
+  switched off that way), "?;" counted as an answer (no false "TS not
+  answering"), lone "?;" not an alert, RTS follows the CAT command.
+* Pi mic (Griffin iMic, Mic capture) was at 15/15 = +31 dB, peaks at
+  0 dBFS: set to 9 = +25 dB (alsactl store); piHPSDR Mic slider 0..6 dB
+  is enough for full FM deviation (20 dB drove the WDSP ALC hard: hiss in
+  pauses). Compressor / EQ / CFC off for FM.
+* Run script keeps the previous log as ~/pihpsdr-if.log.1.
+
 ### Server leaves full screen while a client is connected (2026-10-14)
 * Not a bug: piHPSDR's server_thread.c switches the server display to the
   "custom" size of the client's screen while a client is connected (the

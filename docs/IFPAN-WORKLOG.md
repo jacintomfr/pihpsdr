@@ -301,6 +301,14 @@
   EX00100;) answer "?;". **EX0010000; got no answer - it may have been taken
   as a SET of menu 01**: check menu 01 on the radio. Kenwood's ARCP-570 does
   change menu items, so the EX syntax exists; not probed further.
+* EX format confirmed from the manual (user's PDF, command table page):
+  set `EX` + P1 menu (3 digits) + P2 selection (4 digits) + `;`, read `EX;`
+  answers the menu on display. So the probe EX0010000; did SET menu 01
+  (beep) to OFF; put back to level 5 with EX0010005; (accepted, 2026-10-14).
+  EX; answered EX0000000; = the radio still in menu 00 (display brightness
+  OFF), MD2; still "?;". No CAT command leaves the menu (PS0/PS1 power
+  cycle not tried: not sure PS1 wakes the TS-570, user away). Guide 5.1
+  has the EX format and the useful menu numbers.
 * Code kept: PRE / ATT presses, the command sent and the read-back (100 ms
   later) are now logged. Not done (user: record only): an on-screen hint
   when the TS refuses a set with "?;".

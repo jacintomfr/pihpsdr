@@ -1063,10 +1063,30 @@ static gint64 ts_refused_until = 0;
 // so it answers "?;" to it: expected, not an alert (2026-10-14).
 //
 static gint64 ptt_cmd_us = 0;
+static gint64 set_cmd_us = 0;         // last set command (mode, PRE, ATT, split, subtone ...) sent
+static gint64 lone_refusal_us = 0;    // last "?;" not explained by a set
 
+static void ts_set_sent(void) {
+  set_cmd_us = g_get_monotonic_time();
+}
+
+//
+// A "?;" up to 1 s after one of our set commands: the TS refused it (MENU
+// open ...): alert at once. Otherwise the TS occasionally answers "?;" to a
+// plain read (a transient, the manual says - seen 2026-10-14 at IF; and PA;
+// in FM): only logged, the alert needs two of them within 10 s.
+//
 static void ts_refused_seen(const char *cmd) {
   gint64 now = g_get_monotonic_time();
   if (now - ptt_cmd_us < 500000) { return; }   // the "?;" to our own TX; / RX;
+  if (now - set_cmd_us > 1000000) {
+    int second = (lone_refusal_us != 0 && now - lone_refusal_us < 10000000);
+    lone_refusal_us = now;
+    if (!second) {
+      t_print("%s: lone \"?;\" from the Kenwood (seen at %s) - not an alert\n", __func__, cmd);
+      return;
+    }
+  }
   if (now >= ts_refused_until) {
     t_print("%s: the Kenwood answered \"?;\" (seen at %s, may be the answer to the command before) - its MENU open?\n",
             __func__, cmd);
@@ -1102,7 +1122,7 @@ static int kw_query(int sock, const char *cmd, const char *prefix, char *frame, 
     if (rc < 0) { return rc; }
     if (strcmp(frame, "?") == 0) {
       ts_refused_seen(cmd);
-      return -2;
+      return -3;                      // the radio answered "?;" (not silence: see the IF poll)
     }
     if (strncmp(frame, prefix, plen) == 0) { return 0; }
   }
@@ -1434,6 +1454,7 @@ static int be_get_att(int sock) {
 
 static int be_set_att(int sock, int on) {
   char cmd[32], line[64];
+  ts_set_sent();
   if (ifpan_cat_backend == IFPAN_CAT_KENWOOD) {
     int len = snprintf(cmd, sizeof(cmd), "RA%02d;", on ? 1 : 0);
     return (send(sock, cmd, len, MSG_NOSIGNAL) == len) ? 0 : -1;
@@ -1477,6 +1498,7 @@ static int be_set_af(int sock, int af) {
 
 static int be_set_preamp(int sock, int on) {
   char cmd[32], line[64];
+  ts_set_sent();
   if (ifpan_cat_backend == IFPAN_CAT_KENWOOD) {
     int len = snprintf(cmd, sizeof(cmd), "PA%d;", on ? 1 : 0);
     return (send(sock, cmd, len, MSG_NOSIGNAL) == len) ? 0 : -1;
@@ -1523,6 +1545,7 @@ static int be_set_pc(int sock, int w) {
 //
 static int be_set_mode(int sock, int m) {
   char cmd[32], line[64];
+  ts_set_sent();
   if (ifpan_cat_backend == IFPAN_CAT_KENWOOD) {
     // same order as ifpan_mode_names[]: USB LSB CW CW-R AM FM FSK FSKR
     static const int md[8] = { 2, 1, 3, 7, 5, 4, 6, 9 };
@@ -1637,6 +1660,7 @@ static gboolean ts_sync_apply(gpointer data) {
 
 static int kw_send(int sock, const char *cmd) {
   int len = strlen(cmd);
+  ts_set_sent();
   int rc = (send(sock, cmd, len, MSG_NOSIGNAL) == len) ? 0 : -1;
   usleep(50000);                      // the TS-570 drops commands sent closer together
   return rc;
@@ -2054,6 +2078,11 @@ static gpointer cat_thread(gpointer data) {
     }
     long long f = be_get_freq(sock);
     if (f > 0) { TUNELOG("TS read %lld%s\n", f, hold_until ? " (set on its way)" : ""); }
+    if (f == -3) {
+      // the TS answered "?;" to the poll: it is there, just ask again
+      usleep(50000);
+      continue;
+    }
     if (f == -2) {
       //
       // rigctld is there but the radio does not answer (off, wrong baud

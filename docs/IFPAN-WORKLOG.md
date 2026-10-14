@@ -289,7 +289,23 @@
 `  hardware timer on the pin 9 circuit would cover it); at program start the
 `  PTT port open raises RTS for a few ms.
 `
-`### Server leaves full screen while a client is connected (2026-10-14)
+`### Split / VFO B / CTCSS by CAT, repeater memories (2026-10-14)
+* ts_sync() in the CAT thread: piHPSDR split <-> FT, VFO B <-> FB,
+  CTCSS <-> TO / TN (TS-570 manual: TN01..38 = ctcss_frequencies[] order,
+  39 = 1750 Hz; "FR always places simplex": split on = FR1 MDx FR0 FT1).
+  Read after connect + every CAT_MODE_EVERY polls; radio changes taken
+  over (ts_sync_apply, also pushed to the client), piHPSDR changes sent;
+  not while TX / tuning / pending. 50 ms between commands.
+* store.c (IFPAN): normal memories also store VFO B; recall restores VFO B
+  + split when stored with split, and switches split off otherwise.
+  client_server.c send_memory_data sent VFO A as alt_frequency (upstream
+  bug, fixed). CMD_RCL also sends radio data + VFO B to the client.
+* vfo.c: with split the TS readout shows "TX <VFO B> <mode>".
+* Upstream-shared files touched: store.c, client_server.c, server_thread.c
+  (check when merging new piHPSDR versions). Built on the Pi, not yet
+  tested on the radio.
+
+### Server leaves full screen while a client is connected (2026-10-14)
 * Not a bug: piHPSDR's server_thread.c switches the server display to the
   "custom" size of the client's screen while a client is connected (the
   server computes the spectrum / waterfall pixels at the client's width),

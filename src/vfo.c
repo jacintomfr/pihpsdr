@@ -1737,8 +1737,20 @@ void vfo_update(void) {
       cairo_set_source_rgba(cr, COLOUR_SHADE);
     }
     int km = ifpan_kenwood_mode;
-    snprintf(temp_text, sizeof(temp_text), "TS %lld.%03lld.%02lld %s", kf / 1000000LL,
-             (kf / 1000LL) % 1000LL, (kf / 10LL) % 100LL, km >= 0 ? ifpan_mode_names[km] : "");
+    if (split && transmitter != NULL) {
+      //
+      // split (TS: TX on VFO B): the TX frequency instead, same slot width;
+      // the dial shows the receive frequency (VFO A)
+      //
+      long long tf = vfo[VFO_B].ctun ? vfo[VFO_B].ctun_frequency : vfo[VFO_B].frequency;
+      const char *tm = mode_string[vfo[VFO_B].mode];
+      if (radio_is_transmitting()) { cairo_set_source_rgba(cr, COLOUR_ALARM); }
+      snprintf(temp_text, sizeof(temp_text), "TX %lld.%03lld.%02lld %s", tf / 1000000LL,
+               (tf / 1000LL) % 1000LL, (tf / 10LL) % 100LL, tm);
+    } else {
+      snprintf(temp_text, sizeof(temp_text), "TS %lld.%03lld.%02lld %s", kf / 1000000LL,
+               (kf / 1000LL) % 1000LL, (kf / 10LL) % 100LL, km >= 0 ? ifpan_mode_names[km] : "");
+    }
     cairo_show_text(cr, temp_text);
   }
   // Kenwood preamp (read by CAT; toolbar PRE switches it)

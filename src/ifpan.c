@@ -1064,11 +1064,12 @@ static gint64 ts_refused_until = 0;
 //
 static gint64 ptt_cmd_us = 0;
 
-static void ts_refused_seen(void) {
+static void ts_refused_seen(const char *cmd) {
   gint64 now = g_get_monotonic_time();
   if (now - ptt_cmd_us < 500000) { return; }   // the "?;" to our own TX; / RX;
   if (now >= ts_refused_until) {
-    t_print("%s: the Kenwood refused a command (\"?;\") - its MENU open?\n", __func__);
+    t_print("%s: the Kenwood answered \"?;\" (seen at %s, may be the answer to the command before) - its MENU open?\n",
+            __func__, cmd);
   }
   ts_refused_until = now + 8000000;   // alert shown for 8 s after the last refusal
 }
@@ -1100,7 +1101,7 @@ static int kw_query(int sock, const char *cmd, const char *prefix, char *frame, 
     int rc = kw_read_frame(sock, frame, size);
     if (rc < 0) { return rc; }
     if (strcmp(frame, "?") == 0) {
-      ts_refused_seen();
+      ts_refused_seen(cmd);
       return -2;
     }
     if (strncmp(frame, prefix, plen) == 0) { return 0; }
@@ -1652,6 +1653,9 @@ static long long kw_read_num(int sock, const char *cmd, const char *prefix) {
 // CAT thread; returns -1 if the link was lost
 static int ts_sync(int sock, int busy) {
   if (ifpan_cat_backend != IFPAN_CAT_KENWOOD || busy || ts_sync_pending) { return 0; }
+  // not before piHPSDR's radio is up: it would send its defaults to the TS
+  // (seen 2026-10-14: subtone 01 sent over the TS's 08 at start-up)
+  if (transmitter == NULL || active_receiver == NULL) { return 0; }
   if (ptt_keyed || ifpan_kenwood_tx || radio_is_transmitting()) { return 0; }
   if (!ts_sync_init || ts_sync_count-- <= 0) {
     ts_sync_count = CAT_MODE_EVERY;
@@ -1665,6 +1669,13 @@ static int ts_sync(int sock, int busy) {
     if (fb == -1) { return -1; }
     if (ft < 0 || to < 0 || tn < 0 || fb <= 0) { return 0; }   // refused (MENU open?): next time
     TS_SYNC r = { ft == 1, to == 1, (int) tn, fb };
+    //
+    // The TS has a subtone only in FM (it answers "?;" to TO1 in USB): out
+    // of FM its tone state is not taken over (piHPSDR's CTCSS stays as set)
+    //
+    if (vfo[VFO_A].mode != modeFMN) {
+      r.tone = ts_sent.tone >= 0 ? ts_sent.tone : r.tone;
+    }
     if (!ts_sync_init || r.split != ts_sent.split || r.tone != ts_sent.tone || r.tn != ts_sent.tn
         || r.fb != ts_sent.fb) {
       // first reading, or changed on the radio: piHPSDR-IF takes it over
@@ -1715,7 +1726,7 @@ static int ts_sync(int sock, int busy) {
     ts_sent.tn = want_tn;
     t_print("%s: subtone No. %d sent to the Kenwood\n", __func__, want_tn);
   }
-  if (want_tone != ts_sent.tone) {
+  if (want_tone != ts_sent.tone && vfo[VFO_A].mode == modeFMN) {   // (TS subtone: FM only)
     snprintf(cmd, sizeof(cmd), "TO%d;", want_tone);
     if (kw_send(sock, cmd) < 0) { return -1; }
     ts_sent.tone = want_tone;

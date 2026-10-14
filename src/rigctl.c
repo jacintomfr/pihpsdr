@@ -4127,9 +4127,24 @@ static gpointer ptt_server(gpointer data) {
     }
     new = radio_is_transmitting();
 #ifdef IFPAN
-    // RTS only while both say TX: the CAT thread's command and the TX state
-    // (MOX released or TX time-out also drop it if the CAT link is down)
-    if (serial_rts_wanted >= 0) { new = new && serial_rts_wanted; }
+    //
+    // RTS follows the CAT thread's command (PKS before TX;, dropped before
+    // RX;). An "AND" with the TX state dropped RTS just before TX; when the
+    // TX state came a few ms after the command (2026-10-14). Safety: RTS
+    // still commanded on 1 s after the TX state ended (CAT link down, no
+    // RX; sent) is dropped anyway.
+    //
+    if (serial_rts_wanted >= 0) {
+      static gint64 stale_since = 0;
+      gint64 now_us = g_get_monotonic_time();
+      if (serial_rts_wanted && !new) {
+        if (stale_since == 0) { stale_since = now_us; }
+        new = (now_us - stale_since < 1000000);
+      } else {
+        stale_since = 0;
+        new = serial_rts_wanted;
+      }
+    }
 #endif
     //
     // Set RTS to the transmitting state (if changed)

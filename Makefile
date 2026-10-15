@@ -796,25 +796,14 @@ src/waterfall.o
 #
 ##############################################################################
 
-<<<<<<< HEAD
-$(PROGRAM):  $(OBJS) $(AUDIO_OBJS) $(USBOZY_OBJS) $(SOAPYSDR_OBJS) $(IFPAN_OBJS) $(RADE_OBJS) \
+$(PROGRAM):  $(OBJS) $(AUDIO_OBJS) $(USBOZY_OBJS) $(SOAPYSDR_OBJS) $(IFPAN_OBJS) $(RADE_OBJS) $(SSTV_OBJS) \
 		$(MIDI_OBJS) $(STEMLAB_OBJS) $(TTS_OBJS) $(TCI_OBJS) $(WIN_OBJS)
 	$(COMPILE) -c -o src/version.o src/version.c
 	@+make -C libspecbleach
 	@+make -C wdsp
-	$(LINK) -o $(PROGRAM) $(OBJS) $(AUDIO_OBJS) $(USBOZY_OBJS) $(SOAPYSDR_OBJS) $(IFPAN_OBJS) $(RADE_OBJS) \
-		$(MIDI_OBJS) $(STEMLAB_OBJS) $(TTS_OBJS) $(TCI_OBJS) $(WIN_OBJS) \
-		$(RADE_LIBS) $(LIBS)
-=======
-$(PROGRAM):  $(OBJS) $(AUDIO_OBJS) $(USBOZY_OBJS) $(SOAPYSDR_OBJS) $(IFPAN_OBJS) $(RADE_OBJS) $(SSTV_OBJS) \
-		$(MIDI_OBJS) $(STEMLAB_OBJS) $(TTS_OBJS) $(TCI_OBJS)
-	$(COMPILE) -c -o src/version.o src/version.c
-	@+make -C libspecbleach
-	@+make -C wdsp
 	$(LINK) -o $(PROGRAM) $(OBJS) $(AUDIO_OBJS) $(USBOZY_OBJS) $(SOAPYSDR_OBJS) $(IFPAN_OBJS) $(RADE_OBJS) $(SSTV_OBJS) \
-		$(MIDI_OBJS) $(STEMLAB_OBJS) $(TTS_OBJS) $(TCI_OBJS) \
+		$(MIDI_OBJS) $(STEMLAB_OBJS) $(TTS_OBJS) $(TCI_OBJS) $(WIN_OBJS) \
 		$(RADE_LIBS) $(SSTV_LIBS) $(LIBS)
->>>>>>> cu2ed
 
 ##############################################################################
 #

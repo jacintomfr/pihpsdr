@@ -413,10 +413,17 @@ panel opens at the right and the spectrum / waterfall move to the left.
   (1100 – 2400 Hz) and three tuning lines on the spectrum and the waterfall:
   **1200 Hz** (sync) and **2300 Hz** (white) purple, **1500 Hz** (black)
   blue. A well-tuned picture fills the space between the purple lines.
-* **Decode: Auto** (green when on) finds the mode by itself, from the VIS
-  header or, for a picture already running, from the rhythm of the sync
-  pulses. Pick a mode in the box only to force it — a forced mode will not
-  lock on pictures sent in another mode.
+* The receiver is **MMSSTV's** (its receive chain ported, with MMSSTV's
+  settings), so it behaves like MMSSTV: it decodes weak pictures that
+  other decoders lose, follows small tuning errors (AFC) and straightens
+  pictures from a station whose sound card clock is off (auto slant).
+* **Decode: Auto** (green when on, always on when SSTV opens) finds the
+  mode by itself, from the VIS header or, for a picture already running,
+  from the rhythm of the sync pulses. Choosing a mode in the box starts
+  receiving in that mode at once (MMSSTV's forced start) — use it for a
+  picture whose header was missed.
+* **Station:** shows the call sent as FSK ID after a picture (MMSSTV
+  format).
 * **Restart RX** drops the current picture; **Fit Filter** sets the SSTV
   filter again; **Quick Tune** goes to the usual calling frequencies
   (DIGL below 10 MHz, DIGU above); **Auto-save** keeps every finished

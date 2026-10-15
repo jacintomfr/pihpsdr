@@ -101,6 +101,13 @@ static int squelch_was_on = 0;
 
 void sstv_glue_set_rx_enabled(int on) {
   if (on) { get_engine(); }
+  if (on && dbg_dump != NULL && !atomic_load(&rx_enabled)) {
+    // a new opening of the panel starts a new recording; the audio thread
+    // is not writing (RX off since the panel closed)
+    FILE *f = dbg_dump;
+    dbg_dump = NULL;
+    fclose(f);
+  }
   if (on && dbg_dump == NULL) {
     char flag[512];
     snprintf(flag, sizeof(flag), "%s/sstv-dump.on", g_get_home_dir());
@@ -243,13 +250,15 @@ void sstv_glue_quick_tune(long long hz) {
   sstv_glue_fit_filter();
 }
 
+//
+// The mode choice is not kept: with MMSSTV's receiver picking a mode is a
+// forced start in it (mmsstv_rx.rs), SSTV always opens in Auto.
+//
 void sstv_glue_load_state(void) {
-  GetPropI0("sstv.mode",      sel_mode);
   GetPropI0("sstv.auto_save", auto_save);
 }
 
 void sstv_glue_save_state(void) {
-  SetPropI0("sstv.mode",      sel_mode);
   SetPropI0("sstv.auto_save", auto_save);
 }
 

@@ -762,3 +762,42 @@ for this way of working (Radio menu, "Kenwood / IF panadapter"):
   through sstv.rs offline.
 * Next: SSTV picture to the Windows client (protocol) + Windows build of
   sstv-lib (x86_64-pc-windows-gnu); then TX.
+
+### SSTV receiver = MMSSTV's (2026-10-15)
+* The hpsdr-rs decoder (sstv.rs SstvRx), even with the local tweaks above,
+  lost weak off-air pictures. MMSSTV's receive chain was ported to Rust:
+  `sstv-lib/src/mmsstv_rx.rs` (MmRx, same events; source github.com/n5ac/
+  mmsstv, LGPL; same file in hpsdr-rs). Runs at 12 kHz (48 kHz low-passed,
+  /4). Stages with MMSSTV's values: wide BPF, AGC, 1080/1200/1320/1900/2100
+  Hz tone detectors (energy, not per-sample frequency), sense level 1, VIS
+  state machine, free-run starts (CSYNCINT), Hilbert demodulator, AFC
+  (-200..+125 Hz, 15 pulses), picture rebuild (sync position, resync at
+  line 16, colour), AutoSync. Auto stop off (MMSSTV default; it threw away
+  a real weak picture off the air). Auto slant and FSK-ID decode ON (MMSSTV
+  ships them off): slant removes the clock-error penalty, FSK-ID 5/5 down
+  to 3 dB, no false ID in an hour of noise.
+* Measured (test crate, synthetic pictures + receiver-filtered noise, and
+  off-air recordings made on the Pi): pixel error about half of SstvRx's at
+  every SNR, VIS still at 0 dB, fewer wrong-mode locks, no false lock on
+  noise. Off air, same audio through both: MMSSTV 3/3 of CU2ED's own test
+  pictures (2 x Robot 36, Scottie 2, ~6 dB in the 1.3 kHz filter), the
+  original hpsdr-rs decoder 0/3 (not a tuning error: shifted to the exact
+  frequency it still failed); Martin 2 from G7LHK readable with MMSSTV,
+  half lost with the original. Weak point: a station 100 Hz off gives wrong
+  colours in some modes (MMSSTV's fixed VIS / AFC windows).
+* Mode box = forced start in that mode (only when the choice changes);
+  SSTV always opens in Auto; the mode is no longer saved.
+* Panel: the picture is copied once more when reception ends (MMSSTV
+  redraws the whole picture in its last step, the window used to keep the
+  earlier version); the state / station labels have a fixed width so the
+  bars column no longer jumps between "(receiving)" and "(last)".
+* TX FSK ID (sstv.rs SstvTx::with_fsk_id, used by hpsdr-rs): bits are now
+  sent least significant first and the closing 2100 Hz guard tone added, as
+  MMSSTV sends them; before, MMSSTV could not read our ID.
+* Diagnosis recording (`~/sstv-dump.on`) now starts afresh at every opening
+  of the panel (it used to record only once per program run).
+* "Mode guess while hunting" and a hunting AFC of +-300/400 Hz were tried
+  and dropped (unreliable / false locks on the 1500 Hz black level);
+  MMSSTV and QSSTV do not search wider than about +-150..200 Hz either.
+* Open: Robot 36 "pictures" of plain noise seen once (17:39-17:44) before
+  the recordings started — not reproduced since.

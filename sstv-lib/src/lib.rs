@@ -9,13 +9,15 @@
 
 #![allow(dead_code)]
 
+mod mmsstv_rx;
 mod sstv;
 
 use std::ffi::{c_char, c_int, CStr};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use sstv::{SstvEvent, SstvMode, SstvRx};
+use mmsstv_rx::MmRx;
+use sstv::{SstvEvent, SstvMode};
 
 /// RX audio rate: piHPSDR's receiver output (and hpsdr-rs's OUTPUT_RATE).
 const SAMPLE_RATE_HZ: f64 = 48_000.0;
@@ -35,7 +37,7 @@ struct Snapshot {
 }
 
 pub struct Sstv {
-    rx: Mutex<SstvRx>,
+    rx: Mutex<MmRx>, // MMSSTV's receive chain (mmsstv_rx.rs)
     snap: Mutex<Snapshot>,
     level: Mutex<(f32, f32)>, // (level, sync quality)
     expected: Mutex<Option<SstvMode>>,
@@ -82,7 +84,7 @@ fn image_path(dir: &PathBuf, label: &str) -> Option<PathBuf> {
 
 impl Sstv {
     fn new() -> Self {
-        let mut rx = SstvRx::new(SAMPLE_RATE_HZ);
+        let mut rx = MmRx::new(SAMPLE_RATE_HZ);
         rx.set_expected(None); // Auto
         Sstv {
             rx: Mutex::new(rx),

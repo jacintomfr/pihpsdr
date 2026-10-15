@@ -64,6 +64,9 @@
 #ifdef RADE
 #include "rade_glue.h"
 #endif
+#ifdef SSTV
+#include "sstv_glue.h"
+#endif
 #include "rx_panadapter.h"
 #include "server_menu.h"
 #include "sliders.h"
@@ -3267,6 +3270,9 @@ static void radio_restore_state(void) {
 #ifdef RADE
     rade_glue_load_state();   // server only; receivers / VFOs / TX do not exist yet
 #endif
+#ifdef SSTV
+    sstv_glue_load_state();
+#endif
     split = 0;
     duplex = 0;
     sat_mode = SAT_NONE;
@@ -3502,6 +3508,9 @@ void radio_save_state(void) {
     ifpan_save_state();
 #ifdef RADE
     rade_glue_save_state();
+#endif
+#ifdef SSTV
+    sstv_glue_save_state();
 #endif
 #endif
     SetPropI0("radio.display_warnings",                      display_warnings);

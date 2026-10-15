@@ -1,0 +1,22 @@
+[package]
+name = "sstv_lib"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "SSTV modem for piHPSDR-IF: hpsdr-rs's sstv.rs (from SDRoxide) behind a C interface"
+
+[lib]
+name = "sstv_lib"
+path = "src/lib.rs"
+crate-type = ["staticlib"]
+
+[dependencies]
+num-complex = "0.4"
+# PNG for saving received pictures; resizing for TX pictures (sstv.rs's
+# prepare_image_for_tx). No other formats: the C side loads pictures itself.
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[profile.release]
+opt-level = 3
+debug = false
+panic = "abort"

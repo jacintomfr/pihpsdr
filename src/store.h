@@ -55,6 +55,10 @@ struct _MEM_STORE {
 
   int ctcss_enabled;
   int ctcss;
+#ifdef IFPAN
+  int squelch_enable;   // piHPSDR-IF: receiver squelch of the memory (-1: not stored)
+  double squelch;
+#endif
 };
 
 typedef struct _MEM_STORE MEM;

@@ -801,3 +801,25 @@ for this way of working (Radio menu, "Kenwood / IF panadapter"):
   MMSSTV and QSSTV do not search wider than about +-150..200 Hz either.
 * Open: Robot 36 "pictures" of plain noise seen once (17:39-17:44) before
   the recordings started — not reproduced since.
+
+### SSTV panel laid out as the hpsdr-rs kiosk (2026-10-15)
+* On the 1024 x 600 screen the control strip asked for ~610 px in a 456 px
+  panel, so the whole main window grew past the screen (bars, state and
+  Station cut off). Now as hpsdr-rs's digital_inapp.rs: the panel takes half
+  the width (as piHPSDR's two receivers side by side) and holds only the
+  picture and its status; the status texts are 13 px so the column stays
+  104 px (bars) at the right edge and the picture gets the rest.
+* OPTIONS (toggle) at the bottom left of the waterfall (6 px in, 44 px up,
+  as hpsdr-rs); opened, the controls sit just under the waterfall over the
+  slider area (the user's choice: spectrum and waterfall stay in view) -
+  Quick Tune (popover with the bands, as hpsdr-rs's sstv_quick_popup),
+  Auto-save / Decode: Auto, mode, Restart RX, Fit Filter. Rows wrap if
+  narrow. Not shown by radio_reconfigure's show_all (no_show_all).
+* Close button gone from the panel (Menu -> SSTV closes it, as the kiosk's
+  DIGITAL button). Mode list as a 4 x 4 grid (one column filled the screen).
+* The received FSK station ID is written to the log ("SSTV station ID
+  (FSK): ...").
+* FSK-ID test from the user's old Windows hpsdr-rs: its ID was MSB first
+  (decoded by hand from a recording: 2A C U 2 ...), unreadable by MMSSTV
+  and by us; new Windows MSIs (normal + noAVX2) and kiosk 0.8.7-563 send it
+  LSB first.

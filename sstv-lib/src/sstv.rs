@@ -811,6 +811,10 @@ pub enum SstvEvent {
     /// A header arrived, with good parity, for a mode this decoder does not
     /// have. `name` is the mode name where the code is an assigned one.
     UnsupportedMode { code: u8, name: Option<&'static str> },
+    /// Local addition (not upstream): the image just started was a false
+    /// lock (no sync pulses on its first lines) and was abandoned; the
+    /// receiver is hunting again. Nothing was completed.
+    LockDropped,
 }
 
 #[derive(PartialEq)]
@@ -831,6 +835,9 @@ pub struct SstvRx {
     prev: Complex32,
     // Instantaneous frequency (Hz), lightly smoothed.
     inst_hz: f64,
+    // Heavier-smoothed frequency for the VIS / sync-pulse detectors only
+    // (see DET_ALPHA); pixels still use `inst_hz`.
+    det_hz: f64,
     // Smoothed raw-input level (mean |audio|) for the UI activity meter.
     in_level: f32,
     have_prev: bool,
@@ -881,6 +888,9 @@ pub struct SstvRx {
     // operator is tuned correctly; a weak or absent one means to nudge the
     // VFO).
     last_sync_quality: f32,
+    // Lock check (see LOCK_CHECK_LINES): line calls seen / with a sync pulse
+    check_n: u32,
+    check_good: u32,
 }
 
 /// The hunt for an FSK ID: what has been seen of one so far.
@@ -923,6 +933,29 @@ impl VisState {
     }
 }
 
+/// Local addition (not upstream): smoothing of the frequency the VIS and
+/// sync-pulse detectors look at (one-pole, ~1 ms at 48 kHz). With only the
+/// per-sample `inst_hz` (0.5) a single noisy sample breaks a 1200 Hz run,
+/// so nothing locked below ~15 dB SNR (2.5 kHz); with 0.02 synthetic
+/// Martin / Scottie / Robot / PD / SC2 pictures lock down to ~3 dB and a
+/// real weak Martin 2 off the air decodes. Tuned with FREERUN_MIN_HITS on
+/// synthetic pictures + noise, an hour of plain noise (no false lock) and
+/// that recording.
+const DET_ALPHA: f64 = 0.02;
+
+/// Line-cadence matches needed before free-run locks (upstream: 2). With
+/// the smoother detector, 3 cuts false locks on noise and wrong-mode locks.
+const FREERUN_MIN_HITS: u32 = 3;
+
+/// Local addition (not upstream): after a lock (VIS or free-run), the first
+/// LOCK_CHECK_LINES lines must show a sync pulse (mean below LOCK_CHECK_HZ)
+/// at least LOCK_CHECK_MIN times, or the lock was noise and is dropped
+/// (band-limited RX noise false-locked Robot 36 / SC2 / Martin a few times
+/// an hour, and auto-save kept the noise pictures).
+const LOCK_CHECK_LINES: u32 = 8;
+const LOCK_CHECK_MIN: u32 = 4;
+const LOCK_CHECK_HZ: f64 = 1450.0;
+
 impl SstvRx {
     pub fn new(rate: f64) -> Self {
         let mix_hz = 1900.0f32;
@@ -935,6 +968,7 @@ impl SstvRx {
             lpf: ComplexFir::new(bandpass_taps(129, -1100.0, 1100.0, rate)),
             prev: Complex32::new(0.0, 0.0),
             inst_hz: 1900.0,
+            det_hz: 1900.0,
             in_level: 0.0,
             have_prev: false,
             phase: RxPhase::Hunt,
@@ -955,6 +989,8 @@ impl SstvRx {
             sync_run: 0,
             sync_hist: Vec::new(),
             last_sync_quality: 0.0,
+            check_n: 0,
+            check_good: 0,
         }
     }
 
@@ -1043,6 +1079,7 @@ impl SstvRx {
             self.prev = z;
             self.have_prev = true;
             self.inst_hz += 0.5 * (raw_hz - self.inst_hz);
+            self.det_hz += DET_ALPHA * (raw_hz - self.det_hz);
 
             self.push_hist(self.inst_hz);
             self.sample_idx += 1;
@@ -1148,8 +1185,8 @@ impl SstvRx {
     fn step_hunt(&mut self, out: &mut Vec<SstvEvent>) {
         self.step_fsk_id(out);
         let near = |a: f64, b: f64| (a - b).abs() < 90.0;
-        let is_leader = near(self.inst_hz, VIS_LEADER_HZ);
-        let is_sync = near(self.inst_hz, SYNC_HZ);
+        let is_leader = near(self.det_hz, VIS_LEADER_HZ);
+        let is_sync = near(self.det_hz, SYNC_HZ);
         if is_leader {
             self.vis_state.leader = (self.vis_state.leader + 1).min((self.rate) as u32);
             if self.vis_state.leader as f64 > 0.12 * self.rate {
@@ -1266,7 +1303,7 @@ impl SstvRx {
     /// cadence, start decoding (no VIS needed -- handles tuning into a
     /// picture already in progress).
     fn try_freerun(&mut self, out: &mut Vec<SstvEvent>) {
-        let is_sync = self.inst_hz > 1050.0 && self.inst_hz < 1350.0;
+        let is_sync = self.det_hz > 1050.0 && self.det_hz < 1350.0;
         if is_sync {
             self.sync_run += 1;
             return;
@@ -1283,12 +1320,12 @@ impl SstvRx {
         }
 
         let locked = match self.expected {
-            Some(m) => (self.cadence_hits(m) >= 2).then_some(m),
+            Some(m) => (self.cadence_hits(m) >= FREERUN_MIN_HITS).then_some(m),
             None => {
                 let mut best: Option<SstvMode> = None;
                 let mut best_err = f64::INFINITY;
                 for &m in &SstvMode::ALL {
-                    if self.cadence_hits(m) < 2 {
+                    if self.cadence_hits(m) < FREERUN_MIN_HITS {
                         continue;
                     }
                     let (_, sdur) = self.sync_span(m, m.dimensions().0, 0);
@@ -1324,6 +1361,8 @@ impl SstvRx {
         self.last_cb = vec![128u8; (w / 2) as usize];
         self.sync_run = 0;
         self.sync_hist.clear();
+        self.check_n = 0;
+        self.check_good = 0;
         out.push(SstvEvent::ModeDetected(mode));
     }
 
@@ -1338,6 +1377,22 @@ impl SstvRx {
         // and clock slant on real off-air signals).
         let (w, h) = self.mode.dimensions();
         let start = self.realign_sync(self.line_start, self.mode, w, self.line);
+        if self.check_n < LOCK_CHECK_LINES {
+            self.check_n += 1;
+            if self.sync_present(start, self.mode, w, self.line) {
+                self.check_good += 1;
+            }
+            if self.check_n == LOCK_CHECK_LINES && self.check_good < LOCK_CHECK_MIN {
+                // no sync pulses where the lines should have them: a false
+                // lock on noise -- back to hunting, nothing completed / saved
+                self.phase = RxPhase::Hunt;
+                self.vis_state = VisState::reset();
+                self.sync_hist.clear();
+                self.sync_run = 0;
+                out.push(SstvEvent::LockDropped);
+                return;
+            }
+        }
         for (n, rgb) in self.decode_line(self.mode, w, self.line, start).into_iter().enumerate() {
             let y = self.line + n as u16;
             if y < h {
@@ -1373,6 +1428,23 @@ impl SstvRx {
             }
         }
         (0.0, 0.009 * self.rate)
+    }
+
+    /// Local addition (not upstream): is there a 1200 Hz sync pulse where this
+    /// line has one? Mean frequency over the middle of the pulse (pixels are
+    /// 1500 - 2300 Hz, so noise or picture averages well above it).
+    fn sync_present(&self, start: u64, mode: SstvMode, w: u16, line: u16) -> bool {
+        let (soff, sdur) = self.sync_span(mode, w, line);
+        let from = start as f64 + soff + 0.2 * sdur;
+        let to = start as f64 + soff + 0.8 * sdur;
+        let (mut sum, mut n) = (0.0f64, 0u32);
+        let mut i = from.max(0.0) as u64;
+        while (i as f64) < to {
+            sum += self.hz_at(i);
+            n += 1;
+            i += 1;
+        }
+        n > 0 && sum / (n as f64) < LOCK_CHECK_HZ
     }
 
     /// Correct the line-start sample index by locking to the line's 1200 Hz
@@ -1761,7 +1833,7 @@ mod tests {
                 match e {
                     SstvEvent::ModeDetected(m) => detected = Some(m),
                     SstvEvent::Line { .. } => lines += 1,
-                    SstvEvent::ImageComplete | SstvEvent::FskId(_) | SstvEvent::UnsupportedMode { .. } => {}
+                    SstvEvent::ImageComplete | SstvEvent::FskId(_) | SstvEvent::UnsupportedMode { .. } | SstvEvent::LockDropped => {}
                 }
             }
             guard += 1;
@@ -1990,7 +2062,7 @@ mod tests {
                 match e {
                     SstvEvent::ModeDetected(m) => detected = Some(m),
                     SstvEvent::Line { .. } => lines += 1,
-                    SstvEvent::ImageComplete | SstvEvent::FskId(_) | SstvEvent::UnsupportedMode { .. } => {}
+                    SstvEvent::ImageComplete | SstvEvent::FskId(_) | SstvEvent::UnsupportedMode { .. } | SstvEvent::LockDropped => {}
                 }
             }
         }

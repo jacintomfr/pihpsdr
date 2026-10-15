@@ -24,10 +24,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include "main.h"
 #include "new_menu.h"
 #include "radio.h"
+#include "receiver.h"
+#include "vfo.h"
+#include "mode.h"
 #include "message.h"
 #include "sstv_glue.h"
 #include "sstv_menu.h"
@@ -45,6 +49,29 @@ static GdkPixbuf *pix = NULL;
 static uint8_t *rgb = NULL;
 static size_t rgb_cap = 0;
 static uint32_t last_image_id = 0xffffffffu;
+static int saved_zoom = -1;          // RX1 zoom before the panel opened (zoom 26 while it is open)
+static int saved_pan = 0;
+
+//
+// pan RX1 so that the middle of the SSTV band (1750 Hz audio, between the
+// 1100 Hz and 2400 Hz edges) is in the centre of the panadapter; the pan
+// steps are coarse (sample rate * (zoom - 1) / zoom / 200, ~460 Hz at 96 kHz)
+//
+static void center_pan(void) {
+  if (receivers < 1 || receiver[0] == NULL || receiver[0]->zoom <= 1) { return; }
+  const RECEIVER *rx = receiver[0];
+  int m = vfo[0].mode;
+  double sign = (m == modeLSB || m == modeDIGL) ? -1.0 : 1.0;
+  long long f = vfo[0].ctun ? vfo[0].ctun_frequency : vfo[0].frequency;
+  double offset = (double)(f - vfo[0].frequency) + sign * 1750.0 + rx->sample_rate / 2.0;
+  double z = (offset * rx->zoom / (double)rx->sample_rate - 0.5) / (double)(rx->zoom - 1);
+  radio_set_pan(0, (int)lround(200.0 * z) - 100);
+}
+
+static gboolean center_pan_cb(gpointer data) {
+  if (panel != NULL) { center_pan(); }
+  return G_SOURCE_REMOVE;
+}
 static sstv_status_t st;
 
 // hpsdr-rs SSTV_QUICK_TUNE_HZ (community calling frequencies, a starting point)
@@ -58,8 +85,14 @@ static void panel_close(void) {
     GtkWidget *tmp = panel;
     panel = NULL;
     sstv_glue_set_rx_enabled(0);
+    sstv_glue_filter_restore(); // the filter from before SSTV
     gtk_widget_destroy(tmp);
     g_object_unref(tmp);      // the reference taken in sstv_menu
+    if (saved_zoom > 0) {
+      radio_set_zoom(0, saved_zoom);   // back to the zoom from before SSTV
+      radio_set_pan(0, saved_pan);
+      saved_zoom = -1;
+    }
     radio_reconfigure();      // the spectrum / waterfall get the whole width back
     radio_save_state();
   }
@@ -254,6 +287,7 @@ static void save_cb(GtkWidget *widget, gpointer data) {
 
 static void quick_cb(GtkWidget *widget, gpointer data) {
   sstv_glue_quick_tune(quick[GPOINTER_TO_INT(data)].hz);
+  g_timeout_add(300, center_pan_cb, NULL);   // once the new frequency is in place
 }
 
 //
@@ -300,6 +334,16 @@ static GtkWidget *build_panel(void) {
   gtk_widget_set_name(l, "boldlabel");
   gtk_box_pack_start(GTK_BOX(strip), l, FALSE, FALSE, 0);
   auto_btn = gtk_toggle_button_new_with_label("Auto");
+  {
+    // Auto on: green, unmistakable (the theme's "checked" grey is too faint)
+    GtkCssProvider *css = gtk_css_provider_new();
+    gtk_css_provider_load_from_data(css,
+                                    "button:checked { background-image: none; background-color: rgb(20%, 75%, 20%); color: rgb(0%, 0%, 0%); }",
+                                    -1, NULL);
+    gtk_style_context_add_provider(gtk_widget_get_style_context(auto_btn), GTK_STYLE_PROVIDER(css),
+                                   GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    g_object_unref(css);
+  }
   gtk_widget_set_tooltip_text(auto_btn, "Mode from the VIS header (or the sync cadence)");
   gtk_box_pack_start(GTK_BOX(strip), auto_btn, FALSE, FALSE, 0);
   mode_combo = gtk_combo_box_text_new();
@@ -386,6 +430,44 @@ static GtkWidget *build_panel(void) {
   return vbox;
 }
 
+void sstv_marks_draw(cairo_t *cr, double rxpos, double cAp, int lsb, double height) {
+  if (panel == NULL) { return; }
+  double sign = lsb ? -1.0 : 1.0;
+  const struct { double hz, r, g, b, w; } m[3] = {
+    { 1200.0, 180, 90, 220, 1.5 },    // sync
+    { 2300.0, 180, 90, 220, 1.5 },    // white
+    { 1500.0, 70, 170, 255, 2.5 },    // black
+  };
+  cairo_save(cr);
+  for (int i = 0; i < 3; i++) {
+    double x = rxpos + cAp * sign * m[i].hz;
+    cairo_set_source_rgb(cr, m[i].r / 255.0, m[i].g / 255.0, m[i].b / 255.0);
+    cairo_set_line_width(cr, m[i].w);
+    cairo_move_to(cr, x, 0.0);
+    cairo_line_to(cr, x, height);
+    cairo_stroke(cr);
+  }
+  cairo_restore(cr);
+}
+
+//
+// program exit with the panel open: put the zoom, pan and filter from before
+// SSTV back (values only, the widgets go away with the program) so that
+// radio_save_state() stores the user's settings, not SSTV's
+//
+void sstv_menu_shutdown(void) {
+  if (panel == NULL) { return; }
+  if (timer_id) { g_source_remove(timer_id); timer_id = 0; }
+  sstv_glue_set_rx_enabled(0);
+  sstv_glue_filter_restore();
+  if (saved_zoom > 0 && receivers > 0 && receiver[0] != NULL) {
+    receiver[0]->zoom = saved_zoom;
+    receiver[0]->pan = saved_pan;
+    saved_zoom = -1;
+  }
+  t_print("%s: zoom / pan / filter from before SSTV restored\n", __func__);
+}
+
 // main menu "SSTV": dock the panel (or close it if it is there)
 void sstv_menu(GtkWidget *parent) {
   (void) parent;
@@ -405,6 +487,18 @@ void sstv_menu(GtkWidget *parent) {
   panel = build_panel();
   g_object_ref_sink(panel);
   sstv_glue_set_rx_enabled(1);
+  sstv_glue_filter_take();
+  sstv_glue_fit_filter();     // SSTV filter (1100 - 2400 Hz) right away
+  //
+  // zoom 26 (~3.7 kHz at 96 kHz): the SSTV band 1100 - 2400 Hz fills the
+  // panadapter, as in hpsdr-rs; the zoom from before comes back on close
+  //
+  if (receivers > 0 && receiver[0] != NULL) {
+    saved_zoom = receiver[0]->zoom;
+    saved_pan = receiver[0]->pan;
+    radio_set_zoom(0, 26);
+    center_pan();
+  }
   radio_reconfigure();        // spectrum / waterfall to the left, the panel at the right
   status_timer(NULL);
   timer_id = g_timeout_add(200, status_timer, NULL);

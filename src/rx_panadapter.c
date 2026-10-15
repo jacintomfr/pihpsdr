@@ -42,6 +42,11 @@
 #endif
 #include "receiver.h"
 #include "rx_panadapter.h"
+#ifdef SSTV
+  #include "sstv_menu.h"
+double rx_sstv_rxpos = 0.0;   // RX1 panadapter: x of the receiver frequency (SSTV lines)
+int    rx_sstv_lsb = 0;
+#endif
 #include "theme.h"
 #include "transmitter.h"
 #include "vfo.h"
@@ -204,6 +209,14 @@ void rx_panadapter_update(RECEIVER *rx) {
   cairo_set_source_rgba (cr, COLOUR_PAN_FILTER);
   cairo_rectangle(cr, filter_left, 0.0, filter_right - filter_left, myheight);
   cairo_fill(cr);
+#ifdef SSTV
+  if (rx->id == 0) {
+    int lsb = (mode == modeLSB || mode == modeDIGL);
+    sstv_marks_draw(cr, rxpos, rx->cAp, lsb, myheight);
+    rx_sstv_rxpos = rxpos;         // the waterfall draws the same lines
+    rx_sstv_lsb = lsb;
+  }
+#endif
   // plot the levels
   if (active) {
     cairo_set_source_rgba(cr, COLOUR_PAN_LINE);

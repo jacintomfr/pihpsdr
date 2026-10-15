@@ -28,6 +28,9 @@
 #include "band.h"
 #include "message.h"
 #include "waterfall.h"
+#ifdef SSTV
+  #include "sstv_menu.h"
+#endif
 #ifdef IFPAN
   #include "ifpan.h"
 #endif
@@ -68,6 +71,14 @@ waterfall_draw_cb (GtkWidget *widget,
     gdk_cairo_set_source_pixbuf (cr, rx->pixbuf, 0, 0);
     cairo_paint (cr);
   }
+#ifdef SSTV
+  // the SSTV tuning lines, as on the panadapter (hpsdr-rs draws them on both)
+  if (rx->id == 0) {
+    extern double rx_sstv_rxpos;
+    extern int rx_sstv_lsb;
+    sstv_marks_draw(cr, rx_sstv_rxpos, rx->cAp, rx_sstv_lsb, gtk_widget_get_allocated_height(widget));
+  }
+#endif
   return FALSE;
 }
 

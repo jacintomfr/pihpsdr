@@ -40,6 +40,7 @@
 #endif
 
 #define BARS_W 104
+#define STATE_CHARS 11      // "(receiving)", the widest state text
 
 static GtkWidget *panel = NULL;      // docked panel (in the main window's GtkFixed)
 static int panel_x = -1, panel_y = -1, panel_w = 0, panel_h = 0;
@@ -195,8 +196,13 @@ static gboolean status_timer(gpointer data) {
   if (panel == NULL || e == NULL) { return G_SOURCE_CONTINUE; }
   memset(&st, 0, sizeof(st));
   sstv_get_status(e, &st);
-  // the picture: while one is being decoded, and once when a new one starts / ends
-  if (st.w > 0 && st.h > 0 && (st.receiving || st.image_id != last_image_id)) {
+  // the picture: while one is being decoded, once when a new one starts, and
+  // once more when it ends -- MMSSTV's receiver redraws the whole picture
+  // (resync / slant) right up to its last line, in the same step that ends it
+  static int was_receiving = 0;
+  int ended = was_receiving && !st.receiving;
+  was_receiving = st.receiving;
+  if (st.w > 0 && st.h > 0 && (st.receiving || ended || st.image_id != last_image_id)) {
     size_t need = (size_t) st.w * st.h * 3;
     if (rgb_cap < need) {
       g_free(rgb);
@@ -344,13 +350,13 @@ static GtkWidget *build_panel(void) {
                                    GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
     g_object_unref(css);
   }
-  gtk_widget_set_tooltip_text(auto_btn, "Mode from the VIS header (or the sync cadence)");
+  gtk_widget_set_tooltip_text(auto_btn, "Mode from the VIS header (or the sync rhythm of a picture already running)");
   gtk_box_pack_start(GTK_BOX(strip), auto_btn, FALSE, FALSE, 0);
   mode_combo = gtk_combo_box_text_new();
   for (int i = 0; i < sstv_mode_count(); i++) {
     gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(mode_combo), NULL, sstv_mode_label(i));
   }
-  gtk_widget_set_tooltip_text(mode_combo, "Decode only this mode (free-run, also without a VIS header)");
+  gtk_widget_set_tooltip_text(mode_combo, "Receive now in this mode (forced start, as in MMSSTV)");
   gtk_box_pack_start(GTK_BOX(strip), mode_combo, FALSE, FALSE, 0);
   updating = 1;
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(auto_btn), sstv_glue_get_mode() < 0);
@@ -398,15 +404,21 @@ static GtkWidget *build_panel(void) {
   gtk_box_pack_start(GTK_BOX(srow), state_dot, FALSE, FALSE, 0);
   state_label = gtk_label_new("hunting...");
   gtk_label_set_line_wrap(GTK_LABEL(state_label), TRUE);
+  // fixed width: "(receiving)" / "(last)" / a station's call must not resize
+  // the column (and the picture with it); longer text wraps
+  gtk_label_set_width_chars(GTK_LABEL(state_label), STATE_CHARS);
+  gtk_label_set_max_width_chars(GTK_LABEL(state_label), STATE_CHARS);
   gtk_label_set_xalign(GTK_LABEL(state_label), 0.0);
   gtk_box_pack_start(GTK_BOX(srow), state_label, TRUE, TRUE, 0);
   gtk_box_pack_start(GTK_BOX(col), srow, FALSE, FALSE, 0);
   station_label = gtk_label_new("");
   gtk_label_set_line_wrap(GTK_LABEL(station_label), TRUE);
+  gtk_label_set_max_width_chars(GTK_LABEL(station_label), STATE_CHARS);
   gtk_label_set_xalign(GTK_LABEL(station_label), 0.0);
   gtk_box_pack_start(GTK_BOX(col), station_label, FALSE, FALSE, 0);
   unsupported_label = gtk_label_new("");
   gtk_label_set_line_wrap(GTK_LABEL(unsupported_label), TRUE);
+  gtk_label_set_max_width_chars(GTK_LABEL(unsupported_label), STATE_CHARS);
   gtk_label_set_xalign(GTK_LABEL(unsupported_label), 0.0);
   gtk_box_pack_start(GTK_BOX(col), unsupported_label, FALSE, FALSE, 0);
   gtk_box_pack_start(GTK_BOX(main), col, FALSE, FALSE, 0);

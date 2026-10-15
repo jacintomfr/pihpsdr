@@ -652,12 +652,17 @@ impl SstvTx {
         push(&mut self.plan, FSKID_LEADER_HZ, FSKID_LEADER_S);
         push(&mut self.plan, FSKID_ZERO_HZ, FSKID_SYNC_S);
         push(&mut self.plan, FSKID_ONE_HZ, FSKID_BIT_S);
+        // Each 6-bit symbol least significant bit first, as MMSSTV sends and
+        // decodes it (sstv.cpp CSSTVMOD::WriteFSK / CSSTVDEM::DecodeFSK); it
+        // was MSB first here, which MMSSTV could not read.
         for sym in symbols {
-            for bit in (0..6).rev() {
+            for bit in 0..6 {
                 let one = (sym >> bit) & 1 == 1;
                 push(&mut self.plan, if one { FSKID_ONE_HZ } else { FSKID_ZERO_HZ }, FSKID_BIT_S);
             }
         }
+        // closing guard tone, MMSSTV's Write(FSKSPACE, FSKGARD) (Main.cpp OutputFSKID)
+        push(&mut self.plan, FSKID_ZERO_HZ, FSKID_SYNC_S);
         self.total = self.plan.iter().map(|&(_, n)| n as u64).sum();
         self
     }
@@ -1165,7 +1170,7 @@ impl SstvRx {
             .fsk_state
             .bits
             .chunks_exact(6)
-            .map(|c| c.iter().fold(0u8, |a, &b| (a << 1) | u8::from(b)))
+            .map(|c| c.iter().rev().fold(0u8, |a, &b| (a << 1) | u8::from(b))) // LSB first, as sent
             .collect();
         if symbols[0] != FSKID_HEAD {
             self.fsk_state = FskIdState::reset();

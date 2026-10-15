@@ -337,7 +337,9 @@ while transmitting); the FM mode text shows the tone ("FMN 16k C=88.5").
 **Repeater in one tap (memories):** a memory stored with split on also
 keeps VFO B and the split (piHPSDR keeps VFO B only in SAT/RSAT slots);
 recalling it sets piHPSDR-IF and the TS up; a memory stored without split
-switches split off. Example, 10 m repeater of S. Miguel (Pico da Barrosa
+switches split off. Memories also keep the receiver squelch (on / off and
+level) and, unlike piHPSDR, the split is saved in the props file, so it
+survives a restart (memories stored before keep their squelch unchanged). Example, 10 m repeater of S. Miguel (Pico da Barrosa
 TX 29.630, receiver Pico dos Santos 29.530, 88.5 Hz): VFO A 29.630 FM,
 VFO B 29.530 FM, SPLIT, CTCSS 88.5, store in a memory slot.
 

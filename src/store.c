@@ -56,6 +56,13 @@ void mem_save_state(void) {
     SetPropI1("mem.%d.altband", b,         mem[b].alt_bd);
     SetPropI1("mem.%d.ctcss_enabled", b,   mem[b].ctcss_enabled);
     SetPropI1("mem.%d.ctcss", b,           mem[b].ctcss);
+#ifdef IFPAN
+    // piHPSDR-IF: also the split (piHPSDR keeps it only while running) and the squelch
+    SetPropI1("mem.%d.split", b,           mem[b].split);
+    SetPropI1("mem.%d.duplex", b,          mem[b].duplex);
+    SetPropI1("mem.%d.squelch_enable", b,  mem[b].squelch_enable);
+    SetPropF1("mem.%d.squelch", b,         mem[b].squelch);
+#endif
   }
 }
 
@@ -81,6 +88,12 @@ void mem_restore_state(void) {
     mem[b].alt_bd             = band10;
     mem[b].ctcss_enabled      = 0;
     mem[b].ctcss              = 0;
+#ifdef IFPAN
+    mem[b].split              = 0;
+    mem[b].duplex             = 0;
+    mem[b].squelch_enable     = -1;
+    mem[b].squelch            = 0.0;
+#endif
     //
     // Read from props
     //
@@ -101,6 +114,12 @@ void mem_restore_state(void) {
     GetPropI1("mem.%d.altband", b,         mem[b].alt_bd);
     GetPropI1("mem.%d.ctcss_enabled", b,   mem[b].ctcss_enabled);
     GetPropI1("mem.%d.ctcss", b,           mem[b].ctcss);
+#ifdef IFPAN
+    GetPropI1("mem.%d.split", b,           mem[b].split);
+    GetPropI1("mem.%d.duplex", b,          mem[b].duplex);
+    GetPropI1("mem.%d.squelch_enable", b,  mem[b].squelch_enable);
+    GetPropF1("mem.%d.squelch", b,         mem[b].squelch);
+#endif
   }
 }
 
@@ -164,6 +183,11 @@ void recall_memory_slot(int index) {
       vfo[VFO_B].lo             = band->frequencyLO + band->errorLO;
     }
     radio_set_split(mem[index].split);
+    // the receiver squelch stored with the memory (memories stored before: unchanged)
+    if (mem[index].squelch_enable >= 0 && id < receivers) {
+      receiver[id]->squelch = mem[index].squelch;
+      radio_set_squelch_enable(id, mem[index].squelch_enable);
+    }
 #endif
   } else {
     int b                  = mem[index].bd;
@@ -230,6 +254,10 @@ void store_memory_slot(int index) {
     mem[index].deviation          = vfo[id].deviation;
     mem[index].bd                 = vfo[id].band;
 #ifdef IFPAN
+    if (id < receivers) {
+      mem[index].squelch_enable   = receiver[id]->squelch_enable;
+      mem[index].squelch          = receiver[id]->squelch;
+    }
     //
     // piHPSDR-IF: a memory stored with split on also keeps VFO B (the TX
     // frequency, e.g. a 10 m repeater input), so that recalling it sets up

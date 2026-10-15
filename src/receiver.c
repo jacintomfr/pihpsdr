@@ -60,6 +60,9 @@
 #ifdef RADE
   #include "rade_glue.h"
 #endif
+#ifdef SSTV
+  #include "sstv_glue.h"
+#endif
 
 #define min(x,y) (x<y?x:y)
 #define max(x,y) (x<y?y:x)
@@ -1153,6 +1156,10 @@ static void rx_process_buffer(RECEIVER *rx) {
   }
   lvl = 0.9 * lvl + (0.1 * sum) / rx->output_samples;
   t_print("RX lvl: %5.1f\n", 10.0 * log10(lvl));
+#endif
+#ifdef SSTV
+  // SSTV: RX1 demodulated audio to the SSTV decoder (ahead of RADE's substitution)
+  sstv_glue_rx_block(rx->id, rx->audio_output_buffer, rx->output_samples);
 #endif
 #ifdef RADE
   // RADE: RX1 modem audio -> decoded speech, before capture / client / TCI / output

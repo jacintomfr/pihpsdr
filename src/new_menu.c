@@ -75,6 +75,9 @@
 #ifdef RADE
   #include "rade_menu.h"
 #endif
+#ifdef SSTV
+  #include "sstv_menu.h"
+#endif
 
 GtkWidget *main_menu = NULL;
 GtkWidget *sub_menu = NULL;
@@ -400,6 +403,19 @@ static gboolean vox_cb (GtkWidget *widget, GdkEventButton *event, gpointer data)
   start_vox_menu();
   return TRUE;
 }
+
+#ifdef SSTV
+void start_sstv_menu(void) {
+  cleanup();
+  sstv_menu(top_window);
+}
+
+// cppcheck-suppress constParameterCallback
+static gboolean sstv_cb (GtkWidget *widget, GdkEventButton *event, gpointer data) {
+  start_sstv_menu();
+  return TRUE;
+}
+#endif
 
 #ifdef RADE
 void start_rade_menu(void) {
@@ -728,6 +744,12 @@ void new_menu(void) {
 #ifdef RADE
       btn = gtk_button_new_with_label("RADE");
       g_signal_connect (btn, "button-press-event", G_CALLBACK(rade_cb), NULL);
+      gtk_grid_attach(GTK_GRID(grid), btn, col, row, 1, 1);
+      row++;
+#endif
+#ifdef SSTV
+      btn = gtk_button_new_with_label("SSTV");
+      g_signal_connect (btn, "button-press-event", G_CALLBACK(sstv_cb), NULL);
       gtk_grid_attach(GTK_GRID(grid), btn, col, row, 1, 1);
       row++;
 #endif

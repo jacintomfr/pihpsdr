@@ -436,6 +436,26 @@ ifneq ($(wildcard rade-libs/lib/librade_static.a),)
 RADE?=ON
 endif
 endif
+##############################################################################
+#
+# SSTV (receive phase 1), piHPSDR-IF only: hpsdr-rs's SSTV modem as a Rust
+# static library (sstv-lib/, built with cargo - for the Pi in WSL with the
+# aarch64 target - and copied to sstv-libs/lib/libsstv_lib.a). Switched on
+# automatically once that file exists; SSTV=OFF builds without it.
+#
+##############################################################################
+
+ifeq ($(IFPAN),ON)
+ifneq ($(wildcard sstv-libs/lib/libsstv_lib.a),)
+SSTV?=ON
+endif
+endif
+ifeq ($(SSTV),ON)
+SSTV_OPTIONS=-D SSTV
+SSTV_OBJS=src/sstv_glue.o src/sstv_menu.o
+SSTV_LIBS=sstv-libs/lib/libsstv_lib.a -ldl -lpthread -lm
+endif
+
 ifeq ($(RADE),ON)
 RADE_OPTIONS=-D RADE -I./rade-libs/include
 RADE_OBJS=src/rade_glue.o src/rade_engine.o src/rade_text.o src/rade_mic_agc.o \
@@ -456,7 +476,7 @@ endif
 ##############################################################################
 
 OPTIONS=$(MIDI_OPTIONS) $(USBOZY_OPTIONS) \
-	$(GPIO_OPTIONS) $(SOAPYSDR_OPTIONS) $(IFPAN_OPTIONS) $(RADE_OPTIONS) \
+	$(GPIO_OPTIONS) $(SOAPYSDR_OPTIONS) $(IFPAN_OPTIONS) $(RADE_OPTIONS) $(SSTV_OPTIONS) \
 	$(ANDROMEDA_OPTIONS) \
 	$(STEMLAB_OPTIONS) \
 	$(SERVER_OPTIONS) \
@@ -713,14 +733,14 @@ src/waterfall.o
 #
 ##############################################################################
 
-$(PROGRAM):  $(OBJS) $(AUDIO_OBJS) $(USBOZY_OBJS) $(SOAPYSDR_OBJS) $(IFPAN_OBJS) $(RADE_OBJS) \
+$(PROGRAM):  $(OBJS) $(AUDIO_OBJS) $(USBOZY_OBJS) $(SOAPYSDR_OBJS) $(IFPAN_OBJS) $(RADE_OBJS) $(SSTV_OBJS) \
 		$(MIDI_OBJS) $(STEMLAB_OBJS) $(TTS_OBJS) $(TCI_OBJS)
 	$(COMPILE) -c -o src/version.o src/version.c
 	@+make -C libspecbleach
 	@+make -C wdsp
-	$(LINK) -o $(PROGRAM) $(OBJS) $(AUDIO_OBJS) $(USBOZY_OBJS) $(SOAPYSDR_OBJS) $(IFPAN_OBJS) $(RADE_OBJS) \
+	$(LINK) -o $(PROGRAM) $(OBJS) $(AUDIO_OBJS) $(USBOZY_OBJS) $(SOAPYSDR_OBJS) $(IFPAN_OBJS) $(RADE_OBJS) $(SSTV_OBJS) \
 		$(MIDI_OBJS) $(STEMLAB_OBJS) $(TTS_OBJS) $(TCI_OBJS) \
-		$(RADE_LIBS) $(LIBS)
+		$(RADE_LIBS) $(SSTV_LIBS) $(LIBS)
 
 ##############################################################################
 #

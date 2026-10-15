@@ -44,6 +44,9 @@ extern void start_tx_menu(void);
 #ifdef RADE
 extern void start_rade_menu(void);
 #endif
+#ifdef SSTV
+extern void start_sstv_menu(void);
+#endif
 extern void start_diversity_menu(void);
 extern void start_ps_menu(void);
 extern void start_server_menu(void);

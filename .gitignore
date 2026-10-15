@@ -23,3 +23,7 @@ release/LatexManual/piHPSDR-Manual.pdf
 rade-libs/
 rade-src/
 rade-build/
+
+# SSTV static library built from sstv-lib/ (cargo)
+sstv-libs/
+sstv-lib/target/

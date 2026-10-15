@@ -404,6 +404,32 @@ signals). Untick both to always hear something; tick them to hear only the
 decoded speech. (Seen on the Pi 5, 2026-10-12: "no audio" was simply RADE
 switched on.)
 
+## 6b. SSTV (receive)
+
+Main menu → **SSTV** (on the server; the client shows a note). The SSTV
+panel opens at the right and the spectrum / waterfall move to the left.
+
+* On opening: **zoom 26** with the SSTV band centred, the SSTV filter
+  (1100 – 2400 Hz) and three tuning lines on the spectrum and the waterfall:
+  **1200 Hz** (sync) and **2300 Hz** (white) purple, **1500 Hz** (black)
+  blue. A well-tuned picture fills the space between the purple lines.
+* **Decode: Auto** (green when on) finds the mode by itself, from the VIS
+  header or, for a picture already running, from the rhythm of the sync
+  pulses. Pick a mode in the box only to force it — a forced mode will not
+  lock on pictures sent in another mode.
+* **Restart RX** drops the current picture; **Fit Filter** sets the SSTV
+  filter again; **Quick Tune** goes to the usual calling frequencies
+  (DIGL below 10 MHz, DIGU above); **Auto-save** keeps every finished
+  picture in `~/pihpsdr-if/sstv_images/`.
+* Bars: **Sync** (how clean the sync pulses are), **Lvl** (input level),
+  **%** (picture progress).
+* **Close** (or leaving the program with the panel open) puts the zoom,
+  filter and squelch back as they were before SSTV.
+
+**Noisy pictures with a high S-meter?** The S-meter reads everything in the
+filter, noise included. If the picture is noisy the signal is close to the
+noise; no SSTV program does much better there.
+
 ## 7. Server and client
 
 * The **server** sits next to the radio (now the Raspberry Pi 5): SDR, CAT,

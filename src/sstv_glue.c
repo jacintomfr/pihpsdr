@@ -35,6 +35,14 @@
 #define SSTV_IMAGE_DIR "sstv_images"
 
 static sstv_t    *engine = NULL;
+//
+// Diagnosis (opt-in): with ~/sstv-dump.on present when SSTV starts, the decoder
+// input (mono float, 48 kHz) goes to /tmp/sstv_in.f32, at most 5 minutes, for
+// replaying through sstv.rs offline. Opened once, never closed under the
+// audio thread (only flushed).
+//
+static FILE      *dbg_dump = NULL;
+static long       dbg_dump_n = 0;
 static GMutex     engine_mutex;
 static atomic_int rx_enabled = 0;
 static int        sel_mode = -1;      // -1: Auto
@@ -76,6 +84,10 @@ void sstv_glue_rx_block(int rx_id, const double *stereo48, int frames) {
       buf[i] = (float)(0.5 * gain * (stereo48[2 * (done + i)] + stereo48[2 * (done + i) + 1]));
     }
     sstv_feed_rx(engine, buf, (size_t) n);
+    if (dbg_dump != NULL && dbg_dump_n < 48000L * 300) {
+      fwrite(buf, sizeof(float), (size_t) n, dbg_dump);
+      dbg_dump_n += n;
+    }
     done += n;
   }
 }
@@ -89,6 +101,19 @@ static int squelch_was_on = 0;
 
 void sstv_glue_set_rx_enabled(int on) {
   if (on) { get_engine(); }
+  if (on && dbg_dump == NULL) {
+    char flag[512];
+    snprintf(flag, sizeof(flag), "%s/sstv-dump.on", g_get_home_dir());
+    FILE *t = fopen(flag, "r");
+    if (t != NULL) {
+      fclose(t);
+      dbg_dump_n = 0;
+      dbg_dump = fopen("/tmp/sstv_in.f32", "wb");
+      t_print("%s: recording the decoder input to /tmp/sstv_in.f32 (%s)\n", __func__, flag);
+    }
+  } else if (!on && dbg_dump != NULL) {
+    fflush(dbg_dump);
+  }
   if (!radio_is_remote && receivers > 0 && receiver[0] != NULL) {
     if (on && !atomic_load(&rx_enabled) && receiver[0]->squelch_enable) {
       squelch_was_on = 1;
@@ -149,6 +174,43 @@ void sstv_glue_fit_filter(void) {
     f->high = 2400;
   }
   vfo_id_filter_changed(id, filterVar1);
+#ifdef IFPAN
+  ifpan_push_vfo_to_client();
+#endif
+  g_idle_add(ext_vfo_update, NULL);
+}
+
+//
+// the filter from before SSTV: Fit Filter (and Quick Tune) rewrite Var1 of
+// USB / LSB / DIGU / DIGL and select it; on close the edges and RX1's filter
+// come back (the filter only if the mode is still the one from before)
+//
+static const int fs_modes[4] = { modeUSB, modeLSB, modeDIGU, modeDIGL };
+static int fs_low[4], fs_high[4];
+static int fs_mode = -1, fs_filter = -1;
+
+void sstv_glue_filter_take(void) {
+  if (radio_is_remote) { return; }
+  for (int i = 0; i < 4; i++) {
+    fs_low[i]  = filters[fs_modes[i]][filterVar1].low;
+    fs_high[i] = filters[fs_modes[i]][filterVar1].high;
+  }
+  fs_mode   = vfo[0].mode;
+  fs_filter = vfo[0].filter;
+}
+
+void sstv_glue_filter_restore(void) {
+  if (radio_is_remote || fs_mode < 0) { return; }
+  for (int i = 0; i < 4; i++) {
+    filters[fs_modes[i]][filterVar1].low  = fs_low[i];
+    filters[fs_modes[i]][filterVar1].high = fs_high[i];
+  }
+  if (vfo[0].mode == fs_mode) {
+    vfo_id_filter_changed(0, fs_filter);
+  } else if (vfo[0].filter == filterVar1) {
+    vfo_id_filter_changed(0, filterVar1);   // Var1 of this mode has its old edges again
+  }
+  fs_mode = fs_filter = -1;
 #ifdef IFPAN
   ifpan_push_vfo_to_client();
 #endif

@@ -1008,6 +1008,9 @@ void radio_stop_program(void) {
 #ifdef RADE
   rade_glue_shutdown();   // TX chain values back (saved below), engine thread joined
 #endif
+#ifdef SSTV
+  sstv_menu_shutdown();   // zoom / pan / filter from before SSTV (saved below)
+#endif
 #ifdef GPIO
   gpio_close();
   t_print("%s: GPIO closed\n", __func__);

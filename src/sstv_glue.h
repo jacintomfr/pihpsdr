@@ -22,6 +22,8 @@ void        sstv_glue_set_auto_save(int on);
 int         sstv_glue_get_auto_save(void);
 const char *sstv_glue_image_dir(void);
 void        sstv_glue_fit_filter(void);           // RX passband 1100 - 2400 Hz
+void        sstv_glue_filter_take(void);          // panel open: remember RX1's filter and the Var1 edges
+void        sstv_glue_filter_restore(void);       // panel close: put them back
 void        sstv_glue_quick_tune(long long hz);   // calling frequency, DIGL/DIGU, Fit Filter
 
 void        sstv_glue_load_state(void);

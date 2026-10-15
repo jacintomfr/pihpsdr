@@ -406,8 +406,16 @@ switched on.)
 
 ## 6b. SSTV (receive)
 
-Main menu → **SSTV** (on the server; the client shows a note). The SSTV
-panel opens at the right and the spectrum / waterfall move to the left.
+Main menu → **SSTV** (on the server; the client shows a note) opens it and
+closes it again. As in the hpsdr-rs kiosk, the screen is split in half like
+two receivers side by side: spectrum / waterfall on the left, the SSTV
+picture on the right (as large as possible, with the Sync / Lvl / % bars and
+the decoder state at its right edge).
+
+* **OPTIONS** (bottom left of the waterfall) shows or hides the controls, in
+  a box just under the waterfall: **Quick Tune** (opens the calling
+  frequencies), **Auto-save**, and **Decode: Auto / mode**, **Restart RX**,
+  **Fit Filter**. The mode list opens as a 4 x 4 grid.
 
 * On opening: **zoom 26** with the SSTV band centred, the SSTV filter
   (1100 – 2400 Hz) and three tuning lines on the spectrum and the waterfall:

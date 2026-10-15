@@ -43,6 +43,14 @@
 #define STATE_CHARS 11      // "(receiving)", the widest state text
 
 static GtkWidget *panel = NULL;      // docked panel (in the main window's GtkFixed)
+//
+// As the hpsdr-rs kiosk (digital_inapp.rs): the panel is only the picture and
+// its status; the controls are behind an OPTIONS button at the bottom left of
+// the waterfall and, opened, cover the waterfall (the spectrum stays in view)
+//
+static GtkWidget *opt_btn = NULL;    // OPTIONS, closed (in the GtkFixed, over the waterfall)
+static GtkWidget *opt_box = NULL;    // the controls, open (same)
+static int opt_open = 0;
 static int panel_x = -1, panel_y = -1, panel_w = 0, panel_h = 0;
 static guint timer_id = 0;
 static GtkWidget *area, *bars;
@@ -89,6 +97,9 @@ static void panel_close(void) {
     sstv_glue_filter_restore(); // the filter from before SSTV
     gtk_widget_destroy(tmp);
     g_object_unref(tmp);      // the reference taken in sstv_menu
+    if (opt_btn) { gtk_widget_destroy(opt_btn); g_object_unref(opt_btn); opt_btn = NULL; }
+    if (opt_box) { gtk_widget_destroy(opt_box); g_object_unref(opt_box); opt_box = NULL; }
+    opt_open = 0;
     if (saved_zoom > 0) {
       radio_set_zoom(0, saved_zoom);   // back to the zoom from before SSTV
       radio_set_pan(0, saved_pan);
@@ -102,10 +113,6 @@ static void panel_close(void) {
   panel_x = panel_y = -1;
 }
 
-static gboolean close_cb(void) {
-  panel_close();
-  return TRUE;
-}
 
 // the picture, as large as the area allows with its aspect ratio
 static gboolean pic_draw_cb(GtkWidget *widget, cairo_t *cr, gpointer data) {
@@ -236,6 +243,11 @@ static gboolean status_timer(gpointer data) {
     snprintf(t, sizeof(t), "hunting...");
   }
   gtk_label_set_text(GTK_LABEL(state_label), t);
+  static char last_rx_id[sizeof(st.rx_id)] = "";
+  if (strcmp(st.rx_id, last_rx_id) != 0) {
+    snprintf(last_rx_id, sizeof(last_rx_id), "%s", st.rx_id);
+    if (st.rx_id[0]) { t_print("%s: SSTV station ID (FSK): %s\n", __func__, st.rx_id); }
+  }
   if (st.rx_id[0]) {
     snprintf(t, sizeof(t), "Station: %s", st.rx_id);
     gtk_label_set_text(GTK_LABEL(station_label), t);
@@ -303,11 +315,63 @@ static void quick_cb(GtkWidget *widget, gpointer data) {
 //
 int sstv_panel_wanted_width(int width, int height) {
   if (panel == NULL) { return 0; }
-  int pic_h = height - 2 * 44 - 12;
-  int w = pic_h * 5 / 4 + BARS_W + 8 + 12;
-  if (w > width * 6 / 10) { w = width * 6 / 10; }
-  if (w < 320) { w = 320; }
-  return w;
+  (void) height;
+  return width / 2;           // as piHPSDR's two receivers side by side
+}
+
+//
+// OPTIONS (a toggle, open or closed) at the bottom left of the waterfall, as
+// hpsdr-rs (6 px in, 44 px up; the RX area is 0 .. panel_x); opened, the
+// controls sit just under
+// the waterfall, RX width, over the slider area, so the spectrum and the
+// waterfall both stay in view (the user's choice over hpsdr-rs's "over the
+// waterfall")
+//
+static void options_place(void) {
+  if (panel == NULL || opt_btn == NULL || opt_box == NULL) { return; }
+  int rx_w = panel_x;
+  int bottom = panel_y + panel_h;
+  int bw = rx_w - 12;
+  if (bw < 200) { bw = 200; }
+  gtk_widget_set_size_request(opt_box, bw, -1);
+  int mh = 0, nh = 0;
+  // the contents, not opt_box: a hidden widget measures 0
+  gtk_widget_get_preferred_height_for_width(gtk_bin_get_child(GTK_BIN(opt_box)), bw, &mh, &nh);
+  int bx = 6, by = bottom;
+  int ox = 6, oy = bottom - 44;
+  (void) mh;
+  (void) nh;
+  if (gtk_widget_get_parent(opt_btn) == NULL) {
+    gtk_fixed_put(GTK_FIXED(fixed), opt_btn, ox, oy);
+    gtk_fixed_put(GTK_FIXED(fixed), opt_box, bx, by);
+  } else {
+    gtk_fixed_move(GTK_FIXED(fixed), opt_btn, ox, oy);
+    gtk_fixed_move(GTK_FIXED(fixed), opt_box, bx, by);
+  }
+  gtk_widget_show(opt_btn);   // always, in the waterfall; pressed while the controls are open
+  if (opt_open) {
+    gtk_widget_show(opt_box);
+  } else {
+    gtk_widget_hide(opt_box);
+  }
+}
+
+static gboolean opt_box_draw_cb(GtkWidget *widget, cairo_t *cr, gpointer data) {
+  int w = gtk_widget_get_allocated_width(widget);
+  int h = gtk_widget_get_allocated_height(widget);
+  cairo_set_source_rgb(cr, 0.16, 0.16, 0.16);
+  cairo_rectangle(cr, 0, 0, w, h);
+  cairo_fill(cr);
+  cairo_set_source_rgb(cr, 0.37, 0.37, 0.37);
+  cairo_set_line_width(cr, 1.0);
+  cairo_rectangle(cr, 0.5, 0.5, w - 1, h - 1);
+  cairo_stroke(cr);
+  return FALSE;               // then the buttons on top
+}
+
+static void options_toggle_cb(GtkWidget *widget, gpointer data) {
+  opt_open = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget));
+  options_place();
 }
 
 void sstv_panel_place(int x, int y, int w, int h) {
@@ -323,6 +387,40 @@ void sstv_panel_place(int x, int y, int w, int h) {
   panel_w = w;
   panel_h = h;
   gtk_widget_show_all(panel);
+  options_place();
+}
+
+//
+// A row that wraps onto more lines when the panel is narrow (1024x600):
+// a plain box would ask for its full width and widen the whole main window
+// past the screen.
+//
+//
+// The status texts in a small font (13 px, as hpsdr-rs's kiosk), so they fit
+// the bars' width and the column stays BARS_W wide: the picture gets the rest
+//
+static void small_font(GtkWidget *w) {
+  GtkCssProvider *css = gtk_css_provider_new();
+  gtk_css_provider_load_from_data(css, "label { font-size: 13px; }", -1, NULL);
+  gtk_style_context_add_provider(gtk_widget_get_style_context(w), GTK_STYLE_PROVIDER(css),
+                                 GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  g_object_unref(css);
+}
+
+static GtkWidget *wrap_row(void) {
+  GtkWidget *fb = gtk_flow_box_new();
+  gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(fb), GTK_SELECTION_NONE);
+  gtk_flow_box_set_homogeneous(GTK_FLOW_BOX(fb), FALSE);
+  gtk_flow_box_set_max_children_per_line(GTK_FLOW_BOX(fb), 20);
+  gtk_flow_box_set_column_spacing(GTK_FLOW_BOX(fb), 8);
+  gtk_flow_box_set_row_spacing(GTK_FLOW_BOX(fb), 4);
+  return fb;
+}
+
+static void wrap_add(GtkWidget *fb, GtkWidget *w) {
+  gtk_flow_box_insert(GTK_FLOW_BOX(fb), w, -1);
+  GtkWidget *child = gtk_widget_get_parent(w);   // the GtkFlowBoxChild
+  gtk_widget_set_can_focus(child, FALSE);
 }
 
 static GtkWidget *build_panel(void) {
@@ -331,14 +429,27 @@ static GtkWidget *build_panel(void) {
   //
   // control strip: Close, Decode (Auto / one mode), Restart RX, Fit Filter, Auto-save
   //
-  GtkWidget *strip = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-  GtkWidget *close_b = gtk_button_new_with_label("Close");
-  gtk_widget_set_name(close_b, "close_button");
-  g_signal_connect(close_b, "button-press-event", G_CALLBACK(close_cb), NULL);
-  gtk_box_pack_start(GTK_BOX(strip), close_b, FALSE, FALSE, 0);
+  //
+  // the OPTIONS button (closed) and the controls box (open), as in hpsdr-rs
+  //
+  opt_btn = gtk_toggle_button_new_with_label("OPTIONS");
+  gtk_widget_set_size_request(opt_btn, 120, 40);
+  g_signal_connect(opt_btn, "toggled", G_CALLBACK(options_toggle_cb), NULL);
+  g_object_ref_sink(opt_btn);
+  opt_box = gtk_event_box_new();
+  g_signal_connect(opt_box, "draw", G_CALLBACK(opt_box_draw_cb), NULL);   // its own opaque background
+  g_object_ref_sink(opt_box);
+  // shown / hidden only by options_place: radio_reconfigure's show_all must not open it
+  gtk_widget_set_no_show_all(opt_btn, TRUE);
+  gtk_widget_set_no_show_all(opt_box, TRUE);
+  GtkWidget *ovbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+  gtk_container_set_border_width(GTK_CONTAINER(ovbox), 6);
+  gtk_container_add(GTK_CONTAINER(opt_box), ovbox);
+  GtkWidget *strip = wrap_row();
+  GtkWidget *dec = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);   // "Decode: [Auto] [mode]" stay together
   GtkWidget *l = gtk_label_new("Decode:");
   gtk_widget_set_name(l, "boldlabel");
-  gtk_box_pack_start(GTK_BOX(strip), l, FALSE, FALSE, 0);
+  gtk_box_pack_start(GTK_BOX(dec), l, FALSE, FALSE, 0);
   auto_btn = gtk_toggle_button_new_with_label("Auto");
   {
     // Auto on: green, unmistakable (the theme's "checked" grey is too faint)
@@ -351,13 +462,17 @@ static GtkWidget *build_panel(void) {
     g_object_unref(css);
   }
   gtk_widget_set_tooltip_text(auto_btn, "Mode from the VIS header (or the sync rhythm of a picture already running)");
-  gtk_box_pack_start(GTK_BOX(strip), auto_btn, FALSE, FALSE, 0);
+  gtk_box_pack_start(GTK_BOX(dec), auto_btn, FALSE, FALSE, 0);
   mode_combo = gtk_combo_box_text_new();
   for (int i = 0; i < sstv_mode_count(); i++) {
     gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(mode_combo), NULL, sstv_mode_label(i));
   }
   gtk_widget_set_tooltip_text(mode_combo, "Receive now in this mode (forced start, as in MMSSTV)");
-  gtk_box_pack_start(GTK_BOX(strip), mode_combo, FALSE, FALSE, 0);
+  // 16 modes: a 4 x 4 grid, not one column the height of the screen
+  gtk_combo_box_set_wrap_width(GTK_COMBO_BOX(mode_combo), 4);
+  gtk_box_pack_start(GTK_BOX(dec), mode_combo, FALSE, FALSE, 0);
+  GtkWidget *row2 = wrap_row();
+  wrap_add(row2, dec);
   updating = 1;
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(auto_btn), sstv_glue_get_mode() < 0);
   gtk_combo_box_set_active(GTK_COMBO_BOX(mode_combo), sstv_glue_get_mode());
@@ -367,18 +482,44 @@ static GtkWidget *build_panel(void) {
   GtkWidget *restart = gtk_button_new_with_label("Restart RX");
   gtk_widget_set_tooltip_text(restart, "Drop the picture in progress and wait for the next header");
   g_signal_connect(restart, "clicked", G_CALLBACK(restart_cb), NULL);
-  gtk_box_pack_start(GTK_BOX(strip), restart, FALSE, FALSE, 0);
+  wrap_add(row2, restart);
   GtkWidget *fit = gtk_button_new_with_label("Fit Filter");
   gtk_widget_set_tooltip_text(fit, "Narrow the RX filter to the SSTV tone band (1100-2400 Hz)");
   g_signal_connect(fit, "clicked", G_CALLBACK(fit_cb), NULL);
-  gtk_box_pack_start(GTK_BOX(strip), fit, FALSE, FALSE, 0);
+  wrap_add(row2, fit);
   GtkWidget *save = gtk_check_button_new_with_label("Auto-save");
   gtk_widget_set_name(save, "boldlabel");
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(save), sstv_glue_get_auto_save());
   gtk_widget_set_tooltip_text(save, "Save every completed picture as a PNG, like QSSTV does -- sstv_images/");
   g_signal_connect(save, "toggled", G_CALLBACK(save_cb), NULL);
-  gtk_box_pack_start(GTK_BOX(strip), save, FALSE, FALSE, 0);
-  gtk_box_pack_start(GTK_BOX(vbox), strip, FALSE, FALSE, 0);
+  //
+  // Quick Tune: a button opening the calling frequencies above it (hpsdr-rs
+  // sstv_quick_popup: 110x40, band buttons 72x44, a choice closes it)
+  //
+  GtkWidget *qbtn = gtk_button_new_with_label("Quick Tune");
+  gtk_widget_set_size_request(qbtn, 110, 40);
+  GtkWidget *qpop = gtk_popover_new(qbtn);
+  gtk_popover_set_position(GTK_POPOVER(qpop), GTK_POS_TOP);
+  GtkWidget *qrow = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+  gtk_container_set_border_width(GTK_CONTAINER(qrow), 6);
+  for (int i = 0; i < (int)(sizeof(quick) / sizeof(quick[0])); i++) {
+    GtkWidget *b = gtk_button_new_with_label(quick[i].label);
+    gtk_widget_set_size_request(b, 72, 44);
+    char tip[64];
+    snprintf(tip, sizeof(tip), "%.3f MHz - a starting point, not a standard", quick[i].hz / 1e6);
+    gtk_widget_set_tooltip_text(b, tip);
+    g_signal_connect(b, "clicked", G_CALLBACK(quick_cb), GINT_TO_POINTER(i));
+    g_signal_connect_swapped(b, "clicked", G_CALLBACK(gtk_popover_popdown), qpop);
+    gtk_box_pack_start(GTK_BOX(qrow), b, FALSE, FALSE, 0);
+  }
+  gtk_widget_show_all(qrow);
+  gtk_container_add(GTK_CONTAINER(qpop), qrow);
+  g_signal_connect_swapped(qbtn, "clicked", G_CALLBACK(gtk_popover_popup), qpop);
+  wrap_add(strip, qbtn);
+  wrap_add(strip, save);
+  gtk_box_pack_start(GTK_BOX(ovbox), strip, FALSE, FALSE, 0);
+  gtk_box_pack_start(GTK_BOX(ovbox), row2, FALSE, FALSE, 0);
+  gtk_widget_show_all(ovbox);   // contents ready, so its height can be measured while closed
   //
   // the picture on the left, the bars and the decoder state on the right
   //
@@ -408,37 +549,24 @@ static GtkWidget *build_panel(void) {
   // the column (and the picture with it); longer text wraps
   gtk_label_set_width_chars(GTK_LABEL(state_label), STATE_CHARS);
   gtk_label_set_max_width_chars(GTK_LABEL(state_label), STATE_CHARS);
+  small_font(state_label);
   gtk_label_set_xalign(GTK_LABEL(state_label), 0.0);
   gtk_box_pack_start(GTK_BOX(srow), state_label, TRUE, TRUE, 0);
   gtk_box_pack_start(GTK_BOX(col), srow, FALSE, FALSE, 0);
   station_label = gtk_label_new("");
   gtk_label_set_line_wrap(GTK_LABEL(station_label), TRUE);
   gtk_label_set_max_width_chars(GTK_LABEL(station_label), STATE_CHARS);
+  small_font(station_label);
   gtk_label_set_xalign(GTK_LABEL(station_label), 0.0);
   gtk_box_pack_start(GTK_BOX(col), station_label, FALSE, FALSE, 0);
   unsupported_label = gtk_label_new("");
   gtk_label_set_line_wrap(GTK_LABEL(unsupported_label), TRUE);
   gtk_label_set_max_width_chars(GTK_LABEL(unsupported_label), STATE_CHARS);
+  small_font(unsupported_label);
   gtk_label_set_xalign(GTK_LABEL(unsupported_label), 0.0);
   gtk_box_pack_start(GTK_BOX(col), unsupported_label, FALSE, FALSE, 0);
   gtk_box_pack_start(GTK_BOX(main), col, FALSE, FALSE, 0);
   gtk_box_pack_start(GTK_BOX(vbox), main, TRUE, TRUE, 0);
-  //
-  // Quick Tune: the SSTV calling frequencies
-  //
-  GtkWidget *qrow = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-  l = gtk_label_new("Quick Tune:");
-  gtk_widget_set_name(l, "boldlabel");
-  gtk_box_pack_start(GTK_BOX(qrow), l, FALSE, FALSE, 0);
-  for (int i = 0; i < (int)(sizeof(quick) / sizeof(quick[0])); i++) {
-    GtkWidget *b = gtk_button_new_with_label(quick[i].label);
-    char tip[64];
-    snprintf(tip, sizeof(tip), "%.3f MHz - a starting point, not a standard", quick[i].hz / 1e6);
-    gtk_widget_set_tooltip_text(b, tip);
-    g_signal_connect(b, "clicked", G_CALLBACK(quick_cb), GINT_TO_POINTER(i));
-    gtk_box_pack_start(GTK_BOX(qrow), b, FALSE, FALSE, 0);
-  }
-  gtk_box_pack_start(GTK_BOX(vbox), qrow, FALSE, FALSE, 0);
   return vbox;
 }
 

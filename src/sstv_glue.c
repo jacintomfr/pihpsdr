@@ -13,6 +13,7 @@
 
 #include <glib.h>
 #include <stdatomic.h>
+#include <math.h>
 #include <stdio.h>
 
 #include "band.h"
@@ -53,6 +54,18 @@ static sstv_t *get_engine(void) {
 
 void sstv_glue_rx_block(int rx_id, const double *stereo48, int frames) {
   if (rx_id != 0 || !atomic_load(&rx_enabled) || engine == NULL) { return; }
+  //
+  // The tap is after WDSP's AF gain (the AF slider, SetRXAPanelGain1): undo
+  // it, so the decoder sees the level it would at AF 0 dB whatever the
+  // listening volume (hpsdr-rs taps ahead of its Audio Gain). At the slider's
+  // bottom (-39.5 dB and below) WDSP sends silence: nothing to undo.
+  //
+  double gain = 1.0;
+  if (receivers > 0 && receiver[0] != NULL) {
+    double v = receiver[0]->volume;
+    if (v <= -39.5) { return; }
+    if (v < 0.0) { gain = pow(10.0, -0.05 * v); }
+  }
   float buf[SSTV_BLOCK];
   int done = 0;
   while (done < frames) {
@@ -60,15 +73,33 @@ void sstv_glue_rx_block(int rx_id, const double *stereo48, int frames) {
     if (n > SSTV_BLOCK) { n = SSTV_BLOCK; }
     for (int i = 0; i < n; i++) {
       // mono downmix, as hpsdr-rs spectrum.rs feeds sstv_scratch
-      buf[i] = (float)(0.5 * (stereo48[2 * (done + i)] + stereo48[2 * (done + i) + 1]));
+      buf[i] = (float)(0.5 * gain * (stereo48[2 * (done + i)] + stereo48[2 * (done + i) + 1]));
     }
     sstv_feed_rx(engine, buf, (size_t) n);
     done += n;
   }
 }
 
+//
+// While SSTV decodes, the receiver squelch is off (a closed squelch feeds the
+// decoder silence: the weak parts of a picture would be lost); it is put
+// back as it was when the SSTV panel closes.
+//
+static int squelch_was_on = 0;
+
 void sstv_glue_set_rx_enabled(int on) {
   if (on) { get_engine(); }
+  if (!radio_is_remote && receivers > 0 && receiver[0] != NULL) {
+    if (on && !atomic_load(&rx_enabled) && receiver[0]->squelch_enable) {
+      squelch_was_on = 1;
+      radio_set_squelch_enable(0, 0);
+      t_print("%s: squelch off while SSTV decodes\n", __func__);
+    } else if (!on && atomic_load(&rx_enabled) && squelch_was_on) {
+      squelch_was_on = 0;
+      radio_set_squelch_enable(0, 1);
+      t_print("%s: squelch back on\n", __func__);
+    }
+  }
   atomic_store(&rx_enabled, on ? 1 : 0);
   t_print("%s: SSTV RX %s\n", __func__, on ? "on" : "off");
 }

@@ -66,6 +66,7 @@
 #endif
 #ifdef SSTV
 #include "sstv_glue.h"
+#include "sstv_menu.h"
 #endif
 #include "rx_panadapter.h"
 #include "server_menu.h"
@@ -706,13 +707,23 @@ void radio_reconfigure(void) {
   rx_height -= SLIDERS_HEIGHT * slider_rows;
   rx_height -= TOOLBAR_HEIGHT * toolbar_rows;
   y = VFO_HEIGHT;
+  //
+  // piHPSDR-IF: a panel docked at the right of the spectrum / waterfall
+  // (SSTV), the way two receivers sit side by side: the receivers get the
+  // width that is left
+  //
+  int side_w = 0;
+#ifdef SSTV
+  side_w = sstv_panel_wanted_width(my_width, rx_height);
+#endif
+  int rx_w = my_width - side_w;
   // if there is only one receiver, both cases here do the same.
   if (rx_stack_horizontal) {
     int x = 0;
     for (i = 0; i < receivers; i++) {
       RECEIVER *rx = receiver[i];
       g_mutex_lock(&rx->display_mutex);
-      rx->width = my_width / receivers;
+      rx->width = rx_w / receivers;
       rx_update_width(rx);
       rx_reconfigure(rx, rx_height);
       if (!radio_is_transmitting() || duplex) {
@@ -721,14 +732,14 @@ void radio_reconfigure(void) {
       g_mutex_unlock(&rx->display_mutex);
       rx->x = x;
       rx->y = y;
-      x = x + my_width / receivers;
+      x = x + rx_w / receivers;
     }
     y = y + rx_height;
   } else {
     for (i = 0; i < receivers; i++) {
       RECEIVER *rx = receiver[i];
       g_mutex_lock(&rx->display_mutex);
-      rx->width = my_width;
+      rx->width = rx_w;
       rx_update_width(rx);
       rx_reconfigure(rx, rx_height / receivers);
       if (!radio_is_transmitting() || duplex) {
@@ -753,8 +764,11 @@ void radio_reconfigure(void) {
   } else {
     toolbar_destroy();
   }
+#ifdef SSTV
+  sstv_panel_place(rx_w, VFO_HEIGHT, side_w, rx_height);
+#endif
   if (transmitter != NULL && !duplex) {
-    tx_reconfigure(transmitter, my_width, my_width, rx_height);
+    tx_reconfigure(transmitter, rx_w, rx_w, rx_height);
     if (radio_is_transmitting()) {
       gtk_fixed_move(GTK_FIXED(fixed), transmitter->panel, 0, VFO_HEIGHT);
     }

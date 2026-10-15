@@ -7,8 +7,13 @@
  * decoder is doing ("Scottie 1 (receiving)" / "(last)" / "hunting..."),
  * the station's FSK ID and an unsupported-mode note. Controls: Decode Auto
  * or one mode, Restart RX, Fit Filter (1100 - 2400 Hz), Auto-save, and the
- * Quick Tune calling frequencies. Decoding runs while this window is open.
- * Sized for the Pi's 1024x600 screen (picture 560x448 = 1.75x Scottie).
+ * Quick Tune calling frequencies. Decoding runs while the panel is open.
+ *
+ * The panel is docked at the right of the spectrum / waterfall, which
+ * shrink to the left the way piHPSDR puts two receivers side by side
+ * (radio_reconfigure asks sstv_panel_wanted_width, then sstv_panel_place):
+ * nothing of the spectrum is covered. Its width follows the height there
+ * is, so the picture (5:4, Scottie / Martin) is as large as it can be.
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -20,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "main.h"
 #include "new_menu.h"
 #include "radio.h"
 #include "message.h"
@@ -29,11 +35,10 @@
   #include "ifpan.h"
 #endif
 
-#define PIC_W 560
-#define PIC_H 448
 #define BARS_W 104
 
-static GtkWidget *dialog = NULL;
+static GtkWidget *panel = NULL;      // docked panel (in the main window's GtkFixed)
+static int panel_x = -1, panel_y = -1, panel_w = 0, panel_h = 0;
 static guint timer_id = 0;
 static GtkWidget *area, *bars;
 static GdkPixbuf *pix = NULL;
@@ -47,77 +52,24 @@ static const struct { const char *label; long long hz; } quick[] = {
   { "80m", 3730000LL }, { "40m", 7033000LL }, { "30m", 10132000LL }, { "20m", 14230000LL }, { "15m", 21340000LL },
 };
 
-//
-// The SSTV window opens where it was last (like the RADE window)
-//
-#define SSTV_WINDOW_POS_FILE "sstv-window.txt"
-static int pos_x = 0, pos_y = 0, pos_have = -1;   // -1: file not read yet
-
-static void pos_save(void) {
-  FILE *fp = fopen(SSTV_WINDOW_POS_FILE, "w");
-  if (fp) {
-    fprintf(fp, "%d %d\n", pos_x, pos_y);
-    fclose(fp);
-  }
-}
-
-static void pos_load(void) {
-  if (pos_have >= 0) { return; }
-  pos_have = 0;
-  FILE *fp = fopen(SSTV_WINDOW_POS_FILE, "r");
-  if (fp) {
-    if (fscanf(fp, "%d %d", &pos_x, &pos_y) == 2) { pos_have = 1; }
-    fclose(fp);
-  }
-}
-
-static int pos_ok(int x, int y) {
-#ifdef IFPAN
-  return ifpan_point_on_screen(x, y);
-#else
-  return x > -10000 && y > -10000;
-#endif
-}
-
-static gboolean configure_cb(GtkWidget *widget, GdkEvent *event, gpointer data) {
-  int x, y;
-  gtk_window_get_position(GTK_WINDOW(widget), &x, &y);
-  if ((x != 0 || y != 0) && pos_ok(x, y)) {
-    pos_x = x;
-    pos_y = y;
-    pos_have = 1;
-  }
-  return FALSE;
-}
-
-static gboolean pos_apply(gpointer data) {
-  if (dialog != NULL && pos_have == 1) { gtk_window_move(GTK_WINDOW(dialog), pos_x, pos_y); }
-  return G_SOURCE_REMOVE;
-}
-
-static void cleanup(void) {
+static void panel_close(void) {
   if (timer_id) { g_source_remove(timer_id); timer_id = 0; }
-  if (dialog != NULL && pos_have == 1) { pos_save(); }
-  if (dialog != NULL) {
-    GtkWidget *tmp = dialog;
-    dialog = NULL;
+  if (panel != NULL) {
+    GtkWidget *tmp = panel;
+    panel = NULL;
     sstv_glue_set_rx_enabled(0);
     gtk_widget_destroy(tmp);
-    sub_menu = NULL;
-    active_menu  = NO_MENU;
+    g_object_unref(tmp);      // the reference taken in sstv_menu
+    radio_reconfigure();      // the spectrum / waterfall get the whole width back
     radio_save_state();
   }
   if (pix) { g_object_unref(pix); pix = NULL; }
   last_image_id = 0xffffffffu;
+  panel_x = panel_y = -1;
 }
 
 static gboolean close_cb(void) {
-  cleanup();
-  return TRUE;
-}
-
-static gboolean destroy_cb(void) {
-  cleanup();
+  panel_close();
   return TRUE;
 }
 
@@ -207,7 +159,7 @@ static gboolean dot_draw_cb(GtkWidget *widget, cairo_t *cr, gpointer data) {
 
 static gboolean status_timer(gpointer data) {
   const sstv_t *e = sstv_glue_engine();
-  if (dialog == NULL || e == NULL) { return G_SOURCE_CONTINUE; }
+  if (panel == NULL || e == NULL) { return G_SOURCE_CONTINUE; }
   memset(&st, 0, sizeof(st));
   sstv_get_status(e, &st);
   // the picture: while one is being decoded, and once when a new one starts / ends
@@ -304,17 +256,38 @@ static void quick_cb(GtkWidget *widget, gpointer data) {
   sstv_glue_quick_tune(quick[GPOINTER_TO_INT(data)].hz);
 }
 
-void sstv_menu(GtkWidget *parent) {
-  dialog = gtk_dialog_new();
-  gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(parent));
-  GtkWidget *headerbar = gtk_header_bar_new();
-  gtk_window_set_titlebar(GTK_WINDOW(dialog), headerbar);
-  gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(headerbar), TRUE);
-  gtk_header_bar_set_title(GTK_HEADER_BAR(headerbar), APP_NAME " - SSTV");
-  g_signal_connect(dialog, "delete_event", G_CALLBACK(close_cb), NULL);
-  g_signal_connect(dialog, "destroy", G_CALLBACK(destroy_cb), NULL);
-  GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+//
+// radio_reconfigure: the width the panel wants at the right (0: not docked):
+// the picture area as high as the receiver area minus the two control rows,
+// 5:4 wide, plus the bars column; at most 60 % of the screen
+//
+int sstv_panel_wanted_width(int width, int height) {
+  if (panel == NULL) { return 0; }
+  int pic_h = height - 2 * 44 - 12;
+  int w = pic_h * 5 / 4 + BARS_W + 8 + 12;
+  if (w > width * 6 / 10) { w = width * 6 / 10; }
+  if (w < 320) { w = 320; }
+  return w;
+}
+
+void sstv_panel_place(int x, int y, int w, int h) {
+  if (panel == NULL || w <= 0) { return; }
+  gtk_widget_set_size_request(panel, w, h);
+  if (panel_x < 0) {
+    gtk_fixed_put(GTK_FIXED(fixed), panel, x, y);
+  } else if (x != panel_x || y != panel_y) {
+    gtk_fixed_move(GTK_FIXED(fixed), panel, x, y);
+  }
+  panel_x = x;
+  panel_y = y;
+  panel_w = w;
+  panel_h = h;
+  gtk_widget_show_all(panel);
+}
+
+static GtkWidget *build_panel(void) {
   GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+  gtk_container_set_border_width(GTK_CONTAINER(vbox), 6);
   //
   // control strip: Close, Decode (Auto / one mode), Restart RX, Fit Filter, Auto-save
   //
@@ -323,17 +296,6 @@ void sstv_menu(GtkWidget *parent) {
   gtk_widget_set_name(close_b, "close_button");
   g_signal_connect(close_b, "button-press-event", G_CALLBACK(close_cb), NULL);
   gtk_box_pack_start(GTK_BOX(strip), close_b, FALSE, FALSE, 0);
-  if (radio_is_remote) {
-    // phase 1: the decoder and the picture are on the server
-    GtkWidget *l = gtk_label_new("SSTV runs on the server for now: open SSTV on the piHPSDR-IF server screen.");
-    gtk_widget_set_name(l, "boldlabel");
-    gtk_box_pack_start(GTK_BOX(strip), l, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(vbox), strip, FALSE, FALSE, 0);
-    gtk_container_add(GTK_CONTAINER(content), vbox);
-    sub_menu = dialog;
-    gtk_widget_show_all(dialog);
-    return;
-  }
   GtkWidget *l = gtk_label_new("Decode:");
   gtk_widget_set_name(l, "boldlabel");
   gtk_box_pack_start(GTK_BOX(strip), l, FALSE, FALSE, 0);
@@ -372,7 +334,7 @@ void sstv_menu(GtkWidget *parent) {
   //
   GtkWidget *main = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
   area = gtk_drawing_area_new();
-  gtk_widget_set_size_request(area, PIC_W, PIC_H);
+  gtk_widget_set_size_request(area, 160, 128);
   gtk_widget_set_hexpand(area, TRUE);
   gtk_widget_set_vexpand(area, TRUE);
   g_signal_connect(area, "draw", G_CALLBACK(pic_draw_cb), NULL);
@@ -380,7 +342,7 @@ void sstv_menu(GtkWidget *parent) {
   GtkWidget *col = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
   gtk_widget_set_size_request(col, BARS_W, -1);
   bars = gtk_drawing_area_new();
-  gtk_widget_set_size_request(bars, BARS_W, PIC_H - 22 - 64);
+  gtk_widget_set_size_request(bars, BARS_W, 120);
   gtk_widget_set_vexpand(bars, TRUE);
   g_signal_connect(bars, "draw", G_CALLBACK(bars_draw_cb), NULL);
   gtk_box_pack_start(GTK_BOX(col), bars, TRUE, TRUE, 0);
@@ -421,20 +383,29 @@ void sstv_menu(GtkWidget *parent) {
     gtk_box_pack_start(GTK_BOX(qrow), b, FALSE, FALSE, 0);
   }
   gtk_box_pack_start(GTK_BOX(vbox), qrow, FALSE, FALSE, 0);
-  gtk_container_add(GTK_CONTAINER(content), vbox);
-  sub_menu = dialog;
-  sstv_glue_set_rx_enabled(1);
-  pos_load();
-  int have = (pos_have == 1 && pos_ok(pos_x, pos_y));
-  int want_x = pos_x, want_y = pos_y;
-  if (have) { gtk_window_move(GTK_WINDOW(dialog), want_x, want_y); }
-  gtk_widget_show_all(dialog);
-  if (have) {
-    pos_x = want_x;
-    pos_y = want_y;
-    g_timeout_add(150, pos_apply, NULL);
+  return vbox;
+}
+
+// main menu "SSTV": dock the panel (or close it if it is there)
+void sstv_menu(GtkWidget *parent) {
+  (void) parent;
+  if (panel != NULL) {
+    panel_close();
+    return;
   }
-  g_signal_connect(dialog, "configure-event", G_CALLBACK(configure_cb), NULL);
+  if (radio_is_remote) {
+    // phase 1: the decoder and the picture are on the server
+    GtkWidget *dlg = gtk_message_dialog_new(GTK_WINDOW(top_window), GTK_DIALOG_DESTROY_WITH_PARENT,
+                                            GTK_MESSAGE_INFO, GTK_BUTTONS_OK,
+                                            "SSTV runs on the server for now:\nopen SSTV on the piHPSDR-IF server screen.");
+    g_signal_connect_swapped(dlg, "response", G_CALLBACK(gtk_widget_destroy), dlg);
+    gtk_widget_show_all(dlg);
+    return;
+  }
+  panel = build_panel();
+  g_object_ref_sink(panel);
+  sstv_glue_set_rx_enabled(1);
+  radio_reconfigure();        // spectrum / waterfall to the left, the panel at the right
   status_timer(NULL);
   timer_id = g_timeout_add(200, status_timer, NULL);
 }

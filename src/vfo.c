@@ -1031,13 +1031,15 @@ static void ifpan_layout(cairo_t *cr, const VFO_BAR_LAYOUT *src, double width,
   }
   //
   // Dial: as large as the width left of the right block allows,
-  // limited by the bar height. Template "88.888" + "888".
+  // limited by the bar height. Template "888.888" + "888": room for three
+  // MHz digits (a transverter band, 144.000 000), right-aligned, so HF
+  // frequencies sit one digit to the right of the left edge.
   //
   double avail = x0 - 1.5 * src->size1 - src->vfo_a_l;
   dial->gap = src->size2 / 3.0;
   cairo_text_extents_t e3, e2;
   cairo_set_font_size(cr, src->size3);
-  cairo_text_extents(cr, "88.888", &e3);
+  cairo_text_extents(cr, "888.888", &e3);
   cairo_set_font_size(cr, src->size2);
   cairo_text_extents(cr, "888", &e2);
   //

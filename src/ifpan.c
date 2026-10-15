@@ -1753,6 +1753,22 @@ static int ts_sync(int sock, int busy) {
   // always places the transceiver in simplex", so FT1 last).
   //
   int want_bmode = kenwood_mode_index(vfo[VFO_A].mode);
+  //
+  // Act only on a request that has not changed since the last poll
+  // (~0.1 s): a memory recall changes the mode first and the split a few
+  // ms later, and the in-between state (new mode, old split) made an extra
+  // FR1 MDx FR0 round on the TS (2026-10-14).
+  //
+  {
+    static long long last_sig = -1;
+    long long sig = want_fb ^ ((long long) want_split << 40) ^ ((long long)(want_bmode + 1) << 44)
+                    ^ ((long long)(transmitter->ctcss_enabled ? 1 : 0) << 50)
+                    ^ ((long long) transmitter->ctcss << 52);
+    if (sig != last_sig) {
+      last_sig = sig;
+      return 0;
+    }
+  }
   int want_tn_chk = transmitter != NULL ? transmitter->ctcss + 1 : ts_sent.tn;
   int want_tone_chk = transmitter != NULL ? (transmitter->ctcss_enabled ? 1 : 0) : ts_sent.tone;
   if ((want_fb > 0 && want_fb != ts_sent.fb) || want_split != ts_sent.split

@@ -63,6 +63,7 @@
 #endif
 #ifdef RADE
 #include "rade_glue.h"
+#include "rade_menu.h"
 #endif
 #ifdef SSTV
 #include "sstv_glue.h"
@@ -716,6 +717,9 @@ void radio_reconfigure(void) {
 #ifdef SSTV
   side_w = sstv_panel_wanted_width(my_width, rx_height);
 #endif
+#ifdef RADE
+  if (side_w == 0) { side_w = rade_panel_wanted_width(my_width, rx_height); }
+#endif
   int rx_w = my_width - side_w;
   // if there is only one receiver, both cases here do the same.
   if (rx_stack_horizontal) {
@@ -766,6 +770,9 @@ void radio_reconfigure(void) {
   }
 #ifdef SSTV
   sstv_panel_place(rx_w, VFO_HEIGHT, side_w, rx_height);
+#endif
+#ifdef RADE
+  rade_panel_place(rx_w, VFO_HEIGHT, side_w, rx_height);
 #endif
   if (transmitter != NULL && !duplex) {
     tx_reconfigure(transmitter, rx_w, rx_w, rx_height);
@@ -1010,6 +1017,9 @@ void radio_stop_program(void) {
 #endif
 #ifdef SSTV
   sstv_menu_shutdown();   // zoom / pan / filter from before SSTV (saved below)
+#endif
+#ifdef RADE
+  rade_menu_shutdown();   // zoom / pan from before RADE (saved below)
 #endif
 #ifdef GPIO
   gpio_close();

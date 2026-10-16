@@ -375,12 +375,25 @@ RADE — use PTT / MOX. Details: `docs/RADE-IFPAN.md`.
 RADE RX on, TX armed if it was armed last time, the receiver in DIGU / DIGL
 and the RADE RX filter (narrow 700 - 2300 Hz or wide 300 - 2700 Hz, "Fit
 Filter") at once. If the band has a RADE frequency (Quick Tune list: 80m 3.630,
-40m 7.180, 20m 14.236, 15m 21.180, 10m 28.330 MHz), it goes straight there. The menu's **Close** button (or the window's X) leaves
+40m 7.180, 20m 14.236, 15m 21.180, 10m 28.330 MHz), it goes straight there.
+**RADE** in the menu (or the RADE toolbar / MIDI function) again leaves
 RADE: band, band stack, frequency, CTUN, mode, filter, RX volume and TX Drive
 (TS PWR) go back to what they were before RADE, the Kenwood included,
-whatever was tuned or changed meanwhile. Unticking "Enable RADE RX" also
-leaves RADE. If the RADE menu is only replaced by another menu, RADE stays
-on; open the RADE menu again and Close it to leave. RADE is not switched on
+whatever was tuned or changed meanwhile, and the zoom too. Unticking "Enable
+RADE RX" also leaves RADE.
+
+**The RADE panel** is docked like the SSTV panel (one of the two at a time):
+the screen split in half, spectrum / waterfall on the left at zoom 26
+centred on the RADE signal, the RADE controls on the right — RX / TX armed,
+status, level, the last 3 received callsigns, My callsign, the options in
+two columns (big check boxes with an X), **Adjust** (the EQ gains in a
+pop-up), Fit Filter and **Quick Tune** (the bands in a pop-up).
+
+**On-screen keyboard:** on the Pi a keyboard opens by itself under (or
+above) any text field that gets the focus — My callsign, or any field of
+the menus — as in the hpsdr-rs kiosk: 1234567890 / qwerty rows, Shift (one
+letter), ?123 symbols, Backspace (repeats when held), Enter (confirms and
+closes), hide. Not on Windows (real keyboard). RADE is not switched on
 at startup; if the program was ended in RADE, the state from before RADE is
 put back once the Kenwood's CAT answers (kept as rade_prev.* in the props
 file).

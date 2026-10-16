@@ -417,7 +417,7 @@ IFPAN_OPTIONS=-D IFPAN -I./rnnoise/include
 RNNOISE_SRC=denoise.c rnn.c pitch.c kiss_fft.c celt_lpc.c nnet.c nnet_default.c \
 	parse_lpcnet_weights.c rnnoise_data.c rnnoise_tables.c
 RNNOISE_OBJS=$(addprefix rnnoise/src/,$(RNNOISE_SRC:.c=.o))
-IFPAN_OBJS=src/ifpan.o src/mic_nr.o $(RNNOISE_OBJS)
+IFPAN_OBJS=src/ifpan.o src/mic_nr.o src/osk.o $(RNNOISE_OBJS)
 endif
 
 ##############################################################################

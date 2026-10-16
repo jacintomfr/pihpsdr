@@ -402,7 +402,12 @@ with an X; the coloured state buttons keep their colours. On a small screen
 the Radio menu scrolls (drag it) instead of being cut at the bottom. The Menu is
 as wide as the screen with bigger tiles; window headers are thin and
 have no small "X": use the menu's own Close button (a window without one
-gets a big Close in its header). RADE is not switched on
+gets a big Close in its header). With slider rows shown, Menu and Hide sit
+at the left of the sliders (Menu on the first row, Hide on the second) and
+the top right corner goes to a wider S-meter with a big S readout (no dBm
+tick scale; the dBm readout stays). After Hide, Menu and Show sit in the
+bottom right corner of the waterfall. Switching the touch style on or off
+takes effect after a restart. RADE is not switched on
 at startup; if the program was ended in RADE, the state from before RADE is
 put back once the Kenwood's CAT answers (kept as rade_prev.* in the props
 file).

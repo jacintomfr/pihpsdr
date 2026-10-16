@@ -296,6 +296,17 @@ int touch_style = 0;
 int touch_style = 1;
 #endif
 static GtkCssProvider *touch_css = NULL;
+static GtkCssProvider *touch_css_hi = NULL;   // above css.c's "* { font-family }" (APPLICATION)
+
+//
+// Menu / Hide in bold: css.c asks for bold, but the Pi's "Open Sans" has no
+// bold face (only a separate "Open Sans Extrabold" family), so it showed light
+//
+static const char *touch_rules_hi =
+  "#menubutton label, #hidebutton label { font-family: \"Open Sans Extrabold\", \"FreeSans\", sans-serif;"
+  " font-weight: bold; font-size: 16px; }\n"
+  // black on amber also while a dialog is open (the theme fades it in :backdrop)
+  "#menubutton label, #menubutton:backdrop label { color: rgb(0, 0, 0); }\n";
 
 static const char *touch_rules =
   "button { background-image: none; background-color: rgb(52, 52, 52); color: rgb(235, 235, 235);"
@@ -306,6 +317,12 @@ static const char *touch_rules =
   "button:disabled { background-color: rgb(40, 40, 40); color: rgb(120, 120, 120); }\n"
   "#ifpan_main_menu grid button { min-height: 40px; min-width: 90px; }\n"
   "#close_button { min-height: 40px; min-width: 90px; }\n"
+  // Hide / Show sits on the sliders' grey or in the waterfall: darker, outlined
+  // (css.c sets border: 0 at a higher priority, hence the inset shadow)
+  "#hidebutton { background-color: rgb(28, 28, 28); border-radius: 5px;"
+  " box-shadow: inset 0 0 0 1px rgb(150, 150, 150); }\n"
+  "#hidebutton:hover { background-color: rgb(80, 80, 80); }\n"
+  "#hidebutton:active { background-color: rgb(130, 130, 130); }\n"
   "checkbutton check { min-width: 30px; min-height: 30px; -gtk-icon-source: none; background-image: none;"
   " background-color: rgb(25, 25, 25); border: 2px solid rgb(170, 170, 170); border-radius: 3px; }\n"
   "#ifpan_sliders checkbutton { padding: 0; }\n"
@@ -314,7 +331,7 @@ static const char *touch_rules =
 
 //
 // Touch style: the small "X" of every window's header bar is removed; a window without
-// a Close button of its own gets a big "Close" there instead (24 px from the right). It
+// a Close / Cancel button of its own gets a big "Close" there instead (24 px from the right). It
 // closes the window the way the "X" does (delete-event), so its close handler runs.
 //
 static void header_close_clicked(GtkWidget *b, gpointer data) {
@@ -327,7 +344,10 @@ static void find_close(GtkWidget *w, gpointer data) {
   if (*found) { return; }
   if (GTK_IS_BUTTON(w)) {
     const char *l = gtk_button_get_label(GTK_BUTTON(w));
-    if (l != NULL && g_ascii_strcasecmp(l, "Close") == 0) { *found = 1; return; }
+    if (l != NULL && (g_ascii_strcasecmp(l, "Close") == 0 || g_ascii_strcasecmp(l, "Cancel") == 0)) {
+      *found = 1;   // the window has its own way out
+      return;
+    }
   }
   if (GTK_IS_CONTAINER(w)) { gtk_container_forall(GTK_CONTAINER(w), find_close, data); }
 }
@@ -374,11 +394,16 @@ void touch_style_set(int on) {
   if (touch_css == NULL) {
     touch_css = gtk_css_provider_new();
     gtk_css_provider_load_from_data(touch_css, touch_rules, -1, NULL);
+    touch_css_hi = gtk_css_provider_new();
+    gtk_css_provider_load_from_data(touch_css_hi, touch_rules_hi, -1, NULL);
   }
   gtk_style_context_remove_provider_for_screen(screen, GTK_STYLE_PROVIDER(touch_css));
+  gtk_style_context_remove_provider_for_screen(screen, GTK_STYLE_PROVIDER(touch_css_hi));
   if (touch_style) {
     gtk_style_context_add_provider_for_screen(screen, GTK_STYLE_PROVIDER(touch_css),
         GTK_STYLE_PROVIDER_PRIORITY_APPLICATION - 1);
+    gtk_style_context_add_provider_for_screen(screen, GTK_STYLE_PROVIDER(touch_css_hi),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
   }
 }
 

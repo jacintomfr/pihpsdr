@@ -106,6 +106,11 @@ extern void      ifpan_set_tx_timeout(int minutes);            // Radio menu "TX
 extern int       ifpan_mode_if_offset[8];                      // IF offset per Kenwood mode (Hz)
 extern void      ifpan_set_mode_if_offset(int hz);             // Radio menu: offset of the current Kenwood mode
 extern void      ifpan_remote_command(int what, int value);    // server: CMD_IFPAN from a client
+extern void      ifpan_clean_audio(int user, int on);          // SSTV / RADE: RX and TX processing off, back after
+extern void      ifpan_clean_audio_reapply(void);              // a mode's profile was loaded: off again
+extern void      ifpan_clean_audio_shutdown(void);             // program exit: the settings from before (values only)
+#define IFPAN_CLEAN_SSTV 1
+#define IFPAN_CLEAN_RADE 2
 extern void      ifpan_push_vfo_to_client(void);               // server: VFO / RX / TX / filter data to the client
 // WDSP-processed TX audio to the Kenwood's ACC2 input (sound card output)
 extern char      ifpan_tx_out[128];

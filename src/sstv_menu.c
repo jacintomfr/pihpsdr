@@ -98,6 +98,9 @@ static void panel_close(void) {
     panel = NULL;
     sstv_glue_set_rx_enabled(0);
     sstv_glue_filter_restore(); // the filter from before SSTV
+#ifdef IFPAN
+    ifpan_clean_audio(IFPAN_CLEAN_SSTV, 0);   // RX / TX processing from before SSTV
+#endif
     gtk_widget_destroy(tmp);
     g_object_unref(tmp);      // the reference taken in sstv_menu
     if (opt_btn) { gtk_widget_destroy(opt_btn); g_object_unref(opt_btn); opt_btn = NULL; }
@@ -638,6 +641,9 @@ void sstv_menu(GtkWidget *parent) {
   g_object_ref_sink(panel);
   sstv_glue_set_rx_enabled(1);
   sstv_glue_filter_take();
+#ifdef IFPAN
+  ifpan_clean_audio(IFPAN_CLEAN_SSTV, 1);   // no NR / NB / ANF / EQ / compression, AGC Long
+#endif
   sstv_glue_fit_filter();     // SSTV filter (1100 - 2400 Hz) right away
   //
   // zoom 26 (~3.7 kHz at 96 kHz): the SSTV band 1100 - 2400 Hz fills the

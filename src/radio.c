@@ -1135,6 +1135,9 @@ void radio_stop_program(void) {
 #ifdef RADE
   rade_menu_shutdown();   // zoom / pan from before RADE (saved below)
 #endif
+#ifdef IFPAN
+  ifpan_clean_audio_shutdown();   // RX / TX processing from before SSTV / RADE (saved below)
+#endif
 #ifdef GPIO
   gpio_close();
   t_print("%s: GPIO closed\n", __func__);

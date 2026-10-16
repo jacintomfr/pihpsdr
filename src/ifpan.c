@@ -79,6 +79,8 @@
 #include "soapy_protocol.h"
 #include "vfo.h"
 #include "transmitter.h"
+#include "agc.h"
+#include "profiles.h"
 
 long long ifpan_if_freq = IFPAN_DEFAULT_IF_FREQ;
 long long ifpan_lo_offset = 50000;
@@ -467,6 +469,154 @@ static gboolean mode_apply(gpointer data) {
 // RADE switching to DIGU / DIGL, Fit Filter, ...), the same data is sent
 // as after a client's mode change: VFOs, RX1, TX and the Var filters.
 //
+//
+// SSTV and RADE want the audio as it comes: while the SSTV panel is open or
+// RADE is on, the receivers' NB / NR / ANF / SNB / RX EQ are off and the AGC
+// is Long, and on TX the EQ, compressor, CFC (+ post-EQ), DEXP, phase rotator
+// and microphone NR are off. Everything comes back when the last of the two
+// is left, both the live settings and every mode's profile (the setters store
+// into the current mode's profile, and RADE moves to DIGU / DIGL, whose own
+// profile is loaded and cleaned again by ifpan_clean_audio_reapply).
+// Server side only (a client's panels act through the server).
+//
+static int clean_users = 0;
+static struct {
+  struct { int nb, nr, anf, snb, agc, eq; } prof_rx[MODES];
+  struct { int eq, cmpr, cfc, cfc_eq, dexp, phrot; } prof_tx[MODES];
+  int mic_nr;
+} clean_saved;
+
+static void clean_apply(void) {
+  for (int i = 0; i < receivers; i++) {
+    RECEIVER *rx = receiver[i];
+    if (rx == NULL) { continue; }
+    rx->nb = 0; rx->nr = 0; rx->anf = 0; rx->snb = 0; rx->eq_enable = 0;
+    rx->agc = AGC_LONG;
+    rx_set_noise(rx);
+    rx_set_agc(rx);
+    rx_set_equalizer(rx);
+  }
+  if (transmitter != NULL) {
+    TRANSMITTER *tx = transmitter;
+    tx->eq_enable = 0; tx->compressor = 0; tx->cfc = 0; tx->cfc_eq = 0;
+    tx->dexp = 0; tx->phrot_enable = 0; tx->mic_nr = 0;
+    tx_set_compressor(tx);
+    tx_set_dexp(tx);
+    tx_set_equalizer(tx);
+    tx_set_phrot(tx);
+  }
+}
+
+static void clean_restore_values(void) {
+  for (int m = 0; m < MODES; m++) {
+    RXTXprofile[m].rx.nb    = clean_saved.prof_rx[m].nb;
+    RXTXprofile[m].rx.nr    = clean_saved.prof_rx[m].nr;
+    RXTXprofile[m].rx.anf   = clean_saved.prof_rx[m].anf;
+    RXTXprofile[m].rx.snb   = clean_saved.prof_rx[m].snb;
+    RXTXprofile[m].rx.agc   = clean_saved.prof_rx[m].agc;
+    RXTXprofile[m].rx.en_eq = clean_saved.prof_rx[m].eq;
+    RXTXprofile[m].tx.en_eq        = clean_saved.prof_tx[m].eq;
+    RXTXprofile[m].tx.compressor   = clean_saved.prof_tx[m].cmpr;
+    RXTXprofile[m].tx.cfc          = clean_saved.prof_tx[m].cfc;
+    RXTXprofile[m].tx.cfc_eq       = clean_saved.prof_tx[m].cfc_eq;
+    RXTXprofile[m].tx.dexp         = clean_saved.prof_tx[m].dexp;
+    RXTXprofile[m].tx.phrot_enable = clean_saved.prof_tx[m].phrot;
+  }
+  //
+  // the live settings: those of each receiver's (and the TX VFO's) mode
+  //
+  for (int i = 0; i < receivers; i++) {
+    RECEIVER *rx = receiver[i];
+    if (rx == NULL) { continue; }
+    int m = vfo[i].mode;
+    rx->nb = RXTXprofile[m].rx.nb; rx->nr = RXTXprofile[m].rx.nr;
+    rx->anf = RXTXprofile[m].rx.anf; rx->snb = RXTXprofile[m].rx.snb;
+    rx->agc = RXTXprofile[m].rx.agc; rx->eq_enable = RXTXprofile[m].rx.en_eq;
+  }
+  if (transmitter != NULL) {
+    TRANSMITTER *tx = transmitter;
+    int m = vfo_get_tx_mode();
+    tx->eq_enable = RXTXprofile[m].tx.en_eq; tx->compressor = RXTXprofile[m].tx.compressor;
+    tx->cfc = RXTXprofile[m].tx.cfc; tx->cfc_eq = RXTXprofile[m].tx.cfc_eq;
+    tx->dexp = RXTXprofile[m].tx.dexp; tx->phrot_enable = RXTXprofile[m].tx.phrot_enable;
+    tx->mic_nr = clean_saved.mic_nr;
+  }
+}
+
+void ifpan_clean_audio(int user, int on) {
+  if (radio_is_remote) { return; }
+  int was = clean_users;
+  if (on) { clean_users |= user; } else { clean_users &= ~user; }
+  if (!was && clean_users) {
+    for (int m = 0; m < MODES; m++) {
+      clean_saved.prof_rx[m].nb  = RXTXprofile[m].rx.nb;
+      clean_saved.prof_rx[m].nr  = RXTXprofile[m].rx.nr;
+      clean_saved.prof_rx[m].anf = RXTXprofile[m].rx.anf;
+      clean_saved.prof_rx[m].snb = RXTXprofile[m].rx.snb;
+      clean_saved.prof_rx[m].agc = RXTXprofile[m].rx.agc;
+      clean_saved.prof_rx[m].eq  = RXTXprofile[m].rx.en_eq;
+      clean_saved.prof_tx[m].eq     = RXTXprofile[m].tx.en_eq;
+      clean_saved.prof_tx[m].cmpr   = RXTXprofile[m].tx.compressor;
+      clean_saved.prof_tx[m].cfc    = RXTXprofile[m].tx.cfc;
+      clean_saved.prof_tx[m].cfc_eq = RXTXprofile[m].tx.cfc_eq;
+      clean_saved.prof_tx[m].dexp   = RXTXprofile[m].tx.dexp;
+      clean_saved.prof_tx[m].phrot  = RXTXprofile[m].tx.phrot_enable;
+    }
+    //
+    // the live settings may differ from the profile (changed but not stored):
+    // the current modes' entries take the live ones
+    //
+    for (int i = 0; i < receivers; i++) {
+      const RECEIVER *rx = receiver[i];
+      if (rx == NULL) { continue; }
+      int m = vfo[i].mode;
+      clean_saved.prof_rx[m].nb = rx->nb; clean_saved.prof_rx[m].nr = rx->nr;
+      clean_saved.prof_rx[m].anf = rx->anf; clean_saved.prof_rx[m].snb = rx->snb;
+      clean_saved.prof_rx[m].agc = rx->agc; clean_saved.prof_rx[m].eq = rx->eq_enable;
+    }
+    if (transmitter != NULL) {
+      const TRANSMITTER *tx = transmitter;
+      int m = vfo_get_tx_mode();
+      clean_saved.prof_tx[m].eq = tx->eq_enable; clean_saved.prof_tx[m].cmpr = tx->compressor;
+      clean_saved.prof_tx[m].cfc = tx->cfc; clean_saved.prof_tx[m].cfc_eq = tx->cfc_eq;
+      clean_saved.prof_tx[m].dexp = tx->dexp; clean_saved.prof_tx[m].phrot = tx->phrot_enable;
+      clean_saved.mic_nr = tx->mic_nr;
+    }
+    clean_apply();
+    t_print("%s: RX / TX processing off for SSTV / RADE\n", __func__);
+  } else if (was && !clean_users) {
+    clean_restore_values();
+    for (int i = 0; i < receivers; i++) {
+      if (receiver[i] == NULL) { continue; }
+      rx_set_noise(receiver[i]);
+      rx_set_agc(receiver[i]);
+      rx_set_equalizer(receiver[i]);
+    }
+    if (transmitter != NULL) {
+      tx_set_compressor(transmitter);
+      tx_set_dexp(transmitter);
+      tx_set_equalizer(transmitter);
+      tx_set_phrot(transmitter);
+    }
+    t_print("%s: RX / TX processing back as before SSTV / RADE\n", __func__);
+  } else {
+    return;
+  }
+  ifpan_push_vfo_to_client();
+  g_idle_add(ext_vfo_update, NULL);
+}
+
+void ifpan_clean_audio_reapply(void) {
+  if (radio_is_remote || !clean_users) { return; }
+  clean_apply();
+}
+
+void ifpan_clean_audio_shutdown(void) {
+  if (radio_is_remote || !clean_users) { return; }
+  clean_users = 0;
+  clean_restore_values();   // values only: radio_save_state() stores the user settings
+}
+
 void ifpan_push_vfo_to_client(void) {
   if (radio_is_remote || !remoteclient.running) { return; }
   int m = vfo[VFO_A].mode;

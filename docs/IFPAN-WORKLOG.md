@@ -939,3 +939,26 @@ for this way of working (Radio menu, "Kenwood / IF panadapter"):
   100 % scale above the bar (the big power readout ran into it), power
   0.34 x VFO_HEIGHT, SWR 0.21 x VFO_HEIGHT; the W scale below stays.
 * Checked by capture on the Pi: normal and hidden state, RX and TX meter, Exit dialog.
+
+### SSTV / RADE: no RX or TX processing (2026-10-16)
+* The user's request: entering SSTV or RADE puts the AGC in the right mode and
+  switches off every NR, NB, RX EQ, TX EQ, compression, CFC and DEXP; leaving
+  puts back what was on before. (ANF notches SSTV's steady 1900 Hz VIS leader
+  / 1200 Hz sync; NR chops weak subcarriers; RADE's OFDM wants the signal as
+  it comes.)
+* ifpan.c ifpan_clean_audio(user, on), users SSTV (panel open) and RADE (RX
+  on or TX armed, server side, so also from a client): saves the processing
+  fields of every mode's profile (RXTXprofile[0..MODES-1]: rx nb / nr / anf /
+  snb / agc / en_eq, tx en_eq / compressor / cfc / cfc_eq / dexp /
+  phrot_enable; the current modes' entries from the live values) and the
+  microphone NR; sets RX NB / NR / ANF / SNB / EQ off, AGC Long, TX EQ /
+  compressor / CFC / CFC-EQ / DEXP / phase rotator / mic NR off. The setters
+  store into the current mode's profile; RADE then moves to DIGU / DIGL, and
+  vfo_id_mode_changed calls ifpan_clean_audio_reapply after loading that
+  profile. Leaving the last user: every profile's fields back, the live
+  values from each receiver's (TX VFO's) mode profile, setters, client push.
+  ifpan_clean_audio_shutdown (radio_stop_program) puts the values back
+  before the props are saved.
+* RADE's own voice conditioning (Denoiser / Leveler / Compressor / EQ in the
+  RADE panel, FreeDV's mic chain before the encoder) is not touched.
+* Checked on the Pi by the user (VFO bar indicators in USB / RADE / SSTV).

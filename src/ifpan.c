@@ -61,6 +61,7 @@
 #include "ext.h"
 #include "filter.h"
 #include "ifpan.h"
+#include "osk.h"
 #include "main.h"
 #include "message.h"
 #include "mode.h"
@@ -384,6 +385,7 @@ void ifpan_save_state(void) {
   SetPropI0("ifpan.kenwood_port",  ifpan_kenwood_port);
   SetPropI0("ifpan.tx_mute",       ifpan_tx_mute);
   SetPropI0("ifpan.tx_timeout",    ifpan_tx_timeout);
+  SetPropI0("ifpan.touch_style",   touch_style);
   SetPropI0("ifpan.follow_mode",   ifpan_follow_mode);
   SetPropI0("ifpan.sdr_lna_off",   ifpan_sdr_lna_off);
   SetPropS0("ifpan.tx_out",        ifpan_tx_out);
@@ -404,6 +406,8 @@ void ifpan_restore_state(void) {
   GetPropI0("ifpan.kenwood_port",  ifpan_kenwood_port);
   GetPropI0("ifpan.tx_mute",       ifpan_tx_mute);
   GetPropI0("ifpan.tx_timeout",    ifpan_tx_timeout);
+  GetPropI0("ifpan.touch_style",   touch_style);
+  touch_style_set(touch_style);
   GetPropI0("ifpan.follow_mode",   ifpan_follow_mode);
   GetPropI0("ifpan.sdr_lna_off",   ifpan_sdr_lna_off);
   GetPropS0("ifpan.tx_out",        ifpan_tx_out);

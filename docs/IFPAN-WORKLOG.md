@@ -845,3 +845,16 @@ for this way of working (Radio menu, "Kenwood / IF panadapter"):
   My callsign.
 * "Dropped" in the RADE status counts RX samples thrown away while RADE
   transmits (rx ring full): not a fault.
+
+### Touch style, Radio menu scrolls (2026-10-16)
+* osk.c: one screen CSS (priority APPLICATION - 1, just below css.c) with
+  the keyboard's key look for every button (dark, 1 px border, 5 px rounded
+  corners, lighter pressed, orange :checked) and 24 px X check boxes
+  (Adwaita window-close-symbolic). css.c's named buttons (state colours,
+  menu, hide) and widgets with their own style (SSTV Auto green, keyboard,
+  RADE boxes) keep theirs. Option "Touch style" in the Radio menu's
+  Kenwood block, saved as ifpan.touch_style; default on on Linux, off on
+  Windows. Checked by capture on the Pi.
+* radio_menu.c (IFPAN only): the grid in a scrolled window, at most
+  screen height - 140 px; on 1024x600 the bigger check boxes pushed the
+  menu past the bottom. Where it fits nothing changes.

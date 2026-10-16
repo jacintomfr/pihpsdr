@@ -36,6 +36,7 @@
 #ifdef IFPAN
   #include "audio.h"
   #include "ifpan.h"
+  #include "osk.h"
 #endif
 #include "vfo.h"
 
@@ -175,6 +176,10 @@ static void lo_offset_cb(GtkWidget *widget, gpointer data) {
 // SDR front-end LNA kept off (strong IF buffer input)
 static void tx_timeout_cb(GtkWidget *widget, gpointer data) {
   ifpan_set_tx_timeout(gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(widget)));
+}
+
+static void touch_style_cb(GtkWidget *widget, gpointer data) {
+  touch_style_set(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)));
 }
 
 static void lna_off_cb(GtkWidget *widget, gpointer data) {
@@ -999,6 +1004,14 @@ void radio_menu(GtkWidget *parent) {
       gtk_grid_attach(GTK_GRID(grid), tot_spin, 3, r, 1, 1);
       g_signal_connect(tot_spin, "value_changed", G_CALLBACK(tx_timeout_cb), NULL);
       r++;
+      // touch screen look: rounded dark buttons, big check boxes with an X (osk.c)
+      Btn = gtk_check_button_new_with_label("Touch style");
+      gtk_widget_set_name(Btn, "boldlabel");
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(Btn), touch_style);
+      gtk_widget_set_tooltip_text(Btn, "Rounded buttons and big check boxes with an X, for the touch screen");
+      gtk_grid_attach(GTK_GRID(grid), Btn, 0, r, 2, 1);
+      g_signal_connect(Btn, "toggled", G_CALLBACK(touch_style_cb), NULL);
+      r++;
       // SDR LO offset from the IF: the SDR's DC spike (and the Mirics'
       // mirror) appear this far from the VFO; above half the span they are
       // out of sight (> 192 kHz for a 384k receiver)
@@ -1232,7 +1245,25 @@ void radio_menu(GtkWidget *parent) {
       }
     }
   }
+#ifdef IFPAN
+  {
+    //
+    // piHPSDR-IF: on a small screen (1024x600) the menu is taller than the
+    // screen; it scrolls instead of being cut at the bottom. Where it fits
+    // (scroll area as tall as its contents) nothing changes.
+    //
+    GtkWidget *sw = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(sw), TRUE);
+    gtk_scrolled_window_set_propagate_natural_width(GTK_SCROLLED_WINDOW(sw), TRUE);
+    int screen_h = gdk_screen_get_height(gdk_screen_get_default());
+    gtk_scrolled_window_set_max_content_height(GTK_SCROLLED_WINDOW(sw), screen_h - 140);
+    gtk_container_add(GTK_CONTAINER(sw), grid);
+    gtk_container_add(GTK_CONTAINER(content), sw);
+  }
+#else
   gtk_container_add(GTK_CONTAINER(content), grid);
+#endif
   sub_menu = dialog;
   gtk_widget_show_all(dialog);
 }

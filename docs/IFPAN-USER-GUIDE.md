@@ -399,7 +399,10 @@ closes), hide. Not on Windows (real keyboard).
 on the Pi, off on Windows): buttons look like the keyboard keys (dark,
 rounded corners, orange when a toggle is on) and check boxes are big squares
 with an X; the coloured state buttons keep their colours. On a small screen
-the Radio menu scrolls (drag it) instead of being cut at the bottom. RADE is not switched on
+the Radio menu scrolls (drag it) instead of being cut at the bottom. The Menu is
+as wide as the screen with bigger tiles; window headers are thin and
+have no small "X": use the menu's own Close button (a window without one
+gets a big Close in its header). RADE is not switched on
 at startup; if the program was ended in RADE, the state from before RADE is
 put back once the Kenwood's CAT answers (kept as rade_prev.* in the props
 file).

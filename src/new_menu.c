@@ -50,6 +50,9 @@
 #endif
 #include "mode_menu.h"
 #include "new_menu.h"
+#ifdef IFPAN
+#include "osk.h"
+#endif
 #include "new_protocol.h"
 #include "noise_menu.h"
 #include "oc_menu.h"
@@ -559,6 +562,9 @@ void new_menu(void) {
   }
   if (main_menu == NULL) {
     main_menu = gtk_dialog_new();
+#ifdef IFPAN
+    gtk_widget_set_name(main_menu, "ifpan_main_menu");   // touch style: bigger tiles (osk.c)
+#endif
     gtk_window_set_transient_for(GTK_WINDOW(main_menu), GTK_WINDOW(top_window));
     GtkWidget *headerbar = gtk_header_bar_new();
     gtk_window_set_titlebar(GTK_WINDOW(main_menu), headerbar);
@@ -838,6 +844,18 @@ void new_menu(void) {
       gtk_grid_attach(GTK_GRID(grid), btn, col, row, 1, 1);
     }
     gtk_container_add(GTK_CONTAINER(content), grid);
+#ifdef IFPAN
+    //
+    // Touch style: the menu spans the whole main window. The compositor
+    // (labwc) does not centre this dialog, and an application cannot place
+    // a window under Wayland, but a full-width one can only sit at the left edge.
+    //
+    if (touch_style) {
+      gtk_window_set_default_size(GTK_WINDOW(main_menu), gtk_widget_get_allocated_width(top_window), -1);
+      gtk_widget_set_margin_start(grid, 22);   // 24 px from the screen sides, like the kiosk
+      gtk_widget_set_margin_end(grid, 22);
+    }
+#endif
     gtk_widget_show_all(main_menu);
   } else {
     gtk_widget_destroy(main_menu);

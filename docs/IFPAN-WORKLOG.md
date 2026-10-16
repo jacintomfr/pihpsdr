@@ -882,3 +882,26 @@ for this way of working (Radio menu, "Kenwood / IF panadapter"):
 * Tip: a debug client run from the checkout needs the WDSP wisdom file next
   to it (copy %LOCALAPPDATA%\piHPSDR-IF\wdspWisdom01), else it plans the
   FFTs again for minutes.
+
+### Touch style: bigger Menu, thin headers, big Close (2026-10-16)
+* osk.c touch CSS: main Menu tiles at least 40 x 90 px (#ifpan_main_menu,
+  named in new_menu.c), check boxes 30 px (were 24), #close_button at least
+  40 x 90 px.
+* new_menu.c (IFPAN, touch style): the Menu gets the main window's width
+  (gtk_window_set_default_size) and 22 px side margins (24 px from the
+  screen sides). labwc did not centre the dialog (it opened right-aligned,
+  near the Menu button) and an application cannot place a window under
+  Wayland; a full-width window can only sit at the left edge.
+* Header bars (osk.c, emission hook on "show" of a window, before its size
+  is worked out): the small "X" is removed and has_subtitle set off. The
+  empty subtitle line was what made every header 68 px high (css.c already
+  sets min-height 0); now 34 px. The window is resized to fit (it kept the
+  old height otherwise). Windows without a "Close" button of their own
+  (discovery, exit, action dialog, test, TX window) get a 110 x 34 Close in
+  the header, which closes the window via delete-event like the "X".
+  A CSS-only bigger titlebutton showed the theme's X twice: dropped.
+* sliders.c (IFPAN): the sliders grid is named ifpan_sliders; its Sqlch
+  check box stays 24 px with no padding. The grid has 36 homogeneous
+  columns of ~28 px and the 30 px box widened them all, pushing RF / Sqlch
+  past the right side of the screen.
+* All checked by capture on the Pi at 1024x600.

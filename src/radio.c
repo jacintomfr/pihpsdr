@@ -843,6 +843,16 @@ static void fixed_raise(GtkWidget *w, int x, int y) {
   }
 }
 
+//
+// Something that needs the slider area's left side (the SSTV OPTIONS box) is
+// open: Menu and Hide go to the waterfall corner meanwhile
+//
+static int buttons_to_waterfall = 0;
+void radio_buttons_to_waterfall(int on) {
+  buttons_to_waterfall = on ? 1 : 0;
+  ifpan_place_buttons();
+}
+
 static void ifpan_place_buttons(void) {
   static int last = -1;
   if (fixed == NULL || menu_b == NULL || hide_b == NULL) { return; }
@@ -882,12 +892,12 @@ static void ifpan_place_buttons(void) {
   //
   const int cw = 90, cx = 36;
   int rh = SLIDERS_HEIGHT - 8;
-  if (slider_rows >= 2) {
+  if (slider_rows >= 2 && !buttons_to_waterfall) {
     gtk_widget_set_size_request(menu_b, cw, rh);
     gtk_widget_set_size_request(hide_b, cw, rh);
     fixed_raise(menu_b, cx, ifpan_sliders_y + 4);
     fixed_raise(hide_b, cx, ifpan_sliders_y + SLIDERS_HEIGHT + 4);
-  } else if (slider_rows == 1) {
+  } else if (slider_rows == 1 && !buttons_to_waterfall) {
     gtk_widget_set_size_request(menu_b, cw, rh);
     fixed_raise(menu_b, cx, ifpan_sliders_y + 4);
     gtk_widget_set_size_request(hide_b, bw, bh);

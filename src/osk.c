@@ -364,10 +364,13 @@ static gboolean header_hook(GSignalInvocationHint *ihint, guint n, const GValue 
   g_object_set_data(G_OBJECT(w), "touch_close", GINT_TO_POINTER(1));
   gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(w), FALSE);
   gtk_header_bar_set_has_subtitle(GTK_HEADER_BAR(w), FALSE);
-  // the window may have taken its height from the taller header: let it shrink to fit
+  // the window may have taken its height from the taller header: let it take
+  // its natural size (not the minimum: a scrolled window's minimum is tiny)
   int dw = -1, dh = -1;
   gtk_window_get_default_size(GTK_WINDOW(top), &dw, &dh);
-  gtk_window_resize(GTK_WINDOW(top), dw > 0 ? dw : 1, 1);
+  GtkRequisition nat;
+  gtk_widget_get_preferred_size(top, NULL, &nat);
+  gtk_window_resize(GTK_WINDOW(top), dw > 0 ? dw : MAX(nat.width, 1), MAX(nat.height, 1));
   int found = 0;
   if (GTK_IS_CONTAINER(top)) { find_close(top, &found); }
   if (found) { return TRUE; }    // the menu has its own Close button

@@ -962,3 +962,16 @@ for this way of working (Radio menu, "Kenwood / IF panadapter"):
 * RADE's own voice conditioning (Denoiser / Leveler / Compressor / EQ in the
   RADE panel, FreeDV's mic chain before the encoder) is not touched.
 * Checked on the Pi by the user (VFO bar indicators in USB / RADE / SSTV).
+
+### Touch layout fixes: Radio menu height, SSTV OPTIONS box (2026-10-16)
+* osk.c header hook: the window was resized to (w, 1), i.e. its minimum, to
+  drop the old 68 px header height; the Radio menu's scrolled window has a
+  tiny minimum and opened a few rows high. Now resized to its natural size.
+* SSTV OPTIONS box (under the waterfall, from x 6) was covered by the Menu /
+  Hide column of the touch layout; making the box narrower wrapped it to
+  three rows (no good for touch). radio_buttons_to_waterfall(on) (radio.c):
+  while the box is open, Menu / Hide go to the waterfall corner (the hidden
+  state's place, the OPTIONS button is on the other side); back on close.
+* SSTV OPTIONS row 2 (Auto, mode list, Restart RX, Fit Filter) 40 px high
+  like Quick Tune (height only: a fixed width wrapped the row).
+* Checked by capture on the Pi.

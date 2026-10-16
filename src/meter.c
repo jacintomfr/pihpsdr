@@ -34,6 +34,7 @@
 #include "vfo.h"
 #ifdef IFPAN
   #include "ifpan.h"
+  #include "osk.h"
 #endif
 
 static GtkWidget *meter;
@@ -139,6 +140,31 @@ static void rxmeter_dualscale(cairo_t *cr, double smtr, int sval, int sval2,
   const double frac = smtr / 114.0;
   const double pfrac = pk / 114.0;
   cairo_set_line_width(cr, 1.0);
+  int dbm_scale = 1;
+#ifdef IFPAN
+  //
+  // Touch style: no dBm tick scale above the bar (the dBm readout shows the
+  // level), and its room goes to a bigger S readout. The sizes follow the
+  // meter's height, not its width (the meter is wider in the touch layout).
+  //
+  if (touch_style) {
+    dbm_scale = 0;
+    double base = by - 0.08 * VFO_HEIGHT;
+    cairo_set_source_rgba(cr, COLOUR_METER);
+    cairo_set_font_size(cr, 0.34 * VFO_HEIGHT);
+    if (sval2 > 0) { snprintf(sf, sizeof(sf), "S%d+%d", sval, sval2); }
+    else           { snprintf(sf, sizeof(sf), "S%d", sval); }
+    cairo_move_to(cr, bx, base);
+    cairo_show_text(cr, sf);
+    cairo_set_font_size(cr, 0.21 * VFO_HEIGHT);
+    snprintf(sf, sizeof(sf), "%d dBm", (int)(max_rxlvl - 0.5));
+    cairo_text_extents(cr, sf, &extents);
+    cairo_set_source_rgba(cr, COLOUR_ATTN);
+    cairo_move_to(cr, bx + bw - extents.width, base);
+    cairo_show_text(cr, sf);
+  }
+#endif
+  if (dbm_scale) {
   //
   // Top readout: S-value (left) and dBm (right)
   //
@@ -170,6 +196,7 @@ static void rxmeter_dualscale(cairo_t *cr, double smtr, int sval, int sval2,
     cairo_text_extents(cr, sf, &extents);
     cairo_move_to(cr, tx - 0.5 * extents.width, by - 10.0 * scalfac);
     cairo_show_text(cr, sf);
+  }
   }
   //
   // Trough

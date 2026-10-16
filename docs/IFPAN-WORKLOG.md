@@ -905,3 +905,34 @@ for this way of working (Radio menu, "Kenwood / IF panadapter"):
   columns of ~28 px and the 30 px box widened them all, pushing RF / Sqlch
   past the right side of the screen.
 * All checked by capture on the Pi at 1024x600.
+
+### Touch layout: Menu / Hide out of the corner, bigger S-meter (2026-10-16)
+* The Menu / Hide buttons in the top right corner were hard to hit with a
+  finger. radio.c (IFPAN, touch style with slider rows, touch_layout()):
+  - MENU_W (0 in the touch layout, else MENU_WIDTH) replaces MENU_WIDTH in
+    choose_vfo_layout and the VFO width; ifpan_place_buttons() (end of
+    radio_reconfigure and after TX -> RX, which puts the receiver panels on
+    top again) re-runs choose_vfo_layout when the layout changes and places
+    the buttons; fixed_raise() re-adds them so they draw over the panels.
+  - Two slider rows: Menu and Hide 90 x (SLIDERS_HEIGHT - 8) at x 36, one per
+    row, in a 90 px column left of the sliders (sliders.c: sliders_x, the grid
+    is created 90 px narrower); one row: Menu there, Hide in the waterfall.
+  - Hidden (no slider rows): Show 100 x 40 in the bottom right corner of the
+    receivers' area (24 px from its right side, 8 px from the bottom; left of
+    a docked SSTV / RADE panel, clear of the SSTV OPTIONS button on the left),
+    Menu 12 px left of it. The S-meter keeps its width.
+* The freed 60 px first all went to the VFO bar: the meter is capped at
+  2 x VFO_HEIGHT. In the touch layout the cap is 8/3 x VFO_HEIGHT: the
+  dual-scale meter grew from ~164 to ~215 px.
+* meter.c rxmeter_dualscale (touch style): no dBm tick scale above the bar
+  (-121 / -97 / -73, the user's choice; the dBm readout stays); the S readout
+  0.34 x VFO_HEIGHT, the dBm readout 0.21 x VFO_HEIGHT, sized by the height
+  (the width-based sizes made the text run into the bar on the wider meter).
+* osk.c: Hide / Show dark with a light outline (inset box-shadow: css.c sets
+  border 0 at a higher priority), lighter on hover / press. Menu / Hide text
+  bold through a provider at APPLICATION + 1: css.c's "* { font-family }"
+  picks "Open Sans", which has no bold face on the Pi (only a separate
+  "Open Sans Extrabold" family), so it showed light; Menu text kept black
+  in :backdrop too. "Cancel" counts as a window's own Close (the Exit dialog
+  got a second, header Close).
+* Checked by capture on the Pi: normal and hidden state, meter, Exit dialog.

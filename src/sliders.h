@@ -37,6 +37,9 @@ void queue_popup_slider(enum ACTION action, int rx, double min, double max, doub
 
 extern void sliders_show_zoompan(int y);
 extern void sliders_show_sliders(int y);
+#ifdef IFPAN
+extern int sliders_x;             // left edge of the sliders (touch layout: right of the Menu button)
+#endif
 extern void sliders_create(int width, int height, int rows);
 extern void sliders_destroy(void);
 

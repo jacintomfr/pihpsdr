@@ -805,9 +805,17 @@ int sliders_pan(gpointer data) {
   return G_SOURCE_REMOVE;
 }
 
+#ifdef IFPAN
+int sliders_x = 0;                // piHPSDR-IF touch layout: the Menu button's column
+#endif
+
 void sliders_show_sliders(int ypos) {
   if (sliders_grid) {
+#ifdef IFPAN
+    gtk_fixed_put(GTK_FIXED(fixed),  sliders_grid, sliders_x, ypos);
+#else
     gtk_fixed_put(GTK_FIXED(fixed),  sliders_grid, 0, ypos);
+#endif
     gtk_widget_show_all(sliders_grid);
     sliders_att_type_changed(NULL);
   }

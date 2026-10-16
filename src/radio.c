@@ -60,6 +60,7 @@
 #include "rigctl.h"
 #ifdef IFPAN
 #include "ifpan.h"
+#include "osk.h"
 #endif
 #ifdef RADE
 #include "rade_glue.h"
@@ -111,6 +112,22 @@ static GtkWidget *hide_b;
 static GtkWidget *menu_b;
 static GtkWidget *vfo_panel;
 static GtkWidget *meter;
+
+#ifdef IFPAN
+//
+// piHPSDR-IF touch layout (touch style with slider rows): the Menu button sits
+// at the left of the sliders and Hide/Show in the bottom right corner of the
+// waterfall, so the S-meter gets the width of the top right corner. While
+// hidden, Menu sits next to Show. MENU_W is the corner width the VFO bar leaves.
+//
+static int touch_layout(void);
+static void ifpan_place_buttons(void);
+static int ifpan_sliders_y = 0;   // top of the slider rows (radio_reconfigure)
+#define MENU_W (touch_layout() ? 0 : MENU_WIDTH)
+#define TOUCH_MENU_COL 90         // width of the column at the left of the sliders
+#else
+#define MENU_W MENU_WIDTH
+#endif
 
 // RX and TX frequency calibration (relative, in Hz per 10 MHz)
 int frequency_calibration = 0;
@@ -535,7 +552,7 @@ static void choose_vfo_layout(void) {
   // choose largest possible VFO layout that fits
   //
   const VFO_BAR_LAYOUT *vfl = vfo_layout_list;
-  int avail = display_width[display_size] - MENU_WIDTH;
+  int avail = display_width[display_size] - MENU_W;
   for (;;) {
     if (vfl->width < 0) {
       vfl--;
@@ -554,7 +571,7 @@ static void choose_vfo_layout(void) {
     ADD_METER_WIDTH = 0;
   }
   VFO_HEIGHT = current_vfo_layout->height;
-  int spare = display_width[display_size] - MENU_WIDTH - current_vfo_layout->min_meter - current_vfo_layout->width;
+  int spare = display_width[display_size] - MENU_W - current_vfo_layout->min_meter - current_vfo_layout->width;
   //
   // If there is more space, extend both meters
   //
@@ -569,10 +586,16 @@ static void choose_vfo_layout(void) {
   //
   // If there was *much* horizontal space, meters may have become too large
   //
+#ifdef IFPAN
+  // touch layout: the width freed by the Menu / Hide corner goes to the S-meter
+  int meter_cap = touch_layout() ? (8 * VFO_HEIGHT) / 3 : 2 * VFO_HEIGHT;
+  if (METER_WIDTH > meter_cap) { METER_WIDTH = meter_cap; }
+#else
   if (METER_WIDTH > 2 * VFO_HEIGHT) { METER_WIDTH = 2 * VFO_HEIGHT; }
+#endif
   if (ADD_METER_WIDTH > VFO_HEIGHT) { ADD_METER_WIDTH = VFO_HEIGHT; }
   METER_WIDTH += ADD_METER_WIDTH;
-  VFO_WIDTH = display_width[display_size] - MENU_WIDTH - METER_WIDTH;
+  VFO_WIDTH = display_width[display_size] - MENU_W - METER_WIDTH;
   //t_print("%s: VFO width = %d(%d) pixels meter=%d\n", __func__, current_vfo_layout->width, VFO_WIDTH, METER_WIDTH);
 }
 
@@ -756,7 +779,13 @@ void radio_reconfigure(void) {
     }
   }
   if (slider_rows > 0) {
+#ifdef IFPAN
+    sliders_x = touch_layout() ? TOUCH_MENU_COL : 0;
+    sliders_create(my_width - sliders_x, SLIDERS_HEIGHT, slider_rows);
+    ifpan_sliders_y = y;
+#else
     sliders_create(my_width, SLIDERS_HEIGHT, slider_rows);
+#endif
     sliders_show_sliders(y);
     y += SLIDERS_HEIGHT * slider_rows;
   } else {
@@ -780,6 +809,9 @@ void radio_reconfigure(void) {
       gtk_fixed_move(GTK_FIXED(fixed), transmitter->panel, 0, VFO_HEIGHT);
     }
   }
+#ifdef IFPAN
+  ifpan_place_buttons();
+#endif
 }
 
 //
@@ -792,6 +824,82 @@ void radio_reconfigure(void) {
 static int hide_status = 0;
 static int old_tool = 0;
 static int old_slid = 0;
+
+#ifdef IFPAN
+
+static int touch_layout(void) {
+  return touch_style && (slider_rows > 0 || hide_status);
+}
+
+// put a child of `fixed` on top of the others (GtkFixed draws in child order)
+static void fixed_raise(GtkWidget *w, int x, int y) {
+  if (gtk_widget_get_parent(w) == fixed) {
+    g_object_ref(w);
+    gtk_container_remove(GTK_CONTAINER(fixed), w);
+    gtk_fixed_put(GTK_FIXED(fixed), w, x, y);
+    g_object_unref(w);
+  } else {
+    gtk_fixed_move(GTK_FIXED(fixed), w, x, y);
+  }
+}
+
+static void ifpan_place_buttons(void) {
+  static int last = -1;
+  if (fixed == NULL || menu_b == NULL || hide_b == NULL) { return; }
+  int tl = touch_layout();
+  if (tl != last) {
+    //
+    // the VFO bar and the meter take the corner's width back (or give it)
+    //
+    last = tl;
+    choose_vfo_layout();
+    gtk_widget_set_size_request(meter,  METER_WIDTH, VFO_HEIGHT);
+    gtk_widget_set_size_request(vfo_panel, VFO_WIDTH, VFO_HEIGHT);
+    gtk_fixed_move(GTK_FIXED(fixed), meter, VFO_WIDTH, 0);
+  }
+  if (!tl) {
+    gtk_widget_set_size_request(menu_b, MENU_WIDTH, VFO_HEIGHT / 2);
+    gtk_widget_set_size_request(hide_b, MENU_WIDTH, VFO_HEIGHT / 2);
+    gtk_fixed_move(GTK_FIXED(fixed), menu_b, VFO_WIDTH + METER_WIDTH, 0);
+    gtk_fixed_move(GTK_FIXED(fixed), hide_b, VFO_WIDTH + METER_WIDTH, VFO_HEIGHT / 2);
+    return;
+  }
+  //
+  // the receivers' area: its bottom right corner (left of a docked panel)
+  //
+  int right = 0;
+  for (int i = 0; i < receivers; i++) {
+    int r = receiver[i]->x + receiver[i]->width;
+    if (r > right) { right = r; }
+  }
+  int bottom = VFO_HEIGHT + rx_height;
+  const int bw = 100, bh = 40;
+  int hx = right - 24 - bw, hy = bottom - 8 - bh;
+  //
+  // Menu (and Hide, with two slider rows) in the column left of the sliders,
+  // centred between the screen side and the first slider label (x ~ 163),
+  // one per slider row; what does not fit there goes to the waterfall corner
+  //
+  const int cw = 90, cx = 36;
+  int rh = SLIDERS_HEIGHT - 8;
+  if (slider_rows >= 2) {
+    gtk_widget_set_size_request(menu_b, cw, rh);
+    gtk_widget_set_size_request(hide_b, cw, rh);
+    fixed_raise(menu_b, cx, ifpan_sliders_y + 4);
+    fixed_raise(hide_b, cx, ifpan_sliders_y + SLIDERS_HEIGHT + 4);
+  } else if (slider_rows == 1) {
+    gtk_widget_set_size_request(menu_b, cw, rh);
+    fixed_raise(menu_b, cx, ifpan_sliders_y + 4);
+    gtk_widget_set_size_request(hide_b, bw, bh);
+    fixed_raise(hide_b, hx, hy);
+  } else {
+    gtk_widget_set_size_request(hide_b, bw, bh);
+    fixed_raise(hide_b, hx, hy);
+    gtk_widget_set_size_request(menu_b, bw, bh);
+    fixed_raise(menu_b, hx - 12 - bw, hy);
+  }
+}
+#endif
 
 static gboolean hideall_cb  (GtkWidget *widget, GdkEventButton *event, gpointer data) {
   //
@@ -842,7 +950,7 @@ static void radio_create_visual(void) {
   gtk_container_add(GTK_CONTAINER(top_window), fixed);
   int my_height = display_height[display_size];
   int my_width  = display_width[display_size];
-  VFO_WIDTH = my_width - MENU_WIDTH - METER_WIDTH;
+  VFO_WIDTH = my_width - MENU_W - METER_WIDTH;
   vfo_panel = vfo_init(VFO_WIDTH, VFO_HEIGHT);
   gtk_fixed_put(GTK_FIXED(fixed), vfo_panel, 0, y);
   meter = meter_init(METER_WIDTH, VFO_HEIGHT);
@@ -979,7 +1087,13 @@ static void radio_create_visual(void) {
     }
   }
   if (slider_rows > 0) {
+#ifdef IFPAN
+    sliders_x = touch_layout() ? TOUCH_MENU_COL : 0;
+    sliders_create(my_width - sliders_x, SLIDERS_HEIGHT, slider_rows);
+    ifpan_sliders_y = y;
+#else
     sliders_create(my_width, SLIDERS_HEIGHT, slider_rows);
+#endif
     sliders_show_sliders(y);
     y += SLIDERS_HEIGHT * slider_rows;
   }
@@ -2043,6 +2157,9 @@ static void rxtx(int state) {
       }
       for (int i = 0; i < receivers; i++) {
         gtk_fixed_put(GTK_FIXED(fixed), receiver[i]->panel, receiver[i]->x, receiver[i]->y);
+#ifdef IFPAN
+        ifpan_place_buttons();
+#endif
         receiver[i]->displaying = 1;
         if (!radio_is_remote) {
           rx_on(receiver[i]);

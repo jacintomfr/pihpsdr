@@ -304,11 +304,70 @@ static const char *touch_rules =
   "button:active { background-color: rgb(110, 110, 110); }\n"
   "button:checked { background-color: rgb(200, 110, 30); color: rgb(235, 235, 235); }\n"
   "button:disabled { background-color: rgb(40, 40, 40); color: rgb(120, 120, 120); }\n"
-  "checkbutton check { min-width: 24px; min-height: 24px; -gtk-icon-source: none; background-image: none;"
+  "#ifpan_main_menu grid button { min-height: 40px; min-width: 90px; }\n"
+  "#close_button { min-height: 40px; min-width: 90px; }\n"
+  "checkbutton check { min-width: 30px; min-height: 30px; -gtk-icon-source: none; background-image: none;"
   " background-color: rgb(25, 25, 25); border: 2px solid rgb(170, 170, 170); border-radius: 3px; }\n"
+  "#ifpan_sliders checkbutton { padding: 0; }\n"
+  "#ifpan_sliders checkbutton check { min-width: 24px; min-height: 24px; margin: 0; }\n"
   "checkbutton check:checked { -gtk-icon-source: -gtk-icontheme('window-close-symbolic'); color: rgb(255, 255, 255); }\n";
 
+//
+// Touch style: the small "X" of every window's header bar is removed; a window without
+// a Close button of its own gets a big "Close" there instead (24 px from the right). It
+// closes the window the way the "X" does (delete-event), so its close handler runs.
+//
+static void header_close_clicked(GtkWidget *b, gpointer data) {
+  GtkWidget *top = gtk_widget_get_toplevel(b);
+  if (GTK_IS_WINDOW(top)) { gtk_window_close(GTK_WINDOW(top)); }
+}
+
+static void find_close(GtkWidget *w, gpointer data) {
+  int *found = data;
+  if (*found) { return; }
+  if (GTK_IS_BUTTON(w)) {
+    const char *l = gtk_button_get_label(GTK_BUTTON(w));
+    if (l != NULL && g_ascii_strcasecmp(l, "Close") == 0) { *found = 1; return; }
+  }
+  if (GTK_IS_CONTAINER(w)) { gtk_container_forall(GTK_CONTAINER(w), find_close, data); }
+}
+
+
+static gboolean header_hook(GSignalInvocationHint *ihint, guint n, const GValue *params, gpointer data) {
+  GtkWidget *top = g_value_get_object(&params[0]);
+  // a window being shown, before its size is worked out: its header bar loses the "X" now
+  GtkWidget *w = GTK_IS_WINDOW(top) ? gtk_window_get_titlebar(GTK_WINDOW(top)) : NULL;
+  if (!touch_style || w == NULL || !GTK_IS_HEADER_BAR(w) || g_object_get_data(G_OBJECT(w), "touch_close") != NULL
+      || !gtk_header_bar_get_show_close_button(GTK_HEADER_BAR(w))) {
+    return TRUE;
+  }
+  g_object_set_data(G_OBJECT(w), "touch_close", GINT_TO_POINTER(1));
+  gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(w), FALSE);
+  gtk_header_bar_set_has_subtitle(GTK_HEADER_BAR(w), FALSE);
+  // the window may have taken its height from the taller header: let it shrink to fit
+  int dw = -1, dh = -1;
+  gtk_window_get_default_size(GTK_WINDOW(top), &dw, &dh);
+  gtk_window_resize(GTK_WINDOW(top), dw > 0 ? dw : 1, 1);
+  int found = 0;
+  if (GTK_IS_CONTAINER(top)) { find_close(top, &found); }
+  if (found) { return TRUE; }    // the menu has its own Close button
+  GtkWidget *b = gtk_button_new_with_label("Close");
+  gtk_widget_set_name(b, "close_button");
+  gtk_widget_set_size_request(b, 110, 34);
+  gtk_widget_set_margin_end(b, 18);
+  gtk_widget_set_valign(b, GTK_ALIGN_CENTER);
+  g_signal_connect(b, "clicked", G_CALLBACK(header_close_clicked), NULL);
+  gtk_header_bar_pack_end(GTK_HEADER_BAR(w), b);
+  gtk_widget_show(b);
+  return TRUE;
+}
+
 void touch_style_set(int on) {
+  static int hooked = 0;
+  if (!hooked) {
+    hooked = 1;
+    g_signal_add_emission_hook(g_signal_lookup("show", GTK_TYPE_WIDGET), 0, header_hook, NULL, NULL);
+  }
   touch_style = on != 0;
   GdkScreen *screen = gdk_screen_get_default();
   if (screen == NULL) { return; }

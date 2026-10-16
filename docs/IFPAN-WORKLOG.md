@@ -858,3 +858,50 @@ for this way of working (Radio menu, "Kenwood / IF panadapter"):
 * radio_menu.c (IFPAN only): the grid in a scrolled window, at most
   screen height - 140 px; on 1024x600 the bigger check boxes pushed the
   menu past the bottom. Where it fits nothing changes.
+
+### Windows client crash with the side panels; client spectrum (2026-10-16)
+* Client 3.1.362 crashed (APPCRASH 0xc0000374, heap corruption) when the
+  RADE panel was opened again. Found with a debug build (CFLAGS="-O1 -g"
+  in the windows-port checkout) under MSYS2 gdb: detected in a cairo
+  malloc in rx_panadapter_update. Cause: right after rx_update_width the
+  panadapter widget / waterfall pixbuf are still as wide as before until
+  GTK re-allocates; rx_panadapter_update's samples[mywidth - 1] = -200
+  then wrote past the new, smaller sample buffer (and the loops read past
+  it). Fix (cabb1826): the drawing width is clamped to rx->pixels in
+  rx_panadapter.c and waterfall.c. A piHPSDR bug too, only exposed by the
+  frequent width changes of the side panels. A first guess (configure
+  handlers racing the network thread) was wrong: client_spectrum runs as
+  a g_idle callback in the GTK thread.
+* Client spectrum froze while a side panel was open: the server sends the
+  width set by CMD_SCREEN (which also sizes the server's own screen), the
+  client's receiver was half that and dropped every frame. client_thread.c
+  (IFPAN) now resamples to the client's width (max of the covered points)
+  and scales cB / cAp / cBp; also the TX spectrum.
+* Tested by the user on the debug client: RADE opened / closed repeatedly,
+  no crash, spectrum moving.
+* Tip: a debug client run from the checkout needs the WDSP wisdom file next
+  to it (copy %LOCALAPPDATA%\piHPSDR-IF\wdspWisdom01), else it plans the
+  FFTs again for minutes.
+
+### Touch style: bigger Menu, thin headers, big Close (2026-10-16)
+* osk.c touch CSS: main Menu tiles at least 40 x 90 px (#ifpan_main_menu,
+  named in new_menu.c), check boxes 30 px (were 24), #close_button at least
+  40 x 90 px.
+* new_menu.c (IFPAN, touch style): the Menu gets the main window's width
+  (gtk_window_set_default_size) and 22 px side margins (24 px from the
+  screen sides). labwc did not centre the dialog (it opened right-aligned,
+  near the Menu button) and an application cannot place a window under
+  Wayland; a full-width window can only sit at the left edge.
+* Header bars (osk.c, emission hook on "show" of a window, before its size
+  is worked out): the small "X" is removed and has_subtitle set off. The
+  empty subtitle line was what made every header 68 px high (css.c already
+  sets min-height 0); now 34 px. The window is resized to fit (it kept the
+  old height otherwise). Windows without a "Close" button of their own
+  (discovery, exit, action dialog, test, TX window) get a 110 x 34 Close in
+  the header, which closes the window via delete-event like the "X".
+  A CSS-only bigger titlebutton showed the theme's X twice: dropped.
+* sliders.c (IFPAN): the sliders grid is named ifpan_sliders; its Sqlch
+  check box stays 24 px with no padding. The grid has 36 homogeneous
+  columns of ~28 px and the 30 px box widened them all, pushing RF / Sqlch
+  past the right side of the screen.
+* All checked by capture on the Pi at 1024x600.

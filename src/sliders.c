@@ -878,6 +878,9 @@ void sliders_create(int width, int height, int rows) {
   }
   sliders_destroy();
   sliders_grid = gtk_grid_new();
+#ifdef IFPAN
+  gtk_widget_set_name(sliders_grid, "ifpan_sliders");   // touch style: Sqlch box sized to its column (osk.c)
+#endif
   gtk_widget_set_size_request (sliders_grid, width, height);
   gtk_grid_set_row_homogeneous(GTK_GRID(sliders_grid), FALSE);
   gtk_grid_set_column_homogeneous(GTK_GRID(sliders_grid), TRUE);

@@ -259,6 +259,9 @@ static void set_rx_enabled_int(int on, int force_mode) {
   int entering = on && force_mode && !was_on;
   if (entering) {
     snapshot_take();
+#ifdef IFPAN
+    ifpan_clean_audio(IFPAN_CLEAN_RADE, 1);   // before the move to DIGU / DIGL (that profile is cleaned too)
+#endif
     if (atomic_load(&tx_pref) && transmitter != NULL) { atomic_store(&tx_armed, 1); }
   }
   engine_update();
@@ -269,6 +272,9 @@ static void set_rx_enabled_int(int on, int force_mode) {
   drive_limit();
   if (on && force_mode && !atomic_load(&rx_enabled)) { snapshot_restore(); }   /* the engine did not start */
   if (!on && force_mode) { snapshot_restore(); }   /* after the TX values: the mode brings its own */
+#ifdef IFPAN
+  if (!atomic_load(&rx_enabled) && !atomic_load(&tx_armed)) { ifpan_clean_audio(IFPAN_CLEAN_RADE, 0); }
+#endif
   if (force_mode) { push_client(); }   /* server-made mode / TX filter changes: tell the client */
   /* active_receiver is still NULL while the properties are restored at startup */
   t_print("%s: rx_enabled=%d tx_armed=%d\n", __func__, atomic_load(&rx_enabled), atomic_load(&tx_armed));
@@ -290,6 +296,9 @@ void rade_glue_set_tx_armed(int on) {
   if (remote_send(RADE_REMOTE_TX, on ? 1 : 0, 0, NULL)) { return; }
   atomic_store(&tx_pref, on ? 1 : 0);
   if (on && !was_on) { snapshot_take(); }
+#ifdef IFPAN
+  if (on && !was_on) { ifpan_clean_audio(IFPAN_CLEAN_RADE, 1); }
+#endif
   engine_update();
   if (on && !was_on && atomic_load(&rx_enabled)) { tune_band_rade_frequency(); }
   if (on) { ensure_digital_mode(); }

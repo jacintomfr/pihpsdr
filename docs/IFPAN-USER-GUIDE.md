@@ -395,6 +395,12 @@ the menus — as in the hpsdr-rs kiosk: 1234567890 / qwerty rows, Shift (one
 letter), ?123 symbols, Backspace (repeats when held), Enter (confirms and
 closes), hide. Not on Windows (real keyboard).
 
+**SSTV and RADE take the audio as it comes:** while the SSTV panel is open
+or RADE is on, NB, NR, ANF, SNB and the RX EQ are off and the AGC is Long; on
+TX the EQ, compressor, CFC, DEXP, phase rotator and microphone NR are off.
+Leaving SSTV / RADE puts back what was on before (also each mode's profile).
+RADE's own Denoiser / Leveler / Compressor / EQ stay as set in its panel.
+
 **Touch style** (Menu → Radio, Kenwood / IF panadapter block; on by default
 on the Pi, off on Windows): buttons look like the keyboard keys (dark,
 rounded corners, orange when a toggle is on) and check boxes are big squares

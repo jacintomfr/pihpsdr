@@ -413,6 +413,9 @@ void vfo_id_mode_changed(int id, int m) {
   vfo[id].mode = m;
   if (id < receivers) {
     profiles_load_rxtx_profile(receiver[id]);
+#ifdef IFPAN
+    ifpan_clean_audio_reapply();   // SSTV / RADE: the new mode's processing off again
+#endif
     rx_mode_changed(receiver[id]);
     rx_filter_changed(receiver[id]);
   }

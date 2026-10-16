@@ -111,6 +111,9 @@ void waterfall_update(RECEIVER *rx) {
     int  freq_changed = 0;                    // flag whether we have just "rotated"
     unsigned char *pixels = gdk_pixbuf_get_pixels (rx->pixbuf);
     int width = gdk_pixbuf_get_width(rx->pixbuf);
+    // the pixbuf may still be wider than the sample buffer right after a
+    // width change (rx_update_width, before GTK re-allocates)
+    if (rx->pixels > 0 && width > rx->pixels) { width = rx->pixels; }
     int height = gdk_pixbuf_get_height(rx->pixbuf);
     int rowstride = gdk_pixbuf_get_rowstride(rx->pixbuf);
     //

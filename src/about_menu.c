@@ -70,7 +70,7 @@ void about_menu(GtkWidget *parent) {
   gtk_grid_attach(GTK_GRID(grid), close_b, 0, row, 4, 1);
   row++;
 #ifdef IFPAN
-  snprintf(text, sizeof(text), APP_NAME ": receive-only IF panadapter (TS-570D + PlutoSDR) by CU2ED, based on");
+  snprintf(text, sizeof(text), APP_NAME ": Kenwood TS-570D IF panadapter and remote (TSP IFace 2 IF tap, 73.05 MHz) by CU2ED, based on");
   label = gtk_label_new(text);
   gtk_widget_set_name(label, "med_txt");
   gtk_widget_set_halign(label, GTK_ALIGN_START);

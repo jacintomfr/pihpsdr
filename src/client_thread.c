@@ -683,6 +683,32 @@ static int client_info_display(gpointer ptr) {
   return G_SOURCE_REMOVE;
 }
 
+#ifdef IFPAN
+//
+// piHPSDR-IF: a side panel (SSTV / RADE) narrows the client's receivers to
+// half the width while the server keeps sending the width it was told
+// (CMD_SCREEN, which also sizes the server's own screen): the spectrum is
+// resampled to the client's width (each pixel the strongest of the points it
+// covers, so narrow signals stay) and the pixel factors scaled to match.
+//
+static void spectrum_to_pixels(float *dst, int n, const uint8_t *src, int w) {
+  if (w == n) {
+    for (int i = 0; i < n; i++) { dst[i] = (float)((int)src[i] - 200); }
+    return;
+  }
+  for (int i = 0; i < n; i++) {
+    int a = (int)((long long) i * w / n);
+    int b = (int)((long long)(i + 1) * w / n);
+    if (b <= a) { b = a + 1; }
+    if (b > w) { b = w; }
+    int m = src[a];
+    for (int k = a + 1; k < b; k++) { if (src[k] > m) { m = src[k]; } }
+    dst[i] = (float)(m - 200);
+  }
+}
+#endif
+
+
 static int client_spectrum(gpointer ptr) {
   SPECTRUM_DATA *data = (SPECTRUM_DATA *)ptr;
   int type = from_16(data->header.data_type);
@@ -722,7 +748,17 @@ static int client_spectrum(gpointer ptr) {
     rx->currout = from_double(data->currout);
     rx->pixels_available = data->avail;
     g_mutex_lock(&rx->display_mutex);
+#ifdef IFPAN
+    if (width > 0 && width != rx->pixels && rx->pixels > 0) {
+      double r = (double) rx->pixels / (double) width;
+      rx->cB /= r;
+      rx->cAp *= r;
+      rx->cBp *= r;
+    }
+    if (width > 0 && width <= SPECTRUM_DATA_SIZE && rx->pixel_samples != NULL && rx->pixels > 0 && rx->displaying) {
+#else
     if (width == rx->width && rx->pixel_samples != NULL && rx->pixels > 0 && rx->displaying) {
+#endif
       if (data->compressed) {
         int rc;
         int len = from_16(data->compressed_width);
@@ -733,14 +769,22 @@ static int client_spectrum(gpointer ptr) {
         if (rc < 0 || num != width) {
           t_print("%s: %d --> %d (w=%d, ret=%d)\n", __func__, len, num, width, rc);
         } else {
+#ifdef IFPAN
+          spectrum_to_pixels(rx->pixel_samples, rx->pixels, specbuf, width);
+#else
           for (int i = 0; i < width; i++) {
             rx->pixel_samples[i] = (float)((int)specbuf[i] - 200);
           }
+#endif
         }
       } else {
+#ifdef IFPAN
+        spectrum_to_pixels(rx->pixel_samples, rx->pixels, data->sample, width);
+#else
         for (int i = 0; i < rx->width; i++) {
           rx->pixel_samples[i] = (float)((int)data->sample[i] - 200);
         }
+#endif
       }
       if (rx->display_panadapter) {
         rx_panadapter_update(rx);
@@ -762,7 +806,12 @@ static int client_spectrum(gpointer ptr) {
     tx->fwd = from_double(data->fwd);
     tx->swr = from_double(data->swr);
     g_mutex_lock(&tx->display_mutex);
+#ifdef IFPAN
+    if (width > 0 && width <= SPECTRUM_DATA_SIZE && tx->pixel_samples != NULL && tx->displaying && tx->pixels > 0
+        && tx->display_panadapter) {
+#else
     if (width == tx->width && tx->pixel_samples != NULL && tx->displaying && tx->pixels > 0 && tx->display_panadapter) {
+#endif
       if (data->compressed) {
         int rc;
         int len = from_16(data->compressed_width);
@@ -773,14 +822,22 @@ static int client_spectrum(gpointer ptr) {
         if (rc < 0 || num != width) {
           t_print("%s: %d --> %d (w=%d, ret=%d)\n", __func__, len, num, width, rc);
         } else {
+#ifdef IFPAN
+          spectrum_to_pixels(tx->pixel_samples, tx->pixels, specbuf, width);
+#else
           for (int i = 0; i < width; i++) {
             tx->pixel_samples[i] = (float)((int)specbuf[i] - 200);
           }
+#endif
         }
       } else {
+#ifdef IFPAN
+        spectrum_to_pixels(tx->pixel_samples, tx->pixels, data->sample, width);
+#else
         for (int i = 0; i < tx->width; i++) {
           tx->pixel_samples[i] = (float)((int)data->sample[i] - 200);
         }
+#endif
       }
       tx_panadapter_update(tx);
     }

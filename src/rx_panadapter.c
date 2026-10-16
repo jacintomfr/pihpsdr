@@ -132,6 +132,9 @@ void rx_panadapter_update(RECEIVER *rx) {
   double soffset;
   int active = (active_receiver == rx);
   int mywidth = gtk_widget_get_allocated_width (rx->panadapter);
+  // the widget may still be wider than the sample buffer right after a width
+  // change (rx_update_width, before GTK re-allocates): never index past it
+  if (rx->pixels > 0 && mywidth > rx->pixels) { mywidth = rx->pixels; }
   int myheight = gtk_widget_get_allocated_height (rx->panadapter);
   double scalfac = sqrt(mywidth * 0.00125);
   samples = rx->pixel_samples;

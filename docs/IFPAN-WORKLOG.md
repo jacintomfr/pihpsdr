@@ -858,3 +858,27 @@ for this way of working (Radio menu, "Kenwood / IF panadapter"):
 * radio_menu.c (IFPAN only): the grid in a scrolled window, at most
   screen height - 140 px; on 1024x600 the bigger check boxes pushed the
   menu past the bottom. Where it fits nothing changes.
+
+### Windows client crash with the side panels; client spectrum (2026-10-16)
+* Client 3.1.362 crashed (APPCRASH 0xc0000374, heap corruption) when the
+  RADE panel was opened again. Found with a debug build (CFLAGS="-O1 -g"
+  in the windows-port checkout) under MSYS2 gdb: detected in a cairo
+  malloc in rx_panadapter_update. Cause: right after rx_update_width the
+  panadapter widget / waterfall pixbuf are still as wide as before until
+  GTK re-allocates; rx_panadapter_update's samples[mywidth - 1] = -200
+  then wrote past the new, smaller sample buffer (and the loops read past
+  it). Fix (cabb1826): the drawing width is clamped to rx->pixels in
+  rx_panadapter.c and waterfall.c. A piHPSDR bug too, only exposed by the
+  frequent width changes of the side panels. A first guess (configure
+  handlers racing the network thread) was wrong: client_spectrum runs as
+  a g_idle callback in the GTK thread.
+* Client spectrum froze while a side panel was open: the server sends the
+  width set by CMD_SCREEN (which also sizes the server's own screen), the
+  client's receiver was half that and dropped every frame. client_thread.c
+  (IFPAN) now resamples to the client's width (max of the covered points)
+  and scales cB / cAp / cBp; also the TX spectrum.
+* Tested by the user on the debug client: RADE opened / closed repeatedly,
+  no crash, spectrum moving.
+* Tip: a debug client run from the checkout needs the WDSP wisdom file next
+  to it (copy %LOCALAPPDATA%\piHPSDR-IF\wdspWisdom01), else it plans the
+  FFTs again for minutes.

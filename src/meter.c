@@ -548,6 +548,29 @@ static void txmeter_powerbar(cairo_t *cr, double frac, double pk, const char *pw
   const double bw  = w - 36.0 * scalfac;
   const double bh  = 13.0 * scalfac;
   const double by  = VFO_HEIGHT * 0.50;
+  int pct_scale = 1;
+#ifdef IFPAN
+  //
+  // Touch style: as the RX dual-scale meter, no scale above the bar and a big
+  // power readout, sized by the meter's height
+  //
+  if (touch_style) {
+    pct_scale = 0;
+    double base = by - 0.08 * VFO_HEIGHT;
+    cairo_set_source_rgba(cr, COLOUR_METER);
+    cairo_set_font_size(cr, 0.34 * VFO_HEIGHT);
+    cairo_move_to(cr, bx, base);
+    cairo_show_text(cr, pwrstr);
+    if (swr_alarm) { cairo_set_source_rgba(cr, COLOUR_ALARM); }
+    else           { cairo_set_source_rgba(cr, COLOUR_OK); }
+    cairo_set_font_size(cr, 0.21 * VFO_HEIGHT);
+    snprintf(sf, sizeof(sf), "SWR %1.1f:1", swr);
+    cairo_text_extents(cr, sf, &extents);
+    cairo_move_to(cr, bx + bw - extents.width, base);
+    cairo_show_text(cr, sf);
+  }
+#endif
+  if (pct_scale) {
   //
   // Top readout: power (left), SWR (right)
   //
@@ -577,6 +600,7 @@ static void txmeter_powerbar(cairo_t *cr, double frac, double pk, const char *pw
     cairo_text_extents(cr, sf, &extents);
     cairo_move_to(cr, tx - 0.5 * extents.width, by - 10.0 * scalfac);
     cairo_show_text(cr, sf);
+  }
   }
   //
   // Trough + graded fill (clipped to the rounded trough)

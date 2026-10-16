@@ -935,4 +935,7 @@ for this way of working (Radio menu, "Kenwood / IF panadapter"):
   "Open Sans Extrabold" family), so it showed light; Menu text kept black
   in :backdrop too. "Cancel" counts as a window's own Close (the Exit dialog
   got a second, header Close).
-* Checked by capture on the Pi: normal and hidden state, meter, Exit dialog.
+* txmeter_powerbar (touch style): the same for the TX power bar, no 0 / 50 /
+  100 % scale above the bar (the big power readout ran into it), power
+  0.34 x VFO_HEIGHT, SWR 0.21 x VFO_HEIGHT; the W scale below stays.
+* Checked by capture on the Pi: normal and hidden state, RX and TX meter, Exit dialog.

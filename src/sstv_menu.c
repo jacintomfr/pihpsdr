@@ -38,6 +38,9 @@
 #ifdef IFPAN
   #include "ifpan.h"
 #endif
+#ifdef RADE
+  #include "rade_menu.h"
+#endif
 
 #define BARS_W 104
 #define STATE_CHARS 11      // "(receiving)", the widest state text
@@ -608,6 +611,10 @@ void sstv_menu_shutdown(void) {
   t_print("%s: zoom / pan / filter from before SSTV restored\n", __func__);
 }
 
+int sstv_menu_is_open(void) {
+  return panel != NULL;
+}
+
 // main menu "SSTV": dock the panel (or close it if it is there)
 void sstv_menu(GtkWidget *parent) {
   (void) parent;
@@ -624,6 +631,9 @@ void sstv_menu(GtkWidget *parent) {
     gtk_widget_show_all(dlg);
     return;
   }
+#ifdef RADE
+  if (rade_menu_is_open()) { rade_menu(NULL); }   // one panel at a time on the right half
+#endif
   panel = build_panel();
   g_object_ref_sink(panel);
   sstv_glue_set_rx_enabled(1);

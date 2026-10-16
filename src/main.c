@@ -57,6 +57,9 @@
 #include "test_menu.h"
 #include "version.h"
 #include "vfo.h"
+#ifdef IFPAN
+  #include "osk.h"
+#endif
 
 struct utsname unameData;
 
@@ -202,6 +205,9 @@ static void activate_pihpsdr(GtkApplication *app, gpointer data) {
   // Create top window with minimum size
   //
   top_window = gtk_application_window_new (app);
+#ifdef IFPAN
+  osk_init();   // on-screen keyboard for every text field (touch screen)
+#endif
   gtk_widget_set_size_request(top_window, 100, 100);
   gtk_window_set_title (GTK_WINDOW (top_window), APP_NAME);
   //

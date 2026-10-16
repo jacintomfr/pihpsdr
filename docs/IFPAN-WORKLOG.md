@@ -823,3 +823,25 @@ for this way of working (Radio menu, "Kenwood / IF panadapter"):
   (decoded by hand from a recording: 2A C U 2 ...), unreadable by MMSSTV
   and by us; new Windows MSIs (normal + noAVX2) and kiosk 0.8.7-563 send it
   LSB first.
+
+### RADE panel docked like SSTV, on-screen keyboard (2026-10-16)
+* The RADE window sat over the main screen. rade_menu.c is now a docked
+  panel (radio_reconfigure: rade_panel_wanted_width / rade_panel_place,
+  half the width as SSTV; SSTV and RADE close each other): zoom 26 centred
+  on 1500 Hz audio (again 300 ms after entering / Quick Tune), zoom / pan
+  back on leaving and on program exit (rade_menu_shutdown). Menu -> RADE
+  (and the RADE action) toggles it; no window position file any more.
+* Layout measured on the 1024x600 screen: 40 px rows, check boxes as big
+  squares with an X (28 px, CSS, Adwaita window-close-symbolic, also in the
+  Windows MSI), their text 17 px, status / callsigns / filter text 13 px,
+  options in two columns (three widened the window past the screen), EQ
+  sliders behind "Adjust" and Quick Tune bands in pop-ups; ends at y ~ 440
+  of 447.
+* On-screen keyboard (src/osk.c, IFPAN_OBJS): as hpsdr-rs kiosk_keyboard.rs
+  (layout, 42 px keys, Shift one letter, ?123 layer, Backspace repeat
+  0.45 s / 70 ms, keys never take the focus); a non-modal popover on the
+  focused GtkEntry (focus-in emission hook, every field of the program), the
+  width of its window. On on Linux, off on Windows. Tested on the Pi with
+  My callsign.
+* "Dropped" in the RADE status counts RX samples thrown away while RADE
+  transmits (rx ring full): not a fault.

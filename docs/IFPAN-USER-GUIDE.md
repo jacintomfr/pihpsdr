@@ -393,7 +393,13 @@ pop-up), Fit Filter and **Quick Tune** (the bands in a pop-up).
 above) any text field that gets the focus — My callsign, or any field of
 the menus — as in the hpsdr-rs kiosk: 1234567890 / qwerty rows, Shift (one
 letter), ?123 symbols, Backspace (repeats when held), Enter (confirms and
-closes), hide. Not on Windows (real keyboard). RADE is not switched on
+closes), hide. Not on Windows (real keyboard).
+
+**Touch style** (Menu → Radio, Kenwood / IF panadapter block; on by default
+on the Pi, off on Windows): buttons look like the keyboard keys (dark,
+rounded corners, orange when a toggle is on) and check boxes are big squares
+with an X; the coloured state buttons keep their colours. On a small screen
+the Radio menu scrolls (drag it) instead of being cut at the bottom. RADE is not switched on
 at startup; if the program was ended in RADE, the state from before RADE is
 put back once the Kenwood's CAT answers (kept as rade_prev.* in the props
 file).

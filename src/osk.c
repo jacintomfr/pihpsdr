@@ -279,4 +279,48 @@ int osk_get_enabled(void) {
   return osk_enabled;
 }
 
+//
+// Touch style: the whole program's buttons as the keyboard's keys (dark,
+// thin border, 5 px rounded corners, lighter while pressed, orange when a
+// toggle is on) and check boxes as big squares with an X (as the hpsdr-rs
+// kiosk). One CSS for the screen, just below piHPSDR's own (css.c, priority
+// APPLICATION): its named buttons keep their colours (red / orange / green /
+// ... state buttons, menu, hide), and so do the widgets with a style of their
+// own (the green Auto, the keyboard keys, the RADE check boxes). Off: the
+// look of before. On by default on Linux (the Pi's touch screen), off on
+// Windows; saved as ifpan.touch_style.
+//
+#ifdef _WIN32
+int touch_style = 0;
+#else
+int touch_style = 1;
+#endif
+static GtkCssProvider *touch_css = NULL;
+
+static const char *touch_rules =
+  "button { background-image: none; background-color: rgb(52, 52, 52); color: rgb(235, 235, 235);"
+  " border: 1px solid rgb(95, 95, 95); border-radius: 5px; box-shadow: none; text-shadow: none; }\n"
+  "button:hover { background-color: rgb(64, 64, 64); }\n"
+  "button:active { background-color: rgb(110, 110, 110); }\n"
+  "button:checked { background-color: rgb(200, 110, 30); color: rgb(235, 235, 235); }\n"
+  "button:disabled { background-color: rgb(40, 40, 40); color: rgb(120, 120, 120); }\n"
+  "checkbutton check { min-width: 24px; min-height: 24px; -gtk-icon-source: none; background-image: none;"
+  " background-color: rgb(25, 25, 25); border: 2px solid rgb(170, 170, 170); border-radius: 3px; }\n"
+  "checkbutton check:checked { -gtk-icon-source: -gtk-icontheme('window-close-symbolic'); color: rgb(255, 255, 255); }\n";
+
+void touch_style_set(int on) {
+  touch_style = on != 0;
+  GdkScreen *screen = gdk_screen_get_default();
+  if (screen == NULL) { return; }
+  if (touch_css == NULL) {
+    touch_css = gtk_css_provider_new();
+    gtk_css_provider_load_from_data(touch_css, touch_rules, -1, NULL);
+  }
+  gtk_style_context_remove_provider_for_screen(screen, GTK_STYLE_PROVIDER(touch_css));
+  if (touch_style) {
+    gtk_style_context_add_provider_for_screen(screen, GTK_STYLE_PROVIDER(touch_css),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION - 1);
+  }
+}
+
 #endif /* IFPAN */

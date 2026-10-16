@@ -101,6 +101,7 @@ extern void      ifpan_set_cat_write(int on);                  // Radio menu "Cl
 extern void      ifpan_set_tx_mute(int on);                    // Radio menu "Mute when TS in TX"
 extern void      ifpan_set_lo_offset_khz(int khz);             // Radio menu "SDR LO offset (kHz)"
 extern void      ifpan_set_sdr_lna_off(int on);                // Radio menu "SDR LNA off"
+extern int       ifpan_ts_txeq;                                // TS TX equalizer outside SSTV / RADE: -1 not set, 0..4 (menu 14)
 extern int       ifpan_tx_timeout;                             // TX time-out (minutes, 0: off)
 extern void      ifpan_set_tx_timeout(int minutes);            // Radio menu "TX time-out (min)"
 extern int       ifpan_mode_if_offset[8];                      // IF offset per Kenwood mode (Hz)

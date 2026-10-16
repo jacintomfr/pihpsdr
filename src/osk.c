@@ -364,7 +364,8 @@ static gboolean header_hook(GSignalInvocationHint *ihint, guint n, const GValue 
   g_object_set_data(G_OBJECT(w), "touch_close", GINT_TO_POINTER(1));
   gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(w), FALSE);
   gtk_header_bar_set_has_subtitle(GTK_HEADER_BAR(w), FALSE);
-  // the window may have taken its height from the taller header: let it shrink to fit
+  // the window may have taken its height from the taller header: let it shrink
+  // to fit (a scrolled window must state its minimum, see radio_menu.c)
   int dw = -1, dh = -1;
   gtk_window_get_default_size(GTK_WINDOW(top), &dw, &dh);
   gtk_window_resize(GTK_WINDOW(top), dw > 0 ? dw : 1, 1);

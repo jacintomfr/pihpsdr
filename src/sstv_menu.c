@@ -106,6 +106,9 @@ static void panel_close(void) {
     if (opt_btn) { gtk_widget_destroy(opt_btn); g_object_unref(opt_btn); opt_btn = NULL; }
     if (opt_box) { gtk_widget_destroy(opt_box); g_object_unref(opt_box); opt_box = NULL; }
     opt_open = 0;
+#ifdef IFPAN
+    radio_buttons_to_waterfall(0);
+#endif
     if (saved_zoom > 0) {
       radio_set_zoom(0, saved_zoom);   // back to the zoom from before SSTV
       radio_set_pan(0, saved_pan);
@@ -355,6 +358,9 @@ static void options_place(void) {
     gtk_fixed_move(GTK_FIXED(fixed), opt_box, bx, by);
   }
   gtk_widget_show(opt_btn);   // always, in the waterfall; pressed while the controls are open
+#ifdef IFPAN
+  radio_buttons_to_waterfall(opt_open);   // touch layout: Menu / Hide out of the controls' way
+#endif
   if (opt_open) {
     gtk_widget_show(opt_box);
   } else {
@@ -457,6 +463,7 @@ static GtkWidget *build_panel(void) {
   gtk_widget_set_name(l, "boldlabel");
   gtk_box_pack_start(GTK_BOX(dec), l, FALSE, FALSE, 0);
   auto_btn = gtk_toggle_button_new_with_label("Auto");
+  gtk_widget_set_size_request(auto_btn, -1, 40);
   {
     // Auto on: green, unmistakable (the theme's "checked" grey is too faint)
     GtkCssProvider *css = gtk_css_provider_new();
@@ -476,6 +483,7 @@ static GtkWidget *build_panel(void) {
   gtk_widget_set_tooltip_text(mode_combo, "Receive now in this mode (forced start, as in MMSSTV)");
   // 16 modes: a 4 x 4 grid, not one column the height of the screen
   gtk_combo_box_set_wrap_width(GTK_COMBO_BOX(mode_combo), 4);
+  gtk_widget_set_size_request(mode_combo, -1, 40);
   gtk_box_pack_start(GTK_BOX(dec), mode_combo, FALSE, FALSE, 0);
   GtkWidget *row2 = wrap_row();
   wrap_add(row2, dec);
@@ -486,10 +494,12 @@ static GtkWidget *build_panel(void) {
   g_signal_connect(auto_btn, "toggled", G_CALLBACK(auto_cb), NULL);
   g_signal_connect(mode_combo, "changed", G_CALLBACK(mode_cb), NULL);
   GtkWidget *restart = gtk_button_new_with_label("Restart RX");
+  gtk_widget_set_size_request(restart, -1, 40);   // as tall as Quick Tune (touch)
   gtk_widget_set_tooltip_text(restart, "Drop the picture in progress and wait for the next header");
   g_signal_connect(restart, "clicked", G_CALLBACK(restart_cb), NULL);
   wrap_add(row2, restart);
   GtkWidget *fit = gtk_button_new_with_label("Fit Filter");
+  gtk_widget_set_size_request(fit, -1, 40);
   gtk_widget_set_tooltip_text(fit, "Narrow the RX filter to the SSTV tone band (1100-2400 Hz)");
   g_signal_connect(fit, "clicked", G_CALLBACK(fit_cb), NULL);
   wrap_add(row2, fit);

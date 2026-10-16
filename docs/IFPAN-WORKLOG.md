@@ -962,3 +962,35 @@ for this way of working (Radio menu, "Kenwood / IF panadapter"):
 * RADE's own voice conditioning (Denoiser / Leveler / Compressor / EQ in the
   RADE panel, FreeDV's mic chain before the encoder) is not touched.
 * Checked on the Pi by the user (VFO bar indicators in USB / RADE / SSTV).
+
+### Touch layout fixes: Radio menu height, SSTV OPTIONS box (2026-10-16)
+* osk.c header hook: the window was resized to (w, 1), i.e. its minimum, to
+  drop the old 68 px header height; the Radio menu's scrolled window has a
+  tiny minimum and opened a few rows high. Now resized to its natural size.
+* SSTV OPTIONS box (under the waterfall, from x 6) was covered by the Menu /
+  Hide column of the touch layout; making the box narrower wrapped it to
+  three rows (no good for touch). radio_buttons_to_waterfall(on) (radio.c):
+  while the box is open, Menu / Hide go to the waterfall corner (the hidden
+  state's place, the OPTIONS button is on the other side); back on close.
+* SSTV OPTIONS row 2 (Auto, mode list, Restart RX, Fit Filter) 40 px high
+  like Quick Tune (height only: a fixed width wrapped the row).
+* Radio menu height, second try: resizing to the natural size left ~90 px
+  empty under the main Menu; the window is shrunk to its minimum again and
+  the Radio menu's scrolled window states a minimum content height (its
+  grid's natural height, at most screen height - 140).
+* Checked by capture on the Pi (main Menu compact, Radio menu full height and
+  scrolling, SSTV OPTIONS); the Pi driven with wlrctl while the user was away.
+
+### Kenwood TX equalizer for SSB, OFF in SSTV / RADE (2026-10-16)
+* The user's choice: on the TS only the TX equalizer changes (the speech
+  processor stays OFF, WDSP processes; the TX filter stays 2.4 kHz).
+* Radio menu, Kenwood block (server only): "TS TX EQ (SSB)": Not set / OFF /
+  Hb / FP / bb / C = menu 14, "EX014000n;" (manual's EX table). ts_sync sends
+  the SSB choice, or OFF while ifpan_clean_audio is active (SSTV / RADE),
+  when it differs from what was sent on this connection (again after a
+  reconnect), never in TX. The TS has no read for one menu item ("EX;"
+  only), so the SSB value is a setting (ifpan.ts_txeq); Not set (-1, the
+  default) never touches the TS.
+* Not yet tested on the TS (the user sets the value and watches the EQ icon).
+* The ANF / SNB loss seen once (on in a capture, off later) was not
+  reproduced: SSTV and RADE in and out both brought them back.

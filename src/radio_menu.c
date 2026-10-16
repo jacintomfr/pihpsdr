@@ -178,6 +178,10 @@ static void tx_timeout_cb(GtkWidget *widget, gpointer data) {
   ifpan_set_tx_timeout(gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(widget)));
 }
 
+static void ts_txeq_cb(GtkWidget *widget, gpointer data) {
+  ifpan_ts_txeq = gtk_combo_box_get_active(GTK_COMBO_BOX(widget)) - 1;   // entry 0: not set
+}
+
 static void touch_style_cb(GtkWidget *widget, gpointer data) {
   touch_style_set(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)));
 }
@@ -1011,6 +1015,25 @@ void radio_menu(GtkWidget *parent) {
       gtk_widget_set_tooltip_text(Btn, "Rounded buttons and big check boxes with an X, for the touch screen");
       gtk_grid_attach(GTK_GRID(grid), Btn, 0, r, 2, 1);
       g_signal_connect(Btn, "toggled", G_CALLBACK(touch_style_cb), NULL);
+      // the Kenwood's own TX equalizer (menu 14) for SSB; OFF in SSTV / RADE
+      if (!radio_is_remote) {
+        label = gtk_label_new("TS TX EQ (SSB)");
+        gtk_widget_set_name(label, "boldlabel");
+        gtk_widget_set_halign(label, GTK_ALIGN_END);
+        gtk_grid_attach(GTK_GRID(grid), label, 2, r, 1, 1);
+        GtkWidget *eq_combo = gtk_combo_box_text_new();
+        gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(eq_combo), NULL, "Not set");
+        gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(eq_combo), NULL, "OFF");
+        gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(eq_combo), NULL, "Hb (high boost)");
+        gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(eq_combo), NULL, "FP (formant)");
+        gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(eq_combo), NULL, "bb (bass boost)");
+        gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(eq_combo), NULL, "C (conventional)");
+        gtk_combo_box_set_active(GTK_COMBO_BOX(eq_combo), ifpan_ts_txeq + 1);
+        gtk_widget_set_tooltip_text(eq_combo, "The Kenwood's TX equalizer (menu 14) outside SSTV / RADE; "
+                                    "OFF while SSTV or RADE is on. Not set: never changed");
+        my_combo_attach(GTK_GRID(grid), eq_combo, 3, r, 1, 1);
+        g_signal_connect(eq_combo, "changed", G_CALLBACK(ts_txeq_cb), NULL);
+      }
       r++;
       // SDR LO offset from the IF: the SDR's DC spike (and the Mirics'
       // mirror) appear this far from the VFO; above half the span they are
@@ -1258,6 +1281,12 @@ void radio_menu(GtkWidget *parent) {
     gtk_scrolled_window_set_propagate_natural_width(GTK_SCROLLED_WINDOW(sw), TRUE);
     int screen_h = gdk_screen_get_height(gdk_screen_get_default());
     gtk_scrolled_window_set_max_content_height(GTK_SCROLLED_WINDOW(sw), screen_h - 140);
+    // and at least as tall as the contents up to that: a window shrunk to its
+    // minimum size (touch style, osk.c) must not squeeze the menu
+    gtk_widget_show_all(grid);    // hidden widgets measure 0
+    int gmin = 0, gnat = 0;
+    gtk_widget_get_preferred_height(grid, &gmin, &gnat);
+    gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(sw), MIN(gnat, screen_h - 140));
     gtk_container_add(GTK_CONTAINER(sw), grid);
     gtk_container_add(GTK_CONTAINER(content), sw);
   }

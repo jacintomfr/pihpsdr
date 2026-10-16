@@ -102,6 +102,14 @@ int       ifpan_kenwood_smeter = -999;
 // reports them (-1: not read yet); meter.c turns them into W / SWR.
 //
 int       ifpan_tx_mute = 1;
+//
+// The Kenwood's own TX equalizer (menu 14: OFF / Hb / FP / bb / C, "EX014000n;")
+// is set to the user's SSB choice, and OFF while SSTV or RADE is on. The TS
+// cannot be asked for one menu item ("EX;" only), so the SSB choice is a
+// piHPSDR-IF setting; -1 (not set) leaves the TS's equalizer alone.
+//
+int       ifpan_ts_txeq = -1;
+static int ts_txeq_sent = -1;          // what the TS has been sent on this connection (-1: nothing)
 int       ifpan_tx_timeout = 3;       // minutes in TX before piHPSDR-IF goes back to RX (0: off)
 int       ifpan_follow_mode = 1;      // receiver mode follows the Kenwood mode
 int       ifpan_sdr_lna_off = 0;      // SDR front-end LNA kept off (strong IF input; Radio menu)
@@ -388,6 +396,7 @@ void ifpan_save_state(void) {
   SetPropI0("ifpan.tx_mute",       ifpan_tx_mute);
   SetPropI0("ifpan.tx_timeout",    ifpan_tx_timeout);
   SetPropI0("ifpan.touch_style",   touch_style);
+  SetPropI0("ifpan.ts_txeq",      ifpan_ts_txeq);
   SetPropI0("ifpan.follow_mode",   ifpan_follow_mode);
   SetPropI0("ifpan.sdr_lna_off",   ifpan_sdr_lna_off);
   SetPropS0("ifpan.tx_out",        ifpan_tx_out);
@@ -409,6 +418,7 @@ void ifpan_restore_state(void) {
   GetPropI0("ifpan.tx_mute",       ifpan_tx_mute);
   GetPropI0("ifpan.tx_timeout",    ifpan_tx_timeout);
   GetPropI0("ifpan.touch_style",   touch_style);
+  GetPropI0("ifpan.ts_txeq",      ifpan_ts_txeq);
   touch_style_set(touch_style);
   GetPropI0("ifpan.follow_mode",   ifpan_follow_mode);
   GetPropI0("ifpan.sdr_lna_off",   ifpan_sdr_lna_off);
@@ -1888,6 +1898,18 @@ static int ts_sync(int sock, int busy) {
   // piHPSDR-IF -> TS
   //
   char cmd[32];
+  //
+  // The TS TX equalizer: OFF while SSTV / RADE is on, else the SSB choice
+  //
+  if (ifpan_ts_txeq >= 0) {
+    int want_eq = clean_users ? 0 : ifpan_ts_txeq;
+    if (want_eq != ts_txeq_sent) {
+      snprintf(cmd, sizeof(cmd), "EX014%04d;", want_eq);
+      if (kw_send(sock, cmd) < 0) { return -1; }
+      ts_txeq_sent = want_eq;
+      t_print("%s: TS TX equalizer %d sent (%s)\n", __func__, want_eq, clean_users ? "SSTV / RADE" : "SSB setting");
+    }
+  }
   long long want_fb = vfo_b_freq();
   int want_split = split ? 1 : 0;
   int want_tone = transmitter != NULL ? (transmitter->ctcss_enabled ? 1 : 0) : ts_sent.tone;
@@ -2044,6 +2066,7 @@ static gpointer cat_thread(gpointer data) {
       ts_sync_init = 0;               // read split / VFO B / subtone from the TS first
       ts_sync_count = 0;
       ts_bmode_sent = -1;             // VFO B mode not known (it cannot be read without FR1)
+      ts_txeq_sent = -1;              // the TS TX equalizer is sent again
     }
     //
     // piHPSDR-IF -> Kenwood: send the latest requested frequency, if any

@@ -399,7 +399,10 @@ closes), hide. Not on Windows (real keyboard).
 or RADE is on, NB, NR, ANF, SNB and the RX EQ are off and the AGC is Long; on
 TX the EQ, compressor, CFC, DEXP, phase rotator and microphone NR are off.
 Leaving SSTV / RADE puts back what was on before (also each mode's profile).
-RADE's own Denoiser / Leveler / Compressor / EQ stay as set in its panel.
+RADE's own Denoiser / Leveler / Compressor / EQ stay as set in its panel. The Kenwood's
+own TX equalizer: choose your SSB setting in Menu → Radio, "TS TX EQ (SSB)";
+piHPSDR-IF sets it on the TS outside SSTV / RADE and OFF inside (Not set: the
+TS's equalizer is never changed).
 
 **Touch style** (Menu → Radio, Kenwood / IF panadapter block; on by default
 on the Pi, off on Windows): buttons look like the keyboard keys (dark,

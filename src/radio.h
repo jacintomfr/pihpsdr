@@ -305,6 +305,9 @@ extern int VFO_HEIGHT;                 // VFO bar height
 extern int METER_WIDTH;                // Width allocated to the meter
 extern int ADD_METER_WIDTH;            // Wdith allocated to extended part of meter (included in METER_WIDTH)
 extern const int MENU_WIDTH;           // Width of the Menu and Hide/Show buttons
+#ifdef IFPAN
+extern void radio_buttons_to_waterfall(int on);   // touch layout: Menu / Hide in the waterfall corner meanwhile
+#endif
 
 extern int rx_stack_horizontal;
 extern int suppress_popup_sliders;

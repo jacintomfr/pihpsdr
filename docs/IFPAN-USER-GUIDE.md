@@ -54,6 +54,8 @@ right-hand column.
 | Tune Drive | TUNE_DRIVE | tune power slider. |
 | Two-Tone | TWO_TONE | two-tone test at the TX Drive power, same mode switch. |
 | RADE Menu | **RADE-M** | opens the RADE menu. |
+| Record WAV | **RecWAV** | records the RX audio as heard to a WAV file (48 kHz stereo 16-bit), press again to stop; red "REC mm:ss" in the spectrum. Files: `recordings/piHPSDR-IF_YYYYMMDD_HHMMSS.wav` in the settings folder (Pi `~/pihpsdr-if/recordings/`, Windows `%LOCALAPPDATA%\piHPSDR-IF\recordings\`); on a client it records what the client receives. ~11 MB per minute. |
+| Capture / Replay | **CAPTUR** / **REPLAY** | records the RX audio into memory; Replay plays it back; Capture in TX sends the recording through ACC2. |
 
 ## 4. Tuning
 

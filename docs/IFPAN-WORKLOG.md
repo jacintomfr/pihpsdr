@@ -1005,3 +1005,17 @@ for this way of working (Radio menu, "Kenwood / IF panadapter"):
 * Confirmed by the user: CAPTUR records the RX audio until stopped or until
   the buffer is full, REPLAY plays it back locally, and in TX the recording
   goes out through ACC2 as received.
+
+### Record WAV (2026-10-17)
+* As hpsdr-rs's "Record" (audio_recorder.rs): new action IFPAN_RECORD_WAV
+  ("Record WAV", toolbar "RecWAV", MIDI), start / stop. src/wav_rec.c: the
+  active receiver's RX audio as heard (after volume, mute, channel), 48 kHz
+  stereo 16-bit PCM streamed to disk, header sizes filled in on stop (also in
+  radio_stop_program), stops by itself before the 4 GB WAV limit (~6 h).
+  Taps: receiver.c (server / stand-alone) and client_thread.c (both RX audio
+  formats, the client's own disk). File: <working dir = settings folder>/
+  recordings/piHPSDR-IF_YYYYMMDD_HHMMSS.wav. Red "REC mm:ss" in the
+  panadapter (display_panadapter_messages, top right under the capture box).
+* Checked on the Pi: 15.5 s and 16 s files (2 ch, 48 kHz, 16 bit, left ==
+  right, no dropouts) and a 61.5 min file, 708 MB, header = file size, its
+  length = the wall-clock time (nothing lost).

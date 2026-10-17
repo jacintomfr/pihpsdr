@@ -42,6 +42,9 @@
 #include "property.h"
 #include "radio.h"
 #include "receiver.h"
+#ifdef IFPAN
+  #include "wav_rec.h"
+#endif
 #include "rx_panadapter.h"
 #include "sliders.h"
 #ifdef SOAPYSDR
@@ -1238,6 +1241,9 @@ static void rx_process_buffer(RECEIVER *rx) {
       left_sample = 0.0;
       break;
     }
+#ifdef IFPAN
+    if (rx == active_receiver) { wav_rec_frame(left_sample, right_sample); }   // Record WAV (wav_rec.c)
+#endif
     if (rx->local_audio) {
       audio_write(rx, left_sample, right_sample);
     }

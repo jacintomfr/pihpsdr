@@ -61,6 +61,7 @@
 #ifdef IFPAN
 #include "ifpan.h"
 #include "osk.h"
+#include "wav_rec.h"
 #endif
 #ifdef RADE
 #include "rade_glue.h"
@@ -1147,6 +1148,7 @@ void radio_stop_program(void) {
 #endif
 #ifdef IFPAN
   ifpan_clean_audio_shutdown();   // RX / TX processing from before SSTV / RADE (saved below)
+  wav_rec_stop();                 // a running Record WAV: the file's sizes filled in
 #endif
 #ifdef GPIO
   gpio_close();

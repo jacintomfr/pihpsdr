@@ -41,6 +41,9 @@
   #include "ozyio.h"
 #endif
 #include "receiver.h"
+#ifdef IFPAN
+  #include "wav_rec.h"
+#endif
 #include "rx_panadapter.h"
 #ifdef SSTV
   #include "sstv_menu.h"
@@ -1051,6 +1054,20 @@ void display_panadapter_messages(cairo_t *cr, int width, unsigned int fps) {
     }
     if (++count >= fps / 2) { count = 0; }
   }
+#ifdef IFPAN
+  if (wav_rec_active()) {
+    // Record WAV running (wav_rec.c): red, under the capture box's place
+    int t = wav_rec_seconds();
+    char rs[32];
+    snprintf(rs, sizeof(rs), "REC %02d:%02d", t / 60, t % 60);
+    cairo_set_source_rgba(cr, COLOUR_ALARM);
+    cairo_set_font_size(cr, 16.0 * scalfac);
+    cairo_text_extents_t rext;
+    cairo_text_extents(cr, "REC 00:00", &rext);
+    cairo_move_to(cr, (double) width - rext.width - 10.0 * scalfac, 70.0 * scalfac);
+    cairo_show_text(cr, rs);
+  }
+#endif
   if (capture_state == CAP_RECORDING || capture_state == CAP_XMIT
       || capture_state == CAP_REPLAY
       || capture_state == CAP_AVAIL) {

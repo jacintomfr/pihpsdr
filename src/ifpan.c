@@ -106,7 +106,8 @@ int       ifpan_tx_mute = 1;
 // The Kenwood's own TX equalizer (menu 14: OFF / Hb / FP / bb / C, "EX014000n;")
 // is set to the user's SSB choice, and OFF while SSTV or RADE is on. The TS
 // cannot be asked for one menu item ("EX;" only), so the SSB choice is a
-// piHPSDR-IF setting; -1 (not set) leaves the TS's equalizer alone.
+// piHPSDR-IF setting; -1 (not set): OFF in SSTV / RADE all the same, and
+// nothing sent outside them (the TS keeps OFF after SSTV / RADE then).
 //
 int       ifpan_ts_txeq = -1;
 static int ts_txeq_sent = -1;          // what the TS has been sent on this connection (-1: nothing)
@@ -1901,9 +1902,11 @@ static int ts_sync(int sock, int busy) {
   //
   // The TS TX equalizer: OFF while SSTV / RADE is on, else the SSB choice
   //
-  if (ifpan_ts_txeq >= 0) {
+  // (always OFF in SSTV / RADE; outside them only with an SSB choice, as the
+  // TS cannot be asked what it had)
+  {
     int want_eq = clean_users ? 0 : ifpan_ts_txeq;
-    if (want_eq != ts_txeq_sent) {
+    if (want_eq >= 0 && want_eq != ts_txeq_sent) {
       snprintf(cmd, sizeof(cmd), "EX014%04d;", want_eq);
       if (kw_send(sock, cmd) < 0) { return -1; }
       ts_txeq_sent = want_eq;

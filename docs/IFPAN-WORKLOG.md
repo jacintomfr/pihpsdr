@@ -991,6 +991,9 @@ for this way of working (Radio menu, "Kenwood / IF panadapter"):
   reconnect), never in TX. The TS has no read for one menu item ("EX;"
   only), so the SSB value is a setting (ifpan.ts_txeq); Not set (-1, the
   default) never touches the TS.
-* Not yet tested on the TS (the user sets the value and watches the EQ icon).
+* 2026-10-17: OFF is sent in SSTV / RADE even with "Not set" (like WDSP's TX
+  EQ, the user's request); outside them the SSB choice, nothing when not set.
+* Confirmed on the TS by the user (2026-10-17): EQ on in SSB, off when RADE is
+  entered, on again when RADE is left.
 * The ANF / SNB loss seen once (on in a capture, off later) was not
   reproduced: SSTV and RADE in and out both brought them back.

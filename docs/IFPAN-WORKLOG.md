@@ -1019,3 +1019,14 @@ for this way of working (Radio menu, "Kenwood / IF panadapter"):
 * Checked on the Pi: 15.5 s and 16 s files (2 ch, 48 kHz, 16 bit, left ==
   right, no dropouts) and a 61.5 min file, 708 MB, header = file size, its
   length = the wall-clock time (nothing lost).
+
+### Arc meters in the wider touch-layout meter (2026-10-17)
+* With the meter widened to 8/3 x VFO_HEIGHT, the edgewise (RX / TX) and
+  analog (RX / TX) faces scaled their text, ticks and line widths with the
+  width (scalfac = w * 0.00625 or cy * 0.0125): the top scale labels were cut
+  and the analog dBm readout (cy - radius + 30 sf) fell below the 82 px bar.
+* meter.c: those four scalfac are capped at VFO_HEIGHT * 0.0125 (= the
+  pre-widening size; a no-op outside the touch layout, where the meter is at
+  most 2 x VFO_HEIGHT). The arcs keep the width (the analog radius even grows,
+  73 vs 61 px). The edgewise needle still runs off the bottom by design (pivot
+  below the face). Confirmed by the user: both fit without cuts.

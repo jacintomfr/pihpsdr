@@ -45,6 +45,7 @@
 #include "vfo.h"
 #ifdef IFPAN
   #include "ifpan.h"
+  #include "wav_rec.h"
 #endif
 
 //
@@ -273,6 +274,7 @@ ACTION_TABLE ActionTable[] = {
   {IFPAN_TS_ATU_TUNE,   "TS Tuner\nTune",       "ATU tune",     AT_BTN},
   {MENU_RADE,           "RADE\nMenu",           "RADE-M",       AT_BTN},
   {IFPAN_TS_MUTE,       "TS Speaker\nMute",     "TS MUTE",      AT_BTN},
+  {IFPAN_RECORD_WAV,    "Record\nWAV",          "RecWAV",       AT_BTN},
 #endif
   {ACTIONS,             "None",                 "NONE",         AT_NONE}
 };
@@ -1111,6 +1113,11 @@ int process_action(gpointer data) {
     break;
   case IFPAN_TS_MUTE:
     if (a->mode == PRESSED) { ifpan_ts_mute_toggle(); }
+    break;
+  case IFPAN_RECORD_WAV:
+    // where it is pressed: the server's (or a stand-alone radio's) audio, or
+    // what a client receives, on that computer's disk (wav_rec.c)
+    if (a->mode == PRESSED) { wav_rec_toggle(); }
     break;
 #endif
   case MOX:

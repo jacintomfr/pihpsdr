@@ -66,6 +66,7 @@ extern int clock_nanosleep(clockid_t __clock_id, int __flags,
 #ifdef IFPAN
   #include "ifpan.h"
   #include "mic_nr.h"
+  #include "wav_rec.h"
 #endif
 #ifdef RADE
   #include "rade_glue.h"
@@ -989,6 +990,9 @@ gpointer client_udp_thread(gpointer arg) {
           tci_audio_rx_sample(rx->id, left_sample, right_sample);
         }
 #endif
+#ifdef IFPAN
+        if (rx == active_receiver) { wav_rec_frame(left_sample, right_sample); }   // Record WAV
+#endif
         if (rx->local_audio) {
           audio_write(rx, left_sample, right_sample);
         }
@@ -1024,6 +1028,9 @@ gpointer client_udp_thread(gpointer arg) {
           if (tci_audio_rx_active) {
             tci_audio_rx_sample(rx->id, left_sample, right_sample);
           }
+#endif
+#ifdef IFPAN
+          if (rx == active_receiver) { wav_rec_frame(left_sample, right_sample); }   // Record WAV
 #endif
           if (rx->local_audio) {
             audio_write(rx, left_sample, right_sample);

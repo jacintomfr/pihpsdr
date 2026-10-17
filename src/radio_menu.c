@@ -1030,7 +1030,7 @@ void radio_menu(GtkWidget *parent) {
         gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(eq_combo), NULL, "C (conventional)");
         gtk_combo_box_set_active(GTK_COMBO_BOX(eq_combo), ifpan_ts_txeq + 1);
         gtk_widget_set_tooltip_text(eq_combo, "The Kenwood's TX equalizer (menu 14) outside SSTV / RADE; "
-                                    "OFF while SSTV or RADE is on. Not set: never changed");
+                                    "always OFF while SSTV or RADE is on. Not set: nothing to put back after them");
         my_combo_attach(GTK_GRID(grid), eq_combo, 3, r, 1, 1);
         g_signal_connect(eq_combo, "changed", G_CALLBACK(ts_txeq_cb), NULL);
       }

@@ -16,6 +16,7 @@ dl1ycf/pihpsdr). Nothing of this work has been offered upstream.
 | **`docs/IFPAN-GUIA-UTILIZADOR.md`** | the same user guide in Portuguese (guia do utilizador em português) |
 | **`docs/IFPAN-INSTALL-LINUX.md`** | Linux / Raspberry Pi 5 from scratch (packages, MSi2500 clone with SoapyMiri, RADE, build, launcher, CAT bridge service, server, troubleshooting) |
 | **`docs/IFPAN-INSTALL-WINDOWS.md`** | Windows: MSI, Zadig drivers, CAT bridge (WSL + usbipd), audio, server/client — and building the MSI |
+| **`docs/piHPSDR-IF-como-funciona.pdf`** | how it works, hardware and software, with the TS-570D as the example (in Portuguese, 12 pages, diagrams and screenshots) - to explain the concept to someone new |
 | `docs/RADE-IFPAN.md` | FreeDV RADE V1 inside piHPSDR-IF (maintainer reference) |
 | `docs/IFPAN-WORKLOG.md` | full development log: every feature, commit, measurement, finding, open item |
 | `ifpan-tools/README.md` | helper scripts and test programs (CAT probes, network loss test, MSi2500 tests, Pi / WSL service files) |

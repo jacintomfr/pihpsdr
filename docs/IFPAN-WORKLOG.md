@@ -997,3 +997,11 @@ for this way of working (Radio menu, "Kenwood / IF panadapter"):
   entered, on again when RADE is left.
 * The ANF / SNB loss seen once (on in a capture, off later) was not
   reproduced: SSTV and RADE in and out both brought them back.
+
+### Capture / Replay on the toolbar (2026-10-17)
+* REPLAY showed an empty, dead toolbar button: it was still in the IFPAN
+  toolbar's list of actions that make no sense (ifpan_hidden_action, from the
+  receive-only first version). Removed from the list; Capture was never in it.
+* Confirmed by the user: CAPTUR records the RX audio until stopped or until
+  the buffer is full, REPLAY plays it back locally, and in TX the recording
+  goes out through ACC2 as received.

@@ -47,7 +47,8 @@ enum ACTION tb_actions[MAX_TB_FUNCTIONS][MAX_TB_BUTTONS] = {
 // (CTUN, which is always on). Such buttons get an empty label and do
 // nothing, even if they come from an old props file. MOX / PTT, the TX
 // menu, Mic gain, VOX, Drive, TUNE, TwoTone and the compressor stay: they drive the WDSP
-// TX audio chain for the Kenwood (radio_set_mox keys it by CAT).
+// TX audio chain for the Kenwood (radio_set_mox keys it by CAT). So do Capture and
+// Replay (RX audio recorded, played back locally, or sent in TX through ACC2).
 //
 static int ifpan_hidden_action(enum ACTION a) {
   switch (a) {
@@ -79,7 +80,6 @@ static int ifpan_hidden_action(enum ACTION a) {
   case CW_TXT_4:
   case CW_TXT_5:
   case CTUN:
-  case REPLAY:
     return 1;
   default:
     return 0;

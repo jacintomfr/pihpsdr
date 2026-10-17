@@ -269,7 +269,7 @@ static void rxmeter_edgewise(cairo_t *cr, double smtr, int sval, int sval2,
   cairo_text_extents_t extents;
   double r, g, b, x, y, angle, radians;
   const double w   = (double)(METER_WIDTH - ADD_METER_WIDTH);
-  const double scalfac = w * 0.00625;
+  const double scalfac = fmin(w * 0.00625, VFO_HEIGHT * 0.0125);   // text / ticks: what the height holds (wider meter)
   const double cx  = (w / 2.0) + (double) ADD_METER_WIDTH - 5.0;
   //
   // A far-below pivot gives the shallow "edgewise" curve. The half-span is
@@ -416,7 +416,7 @@ static void txmeter_edgewise(cairo_t *cr, double frac, double pk, const char *pw
   cairo_text_extents_t extents;
   double r, g, b, angle, radians;
   const double w   = (double)(METER_WIDTH - ADD_METER_WIDTH);
-  const double scalfac = w * 0.00625;
+  const double scalfac = fmin(w * 0.00625, VFO_HEIGHT * 0.0125);   // text / ticks: what the height holds (wider meter)
   const double cx  = (w / 2.0) + (double) ADD_METER_WIDTH;
   const double pivot_y = VFO_HEIGHT * 1.95;
   const double radius  = VFO_HEIGHT * 1.58;
@@ -954,7 +954,7 @@ ifpan_meter_done:
     double angle;
     double radians;
     double cy  = (double)(METER_WIDTH - ADD_METER_WIDTH) / 2;
-    double scalfac = cy * 0.0125;
+    double scalfac = fmin(cy * 0.0125, VFO_HEIGHT * 0.0125);   // text / ticks: what the height holds
     double radius = cy - 35.0 * scalfac;
     double min_angle, max_angle, bydb;
     double cx = cy + ADD_METER_WIDTH - 5;
@@ -1340,7 +1340,7 @@ void txmeter_update(int fps, double pwr, double alc, double swr, double mic, dou
     // Analog TX — Option 2 face (dark glass + filled arc) with Option 3 text
     //
     double cy  = (double)(METER_WIDTH - ADD_METER_WIDTH) / 2;
-    double scalfac = 0.0125 * cy;
+    double scalfac = fmin(0.0125 * cy, VFO_HEIGHT * 0.0125);   // text / ticks: what the height holds
     double radius = cy - 35.0 * scalfac;
     //
     double cx = cy + ADD_METER_WIDTH - 5;

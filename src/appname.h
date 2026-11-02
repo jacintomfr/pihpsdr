@@ -26,7 +26,11 @@
 #ifndef _APPNAME_H_
 #define _APPNAME_H_
 
-#ifdef IFPAN
+#if defined(IFPAN) && defined(KX3)
+#define APP_NAME    "piHPSDR-KX3"  // Elecraft KX3 build (docs/KX3-PROJECT-BRIEF.md)
+#define APP_DIR     "pihpsdr-kx3"
+#define APP_SCRIPT  "pihpsdr-kx3.sh"
+#elif defined(IFPAN)
 #define APP_NAME    "piHPSDR-IF"   // shown in titles, labels, audio mixers
 #define APP_DIR     "pihpsdr-if"   // working dir: $HOME/.config/APP_DIR
 #define APP_SCRIPT  "pihpsdr-if.sh"

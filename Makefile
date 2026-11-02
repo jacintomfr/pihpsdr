@@ -39,6 +39,7 @@ MIDI=ON
 USBOZY=OFF
 SOAPYSDR=ON
 IFPAN=ON
+KX3=ON
 PORTFORWARD=ON
 TCI=ON
 ifeq ($(MACOS), YES)
@@ -57,6 +58,8 @@ endif
 # USBOZY       | If ON, piHPSDR can talk to legacy USB OZY radios (needs  libusb-1.0)
 # SOAPYSDR     | If ON, piHPSDR can talk to radios via SoapySDR library
 # IFPAN        | If ON, RX-only IF panadapter (TS-570D 1st IF, PlutoSDR, rigctld). Needs SOAPYSDR
+# KX3          | If ON (with IFPAN=ON), piHPSDR-KX3: Elecraft KX3, RX I/Q from the KX3 into a
+#              | sound card instead of an IF tap, Elecraft CAT (docs/KX3-PROJECT-BRIEF.md)
 # TCI          | If ON, activate TCI server (needs libwebsockets)
 # AUDIO        | Select audio module (ALSA, PULSE, PORTAUDO, PIPEWIRE)
 #
@@ -418,6 +421,14 @@ RNNOISE_SRC=denoise.c rnn.c pitch.c kiss_fft.c celt_lpc.c nnet.c nnet_default.c 
 	parse_lpcnet_weights.c rnnoise_data.c rnnoise_tables.c
 RNNOISE_OBJS=$(addprefix rnnoise/src/,$(RNNOISE_SRC:.c=.o))
 IFPAN_OBJS=src/ifpan.o src/mic_nr.o src/osk.o src/wav_rec.o $(RNNOISE_OBJS)
+ifeq ($(KX3),ON)
+# piHPSDR-KX3: the same front-end code, with the KX3 differences under #ifdef KX3
+IFPAN_OPTIONS+= -D KX3
+endif
+else
+ifeq ($(KX3),ON)
+$(error KX3=ON requires IFPAN=ON)
+endif
 endif
 
 ##############################################################################
@@ -520,7 +531,11 @@ LIBS=	$(LDFLAGS) $(AUDIO_LIBS) $(USBOZY_LIBS) $(GTK_LIBS) $(GPIO_LIBS) \
 ##############################################################################
 
 ifeq ($(IFPAN),ON)
+ifeq ($(KX3),ON)
+PROGRAM=pihpsdr-kx3
+else
 PROGRAM=pihpsdr-if
+endif
 else
 PROGRAM=pihpsdr
 endif
